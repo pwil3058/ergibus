@@ -116,5 +116,12 @@ fn main() {
         Ok(ok) => ok,
         Err(e) => panic!("double bummer: {:?}", e)
     };
-    println!("JSON string:\n{:?}", sd_str)
+    println!("JSON string:\n{:?}", sd_str);
+    let sde: SnapshotDir = match serde_json::from_str(&sd_str) {
+        Ok(ok) => ok,
+        Err(e) => panic!("triple bummer: {:?}", e)
+    };
+    println!("***********************************************");
+    println!("***********************************************");
+    println!("Extracted:\n{:?}", sde);
 }
