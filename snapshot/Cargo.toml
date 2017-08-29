@@ -7,4 +7,5 @@ authors = ["Peter Williams <pwil3058@gmail.com>"]
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+walkdir = "1.0.7"
 content = { path = "../content" }
