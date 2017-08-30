@@ -9,3 +9,4 @@ serde_derive = "1.0"
 serde_json = "1.0"
 walkdir = "1.0.7"
 content = { path = "../content" }
+pathux = { path = "../pathux" }

@@ -6,6 +6,7 @@ extern crate serde_json;
 extern crate walkdir;
 
 extern crate content;
+extern crate pathux;
 
 // Standard Library access
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ use walkdir::{WalkDir, WalkDirIterator};
 
 // local crates access
 use content::{ContentMgmtKey, ContentManager, HashAlgorithm, ContentError};
+use pathux::{split_abs_path, split_rel_path, first_subpath_as_string};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Attributes {
@@ -67,24 +69,6 @@ struct SnapshotDir {
     files: HashMap<String, FileData>,
     file_links: HashMap<String, LinkData>,
     subdir_links: HashMap<String, LinkData>,
-}
-
-fn first_component_name(path: &Path) -> &str {
-    assert!(path.is_relative());
-    match path.components().next() {
-        Some(c) => {
-            match c {
-                Component::Normal(c) => {
-                    match c.to_str() {
-                        Some(s) => s,
-                        None => panic!("shouldn't happen!!!"),
-                    }
-                },
-                _ => panic!("shouldn't happen!!!"),
-            }
-        },
-        _ => panic!("shouldn't happen!!!"),
-    }
 }
 
 fn ignore_report_or_crash(err: &io::Error, path: &Path) {
@@ -136,10 +120,10 @@ impl SnapshotDir {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path) {
             Ok(rel_path) => {
-                if rel_path == PathBuf::from("") {
-                    return Some(self)
-                }
-                let first_name = first_component_name(rel_path).to_string();
+                let first_name = match first_subpath_as_string(rel_path) {
+                    Some(fname) => fname,
+                    None => return Some(self)
+                };
                 match self.subdirs.get(&first_name) {
                     Some(sd) => sd.find_subdir(abs_subdir_path),
                     None => None,
@@ -153,10 +137,10 @@ impl SnapshotDir {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path.clone()) {
             Ok(rel_path) => {
-                if rel_path == PathBuf::from("") {
-                    return Ok(self)
-                }
-                let first_name = first_component_name(rel_path).to_string();
+                let first_name = match first_subpath_as_string(rel_path) {
+                    Some(fname) => fname,
+                    None => return Ok(self)
+                };
                 if !self.subdirs.contains_key(&first_name) {
                     let mut path_buf = PathBuf::new();
                     path_buf.push(self.path.clone());
@@ -398,12 +382,6 @@ impl SnapshotGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn first_component_name_works() {
-        assert_eq!("first", first_component_name(Path::new("first/second")));
-        assert_ne!("second", first_component_name(Path::new("first/second")))
-    }
 
     #[test]
     fn serialization_works() {
