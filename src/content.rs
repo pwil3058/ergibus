@@ -1,9 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
-
-extern crate serde;
-extern crate serde_json;
-
 use std::cell::Cell;
 use std::io;
 use std::path::{Path, PathBuf};

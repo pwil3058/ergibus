@@ -1,13 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
-
-extern crate serde;
-extern crate serde_json;
-extern crate walkdir;
-
-extern crate content;
-extern crate pathux;
-
 // Standard Library access
 use std::collections::HashMap;
 use std::collections::hash_map::Iter;
@@ -18,6 +8,7 @@ use std::os::linux::fs::MetadataExt;
 use std::path::{Path, PathBuf, Component};
 
 // cargo.io crates acess
+use serde_json;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local crates access

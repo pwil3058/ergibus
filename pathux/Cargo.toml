@@ -1,6 +1,0 @@
-[package]
-name = "pathux"
-version = "0.1.0"
-authors = ["Peter Williams <pwil3058@gmail.com>"]
-
-[dependencies]
