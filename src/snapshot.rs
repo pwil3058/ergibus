@@ -2,7 +2,8 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Iter;
 use std::error::Error;
-use std::fs::{self, Metadata};
+use std::fs::{self, Metadata, File};
+use std::io::prelude::*;
 use std::io::{self, ErrorKind};
 use std::os::linux::fs::MetadataExt;
 use std::path::{Path, PathBuf, Component};
@@ -15,6 +16,17 @@ use walkdir::{WalkDir, WalkDirIterator};
 use content::{ContentMgmtKey, ContentManager, HashAlgorithm, ContentError};
 use pathux::{split_abs_path, split_rel_path, first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
+
+#[derive(Debug)]
+enum SSError {
+    NoSnapshotAvailable,
+    SnapshotMismatch,
+    SnapshotMismatchDirty(io::Error),
+    IOError(io::Error),
+    JsonError(serde_json::Error),
+    SnapshotReadIOError(io::Error),
+    SnapshotReadJsonError(serde_json::Error),
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Attributes {
@@ -241,8 +253,11 @@ impl SnapshotPersistentData {
         }
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
+    fn serialize(&self) -> Result<String, SSError> {
+        match serde_json::to_string(self) {
+            Ok(string) => Ok(string),
+            Err(err) => Err(SSError::JsonError(err)),
+        }
     }
 
     fn release_contents(&self) {
@@ -276,6 +291,26 @@ impl SnapshotPersistentData {
             }
         }
         Ok(())
+    }
+}
+
+impl SnapshotPersistentData {
+    fn from_file(file_path: &Path) -> Result<SnapshotPersistentData, SSError> {
+        match File::open(file_path) {
+            Ok(mut file) => {
+                let mut spd_str = String::new();
+                match file.read_to_string(&mut spd_str) {
+                    Err(err) => return Err(SSError::SnapshotReadIOError(err)),
+                    _ => ()
+                };
+                let spde = serde_json::from_str::<SnapshotPersistentData>(&spd_str);
+                match spde {
+                    Ok(snapshot_persistent_data) => Ok(snapshot_persistent_data),
+                    Err(err) => Err(SSError::SnapshotReadJsonError(err))
+                }
+            },
+            Err(err) => Err(SSError::SnapshotReadIOError(err))
+        }
     }
 }
 
@@ -323,10 +358,10 @@ impl SnapshotGenerator {
     }
 
     #[cfg(test)]
-    fn serialised_snapshot(&self) -> serde_json::Result<String> {
+    fn serialised_snapshot(&self) -> Result<String, SSError> {
         match self.snapshot {
             Some(ref snapshot) => snapshot.serialize(),
-            None => panic!("no snapshot available")
+            None => Err(SSError::NoSnapshotAvailable)
         }
     }
 
@@ -354,6 +389,40 @@ impl SnapshotGenerator {
             None => ()
         }
         self.snapshot = None;
+    }
+
+    fn write_snapshot_to(&mut self, path: &Path) -> Result<(), SSError> {
+        match self.snapshot {
+            Some(ref snapshot) => {
+                let mut file = File::create(path).map_err(|err| SSError::IOError(err))?;
+                let json_text = snapshot.serialize()?;
+                file.write_all(json_text.as_bytes()).map_err(|err| SSError::IOError(err))?;
+            },
+            None => return Err(SSError::NoSnapshotAvailable)
+        }
+        // check that the snapshot can be rebuilt from the file
+        match SnapshotPersistentData::from_file(&path) {
+            Ok(rb_snapshot) => {
+                if self.snapshot == Some(rb_snapshot) {
+                    // don't release contents as references are stored in the file
+                    self.snapshot = None;
+                    Ok(())
+                } else {
+                    // The file is mangled so remove it
+                    match fs::remove_file(&path) {
+                        Ok(_) => Err(SSError::SnapshotMismatch),
+                        Err(err) => Err(SSError::SnapshotMismatchDirty(err))
+                    }
+                }
+            },
+            Err(err) => {
+                // The file is mangled so remove it
+                match fs::remove_file(&path) {
+                    Ok(_) => Err(err),
+                    Err(_) => Err(err)
+                }
+            }
+        }
     }
 }
 
@@ -401,5 +470,17 @@ mod tests {
         let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
         sg.generate_snapshot();
         assert!(sg.snapshot_available())
+    }
+
+    #[test]
+    fn test_write_snapshot() {
+        let content_mgmt_key = ContentMgmtKey::new_dummy();
+        let p = Path::new("/home/peter/SRC").canonicalize().unwrap();
+        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
+        sg.generate_snapshot();
+        assert!(sg.snapshot_available());
+        sg.write_snapshot_to(Path::new("/home/peter/TEST/test.patch"));
+        assert!(!sg.snapshot_available());
+        let rb_spd_e = SnapshotPersistentData::from_file(&p);
     }
 }
