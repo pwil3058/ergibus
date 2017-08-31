@@ -14,6 +14,7 @@ use walkdir::{WalkDir, WalkDirIterator};
 // local crates access
 use content::{ContentMgmtKey, ContentManager, HashAlgorithm, ContentError};
 use pathux::{split_abs_path, split_rel_path, first_subpath_as_string};
+use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Attributes {
@@ -60,18 +61,6 @@ struct SnapshotDir {
     files: HashMap<String, FileData>,
     file_links: HashMap<String, LinkData>,
     subdir_links: HashMap<String, LinkData>,
-}
-
-fn ignore_report_or_crash(err: &io::Error, path: &Path) {
-    if err.kind() != ErrorKind::NotFound {
-        // we assume that "not found" is due to a race condition and don't report it
-        if err.kind() == ErrorKind::PermissionDenied {
-            // benign so just report it
-            println!("{:?}: {:?}", path, err.description());
-        } else {
-            panic!("{:?}: {:?}", path, err.description());
-        }
-    }
 }
 
 impl SnapshotDir {
@@ -154,12 +143,12 @@ impl SnapshotDir {
                             match entry.file_type() {
                                 Ok(e_type) => {
                                     if e_type.is_file() {
-                                        if exclusions.is_excluded_dir(&entry.path()) {
+                                        if exclusions.is_excluded_file(&entry.path()) {
                                             continue
                                         }
                                         self.add_file(&entry, &content_mgr);
                                     } else if e_type.is_symlink() {
-                                        if exclusions.is_excluded_dir(&entry.path()) {
+                                        if exclusions.is_excluded_file(&entry.path()) {
                                             continue
                                         }
                                         self.add_symlink(&entry);
@@ -224,8 +213,8 @@ impl SnapshotDir {
         };
         let abs_target_path = match self.path.join(link_target.clone()).canonicalize() {
             Ok(atp) => atp,
-            Err(err) => {
-                println!("{:?}: broken symbolic to \"{:?}\" link ignored", &dir_entry.path(), link_target);
+            Err(ref err) => {
+                report_broken_link_or_crash(err, &dir_entry.path(), &link_target);
                 return
             }
         };
@@ -280,11 +269,9 @@ impl SnapshotPersistentData {
                     }
                 },
                 Err(err) => {
-                    // TODO: be more picky about what to report and what to ignore
-                    println!("{:?}: {:?}", err.description(), err.path().unwrap());
-                    let io_err = io::Error::from(err);
-                    let code = io_err.kind();
-                    println!("code {:?}: {:?}", code, io_err)
+                    let path = err.path().unwrap().to_path_buf();
+                    let io_error = io::Error::from(err);
+                    ignore_report_or_crash(&io_error, &path);
                 },
             }
         }

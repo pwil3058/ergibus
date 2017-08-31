@@ -7,4 +7,5 @@ extern crate walkdir;
 
 mod content;
 mod pathux;
+mod report;
 mod snapshot;
