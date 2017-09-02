@@ -7,8 +7,11 @@ use std::io::prelude::*;
 use std::io::{self, ErrorKind};
 use std::os::linux::fs::MetadataExt;
 use std::path::{Path, PathBuf, Component};
+use std::time;
 
 // cargo.io crates acess
+use chrono::prelude::*;
+use serde;
 use serde_json;
 use walkdir::{WalkDir, WalkDirIterator};
 
@@ -242,6 +245,8 @@ impl SnapshotDir {
 struct SnapshotPersistentData {
     root_dir: SnapshotDir,
     content_mgmt_key: ContentMgmtKey,
+    started_create: time::SystemTime,
+    finished_create: time::SystemTime,
 }
 
 impl SnapshotPersistentData {
@@ -249,7 +254,9 @@ impl SnapshotPersistentData {
         let sd = SnapshotDir::new(None).unwrap();
         SnapshotPersistentData{
             root_dir: sd,
-            content_mgmt_key: rmk.clone()
+            content_mgmt_key: rmk.clone(),
+            started_create: time::SystemTime::now(),
+            finished_create: time::SystemTime::now(),
         }
     }
 
@@ -263,8 +270,6 @@ impl SnapshotPersistentData {
     fn release_contents(&self) {
         let content_mgr = ContentManager::new(&self.content_mgmt_key, true);
         self.root_dir.release_contents(&content_mgr);
-        // make sure that there's no accidental reference to the data
-        //self.root_dir = SnapshotDir::new(None).unwrap();
     }
 
     fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> io::Result<()> {
@@ -291,6 +296,27 @@ impl SnapshotPersistentData {
             }
         }
         Ok(())
+    }
+
+    fn creation_duration(&self) -> time::Duration {
+        match self.finished_create.duration_since(self.started_create) {
+            Ok(duration) => duration,
+            Err(_) => time::Duration::new(0, 0)
+        }
+    }
+
+    fn file_name(&self) -> PathBuf {
+        let dt = DateTime::<Utc>::from(self.finished_create);
+        PathBuf::from(format!("{}", dt.format("%Y-%m-%d-%H-%M-%SZ")))
+    }
+
+    fn write_to_dir(&self, dir_path: &Path) -> Result<PathBuf, SSError> {
+        let file_name = self.file_name();
+        let path = dir_path.join(file_name);
+        let mut file = File::create(&path).map_err(|err| SSError::IOError(err))?;
+        let json_text = self.serialize()?;
+        file.write_all(json_text.as_bytes()).map_err(|err| SSError::IOError(err))?;
+        Ok(path)
     }
 }
 
@@ -373,15 +399,25 @@ impl SnapshotGenerator {
         }
     }
 
-    fn generate_snapshot(&mut self) {
+    fn generate_snapshot(&mut self) -> time::Duration {
         if self.snapshot.is_some() {
             // This snapshot is being thrown away so we release its contents
             self.release_snapshot();
         }
         let mut snapshot = SnapshotPersistentData::new(&self.content_mgmt_key);
         snapshot.add_dir(&self.base_dir_path, &self.exclusions);
+        snapshot.finished_create = time::SystemTime::now();
+        let duration = snapshot.creation_duration();
         self.snapshot = Some(snapshot);
-     }
+        duration
+    }
+
+    fn generation_duration(&self) -> Result<time::Duration, SSError> {
+        match self.snapshot {
+            Some(ref snapshot) => Ok(snapshot.creation_duration()),
+            None => Err(SSError::NoSnapshotAvailable)
+        }
+    }
 
     fn release_snapshot(&mut self) {
         match self.snapshot {
@@ -391,25 +427,23 @@ impl SnapshotGenerator {
         self.snapshot = None;
     }
 
-    fn write_snapshot_to(&mut self, path: &Path) -> Result<(), SSError> {
-        match self.snapshot {
+    fn write_snapshot_to(&mut self, dir_path: &Path) -> Result<PathBuf, SSError> {
+        let file_path = match self.snapshot {
             Some(ref snapshot) => {
-                let mut file = File::create(path).map_err(|err| SSError::IOError(err))?;
-                let json_text = snapshot.serialize()?;
-                file.write_all(json_text.as_bytes()).map_err(|err| SSError::IOError(err))?;
+                snapshot.write_to_dir(dir_path)?
             },
             None => return Err(SSError::NoSnapshotAvailable)
-        }
+        };
         // check that the snapshot can be rebuilt from the file
-        match SnapshotPersistentData::from_file(&path) {
+        match SnapshotPersistentData::from_file(&file_path) {
             Ok(rb_snapshot) => {
                 if self.snapshot == Some(rb_snapshot) {
                     // don't release contents as references are stored in the file
                     self.snapshot = None;
-                    Ok(())
+                    Ok(file_path)
                 } else {
                     // The file is mangled so remove it
-                    match fs::remove_file(&path) {
+                    match fs::remove_file(&file_path) {
                         Ok(_) => Err(SSError::SnapshotMismatch),
                         Err(err) => Err(SSError::SnapshotMismatchDirty(err))
                     }
@@ -417,7 +451,7 @@ impl SnapshotGenerator {
             },
             Err(err) => {
                 // The file is mangled so remove it
-                match fs::remove_file(&path) {
+                match fs::remove_file(&file_path) {
                     Ok(_) => Err(err),
                     Err(_) => Err(err)
                 }
@@ -479,8 +513,8 @@ mod tests {
         let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
         sg.generate_snapshot();
         assert!(sg.snapshot_available());
-        sg.write_snapshot_to(Path::new("/home/peter/TEST/test.patch"));
+        let result = sg.write_snapshot_to(Path::new("/home/peter/TEST/"));
+        assert!(result.is_ok());
         assert!(!sg.snapshot_available());
-        let rb_spd_e = SnapshotPersistentData::from_file(&p);
     }
 }
