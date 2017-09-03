@@ -467,7 +467,7 @@ mod tests {
     #[test]
     fn serialization_works() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
-        let p = Path::new("/home/peter/").canonicalize().unwrap();
+        let p = Path::new(".").canonicalize().unwrap();
         let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
         sg.generate_snapshot();
         let spd_str = sg.serialised_snapshot().unwrap_or_else(|err| {
@@ -500,7 +500,7 @@ mod tests {
     #[test]
     fn test_snapshot_creator() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
-        let p = Path::new("/home/peter/").canonicalize().unwrap();
+        let p = Path::new(".").canonicalize().unwrap();
         let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
         sg.generate_snapshot();
         assert!(sg.snapshot_available())
@@ -509,7 +509,7 @@ mod tests {
     #[test]
     fn test_write_snapshot() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
-        let p = Path::new("/home/peter/SRC").canonicalize().unwrap();
+        let p = Path::new(".").canonicalize().unwrap();
         let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
         sg.generate_snapshot();
         assert!(sg.snapshot_available());

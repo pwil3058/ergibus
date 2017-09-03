@@ -1,6 +1,11 @@
 use std::cell::Cell;
+use std::fs::{self, File};
+use std::io::prelude::*;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use crypto;
+use crypto::digest::Digest;
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
 pub enum HashAlgorithm {
@@ -54,7 +59,17 @@ impl ContentManager {
 
     pub fn store_file_contents(&self, abs_file_path: &Path) -> Result<String, ContentError> {
         self.count.replace(self.count.get() + 1);
-        Ok(format!("Token Key: {:?}", self.count.get()))
+        let mut file = File::open(abs_file_path).map_err(|err| ContentError::FileSystemError(err))?;
+        let mut buffer = [0; 1000000];
+        let mut hasher = crypto::sha1::Sha1::new();
+        loop {
+            let n_bytes = file.read(&mut buffer).map_err(|err| ContentError::FileSystemError(err))?;
+            if n_bytes == 0 {
+                break;
+            };
+            hasher.input(&buffer);
+        }
+        Ok(hasher.result_str())
     }
 
     pub fn release_contents(&self, content_token: &str) -> Result<(), ContentError> {
