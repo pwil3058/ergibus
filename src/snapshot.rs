@@ -16,6 +16,7 @@ use serde_json;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local crates access
+use archive::{AError, Exclusions};
 use content::{ContentMgmtKey, ContentManager, HashAlgorithm, ContentError};
 use pathux::{split_abs_path, split_rel_path, first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
@@ -29,6 +30,7 @@ enum SSError {
     JsonError(serde_json::Error),
     SnapshotReadIOError(io::Error),
     SnapshotReadJsonError(serde_json::Error),
+    ArchiveError(AError),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -341,19 +343,6 @@ impl SnapshotPersistentData {
 }
 
 #[derive(Debug)]
-struct Exclusions {}
-
-impl Exclusions {
-    fn is_excluded_dir(&self, abs_dir_path: &Path) -> bool {
-        return false;
-    }
-
-    fn is_excluded_file(&self, abs_file_path: &Path) -> bool {
-        return false;
-    }
-}
-
-#[derive(Debug)]
 struct SnapshotGenerator {
     snapshot: Option<SnapshotPersistentData>,
     base_dir_path: PathBuf,
@@ -370,13 +359,15 @@ impl Drop for SnapshotGenerator {
 }
 
 impl SnapshotGenerator {
-    pub fn new(bdp: &Path, rmk: ContentMgmtKey) -> SnapshotGenerator {
-        SnapshotGenerator {
+    pub fn new(bdp: &Path, rmk: ContentMgmtKey) -> Result<SnapshotGenerator, SSError> {
+        let exclusions = Exclusions::new_dummy().map_err(|err| SSError::ArchiveError(err))?;
+        let generator = SnapshotGenerator {
             snapshot: None,
             base_dir_path: bdp.to_path_buf(),
-            exclusions: Exclusions{},
+            exclusions: exclusions,
             content_mgmt_key: rmk,
-        }
+        };
+        Ok(generator)
     }
 
     fn snapshot_available(&self) -> bool {
@@ -468,7 +459,7 @@ mod tests {
     fn serialization_works() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
         let p = Path::new(".").canonicalize().unwrap();
-        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
+        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
         sg.generate_snapshot();
         let spd_str = sg.serialised_snapshot().unwrap_or_else(|err| {
             panic!("double bummer: {:?}", err);
@@ -501,7 +492,7 @@ mod tests {
     fn test_snapshot_creator() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
         let p = Path::new(".").canonicalize().unwrap();
-        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
+        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
         sg.generate_snapshot();
         assert!(sg.snapshot_available())
     }
@@ -510,7 +501,7 @@ mod tests {
     fn test_write_snapshot() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
         let p = Path::new(".").canonicalize().unwrap();
-        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key);
+        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
         sg.generate_snapshot();
         assert!(sg.snapshot_available());
         let result = sg.write_snapshot_to(Path::new("/home/peter/TEST/"));
