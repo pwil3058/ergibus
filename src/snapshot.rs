@@ -1,24 +1,21 @@
 // Standard Library access
 use std::collections::HashMap;
-use std::collections::hash_map::Iter;
-use std::error::Error;
 use std::fs::{self, Metadata, File};
 use std::io::prelude::*;
-use std::io::{self, ErrorKind};
+use std::io;
 use std::os::linux::fs::MetadataExt;
-use std::path::{Path, PathBuf, Component};
+use std::path::{Path, PathBuf};
 use std::time;
 
 // cargo.io crates acess
 use chrono::prelude::*;
-use serde;
 use serde_json;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local crates access
 use archive::{AError, Exclusions};
-use content::{ContentMgmtKey, ContentManager, HashAlgorithm, ContentError};
-use pathux::{split_abs_path, split_rel_path, first_subpath_as_string};
+use content::{ContentMgmtKey, ContentManager, ContentError};
+use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Debug)]
@@ -374,29 +371,15 @@ impl SnapshotGenerator {
         self.snapshot.is_some()
     }
 
-    #[cfg(test)]
-    fn serialised_snapshot(&self) -> Result<String, SSError> {
-        match self.snapshot {
-            Some(ref snapshot) => snapshot.serialize(),
-            None => Err(SSError::NoSnapshotAvailable)
-        }
-    }
-
-    #[cfg(test)]
-    fn matches_snapshot(&self, snapshot: &SnapshotPersistentData) -> bool {
-        match self.snapshot {
-            Some(ref my_snapshot) => *my_snapshot == *snapshot,
-            None => false
-        }
-    }
-
     fn generate_snapshot(&mut self) -> time::Duration {
         if self.snapshot.is_some() {
             // This snapshot is being thrown away so we release its contents
             self.release_snapshot();
         }
         let mut snapshot = SnapshotPersistentData::new(&self.content_mgmt_key);
-        snapshot.add_dir(&self.base_dir_path, &self.exclusions);
+        if let Err(err) = snapshot.add_dir(&self.base_dir_path, &self.exclusions) {
+            ignore_report_or_crash(&err, &self.base_dir_path);
+        };
         snapshot.finished_create = time::SystemTime::now();
         let duration = snapshot.creation_duration();
         self.snapshot = Some(snapshot);
@@ -456,21 +439,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn serialization_works() {
-        let content_mgmt_key = ContentMgmtKey::new_dummy();
-        let p = Path::new(".").canonicalize().unwrap();
-        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
-        sg.generate_snapshot();
-        let spd_str = sg.serialised_snapshot().unwrap_or_else(|err| {
-            panic!("double bummer: {:?}", err);
-        });
-        let spde: SnapshotPersistentData = serde_json::from_str(&spd_str).unwrap_or_else(|err| {
-            panic!("triple bummer: {:?}", err);
-        });
-        assert!(sg.matches_snapshot(&spde));
-    }
-
-    #[test]
     fn find_or_add_subdir_works() {
         let mut sd = SnapshotDir::new(None).unwrap();
         let p = PathBuf::from("/home/peter/TEST");
@@ -489,20 +457,12 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_creator() {
-        let content_mgmt_key = ContentMgmtKey::new_dummy();
-        let p = Path::new(".").canonicalize().unwrap();
-        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
-        sg.generate_snapshot();
-        assert!(sg.snapshot_available())
-    }
-
-    #[test]
     fn test_write_snapshot() {
         let content_mgmt_key = ContentMgmtKey::new_dummy();
         let p = Path::new(".").canonicalize().unwrap();
         let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
         sg.generate_snapshot();
+        println!("Generating for {:?} took {:?}", &p, sg.generation_duration());
         assert!(sg.snapshot_available());
         let result = sg.write_snapshot_to(Path::new("/home/peter/TEST/"));
         assert!(result.is_ok());

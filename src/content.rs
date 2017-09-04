@@ -7,6 +7,22 @@ use std::path::{Path, PathBuf};
 use crypto;
 use crypto::digest::Digest;
 
+pub fn get_content_mgmt_key(repo_name: &str) -> Result<ContentMgmtKey, CError> {
+    if repo_name == "dummy" {
+        Ok(ContentMgmtKey::new_dummy())
+    } else {
+        Err(CError::UnknownRepo(repo_name.to_string()))
+    }
+}
+
+#[derive(Debug)]
+pub enum CError {
+    UnknownRepo(String),
+    IOError(io::Error, PathBuf),
+    UnknownToken(String),
+    FileSystemError(io::Error),
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
 pub enum HashAlgorithm {
     Sha1,
@@ -35,12 +51,6 @@ impl ContentMgmtKey {
     }
 }
 
-#[derive(Debug)]
-pub enum ContentError {
-    UnknownToken(String),
-    FileSystemError(io::Error),
-}
-
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct ContentManager {
     count: Cell<i64>,
@@ -57,13 +67,13 @@ impl ContentManager {
         ContentManager{count: Cell::new(0)}
     }
 
-    pub fn store_file_contents(&self, abs_file_path: &Path) -> Result<String, ContentError> {
+    pub fn store_file_contents(&self, abs_file_path: &Path) -> Result<String, CError> {
         self.count.replace(self.count.get() + 1);
-        let mut file = File::open(abs_file_path).map_err(|err| ContentError::FileSystemError(err))?;
+        let mut file = File::open(abs_file_path).map_err(|err| CError::FileSystemError(err))?;
         let mut buffer = [0; 1000000];
         let mut hasher = crypto::sha1::Sha1::new();
         loop {
-            let n_bytes = file.read(&mut buffer).map_err(|err| ContentError::FileSystemError(err))?;
+            let n_bytes = file.read(&mut buffer).map_err(|err| CError::FileSystemError(err))?;
             if n_bytes == 0 {
                 break;
             };
@@ -72,7 +82,7 @@ impl ContentManager {
         Ok(hasher.result_str())
     }
 
-    pub fn release_contents(&self, content_token: &str) -> Result<(), ContentError> {
+    pub fn release_contents(&self, content_token: &str) -> Result<(), CError> {
         self.count.replace(self.count.get() - 1);
         Ok(())
     }
