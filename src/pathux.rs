@@ -1,3 +1,4 @@
+use std::env;
 use std::path::{Path, PathBuf, Component};
 
 pub fn split_abs_path(abs_path: &Path) -> Vec<String> {
@@ -50,6 +51,20 @@ pub fn first_subpath_as_string(path: &Path) -> Option<String> {
     None
 }
 
+pub fn expand_home_dir(rel_path: &Path) -> PathBuf {
+    let parts = split_rel_path(rel_path);
+    let mut path_buf = PathBuf::new();
+    if parts[0] == "~" {
+        path_buf.push(env::home_dir().unwrap());
+    } else {
+        panic!("Illegal input: {:?}", rel_path);
+    };
+    for part in &parts[1..] {
+        path_buf.push(part);
+    }
+    path_buf
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,5 +87,12 @@ mod tests {
         assert_eq!(Some("first".to_string()), first_subpath_as_string(Path::new("first/second")));
         assert_ne!(Some("second".to_string()), first_subpath_as_string(Path::new("first/second")));
         assert_eq!(Some("first".to_string()), first_subpath_as_string(Path::new("/first/second")));
+    }
+
+    #[test]
+    fn test_expand_home_dir() {
+        let home_dir = env::home_dir().unwrap();
+        assert_eq!(home_dir, expand_home_dir(&PathBuf::from("~")));
+        assert_eq!(home_dir.join("SRC/GITHUB"), expand_home_dir(&PathBuf::from("~/SRC/GITHUB")));
     }
 }
