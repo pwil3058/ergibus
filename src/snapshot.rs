@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs::{self, Metadata, File};
 use std::io::prelude::*;
 use std::io;
+use std::ops::{AddAssign};
 use std::os::linux::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time;
@@ -34,12 +35,14 @@ enum SSError {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Attributes {
     st_mode: u32,
+    st_size: u64,
 }
 
 impl Attributes {
     pub fn new(metadata: &Metadata) -> Attributes {
         Attributes{
             st_mode: metadata.st_mode(),
+            st_size: metadata.st_size(),
         }
     }
 }
@@ -149,7 +152,9 @@ impl SnapshotDir {
         }
     }
 
-    fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) {
+    fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) -> (FileStats, SymLinkStats) {
+        let mut file_stats = FileStats{file_count: 0, byte_count: 0};
+        let mut sym_link_stats = SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0};
         match fs::read_dir(&self.path) {
             Ok(entries) => {
                 for entry_or_err in entries {
@@ -161,12 +166,12 @@ impl SnapshotDir {
                                         if exclusions.is_excluded_file(&entry.path()) {
                                             continue
                                         }
-                                        self.add_file(&entry, &content_mgr);
+                                        file_stats += self.add_file(&entry, &content_mgr);
                                     } else if e_type.is_symlink() {
                                         if exclusions.is_excluded_file(&entry.path()) {
                                             continue
                                         }
-                                        self.add_symlink(&entry);
+                                        sym_link_stats += self.add_symlink(&entry);
                                     }
                                 },
                                 Err(err) => ignore_report_or_crash(&err, &self.path)
@@ -178,18 +183,19 @@ impl SnapshotDir {
             },
             Err(err) => ignore_report_or_crash(&err, &self.path)
         };
+        (file_stats, sym_link_stats)
     }
 
-    fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) {
+    fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> FileStats {
         let file_name = dir_entry.file_name().into_string().unwrap();
         if self.files.contains_key(&file_name) {
-            return
+            return FileStats{file_count: 0, byte_count: 0}
         }
         let attributes = match dir_entry.metadata() {
             Ok(ref metadata) => Attributes::new(metadata),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return
+                return FileStats{file_count: 0, byte_count: 0}
             }
         };
         let content_token = match content_mgr.store_file_contents(&dir_entry.path()) {
@@ -198,46 +204,81 @@ impl SnapshotDir {
                 match err {
                     CError::FileSystemError(io_err) => {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
-                        return
+                        return FileStats{file_count: 0, byte_count: 0}
                     },
                     _ => panic!("should not happen")
                 }
             }
         };
+        let file_stats = FileStats{file_count: 1, byte_count: attributes.st_size};
         self.files.insert(file_name, FileData{attributes, content_token});
+        file_stats
     }
 
-    fn add_symlink(&mut self, dir_entry: &fs::DirEntry) {
+    fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
         let file_name = dir_entry.file_name().into_string().unwrap();
         if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
-            return
+            return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
         }
         let attributes = match dir_entry.metadata() {
             Ok(ref metadata) => Attributes::new(metadata),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return
+                return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
             }
         };
         let link_target = match dir_entry.path().read_link() {
             Ok(lt) => lt,
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return
+                return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
             }
         };
         let abs_target_path = match self.path.join(link_target.clone()).canonicalize() {
             Ok(atp) => atp,
             Err(ref err) => {
                 report_broken_link_or_crash(err, &dir_entry.path(), &link_target);
-                return
+                return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
             }
         };
         if abs_target_path.is_file() {
             self.file_links.insert(file_name, LinkData{attributes, link_target});
+            return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 1};
         } else if abs_target_path.is_dir() {
             self.subdir_links.insert(file_name, LinkData{attributes, link_target});
+            return SymLinkStats{dir_sym_link_count: 1, file_sym_link_count: 0};
         }
+        SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+struct FileStats {
+    file_count: u64,
+    byte_count: u64,
+}
+
+impl AddAssign for FileStats {
+    fn add_assign(&mut self, other: FileStats) {
+        *self = FileStats {
+            file_count: self.file_count + other.file_count,
+            byte_count: self.byte_count + other.byte_count,
+        };
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+struct SymLinkStats {
+    dir_sym_link_count: u64,
+    file_sym_link_count: u64,
+}
+
+impl AddAssign for SymLinkStats {
+    fn add_assign(&mut self, other: SymLinkStats) {
+        *self = SymLinkStats {
+            dir_sym_link_count: self.dir_sym_link_count + other.dir_sym_link_count,
+            file_sym_link_count: self.file_sym_link_count + other.file_sym_link_count,
+        };
     }
 }
 
@@ -245,18 +286,24 @@ impl SnapshotDir {
 struct SnapshotPersistentData {
     root_dir: SnapshotDir,
     content_mgmt_key: ContentMgmtKey,
+    archive_name: String,
     started_create: time::SystemTime,
     finished_create: time::SystemTime,
+    file_stats: FileStats,
+    sym_link_stats: SymLinkStats,
 }
 
 impl SnapshotPersistentData {
-    fn new(rmk: &ContentMgmtKey) -> SnapshotPersistentData {
+    fn new(archive_name: &str, rmk: &ContentMgmtKey) -> SnapshotPersistentData {
         let sd = SnapshotDir::new(None).unwrap();
         SnapshotPersistentData{
             root_dir: sd,
             content_mgmt_key: rmk.clone(),
+            archive_name: archive_name.to_string(),
             started_create: time::SystemTime::now(),
             finished_create: time::SystemTime::now(),
+            file_stats: FileStats{file_count: 0, byte_count: 0},
+            sym_link_stats: SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0},
         }
     }
 
@@ -284,7 +331,11 @@ impl SnapshotPersistentData {
                         continue
                     }
                     match dir.find_or_add_subdir(e_path) {
-                        Ok(sub_dir) => sub_dir.populate(exclusions, &content_mgr),
+                        Ok(sub_dir) => {
+                            let (file_stats, sym_link_stats) = sub_dir.populate(exclusions, &content_mgr);
+                            self.file_stats += file_stats;
+                            self.sym_link_stats += sym_link_stats
+                        },
                         Err(err) => ignore_report_or_crash(&err, &e_path)
                     }
                 },
@@ -370,7 +421,7 @@ impl SnapshotGenerator {
             // This snapshot is being thrown away so we release its contents
             self.release_snapshot();
         }
-        let mut snapshot = SnapshotPersistentData::new(&self.archive_data.content_mgmt_key);
+        let mut snapshot = SnapshotPersistentData::new(&self.archive_data.name, &self.archive_data.content_mgmt_key);
         for abs_path in self.archive_data.includes.iter() {
             if abs_path.is_dir() {
                 if let Err(err) = snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
@@ -463,5 +514,15 @@ mod tests {
         let result = sg.write_snapshot();
         assert!(result.is_ok());
         assert!(!sg.snapshot_available());
+        match result {
+            Ok(ref ss_file_path) => {
+                match SnapshotPersistentData::from_file(ss_file_path) {
+                    Ok(ss) => println!("{:?}: {:?} {:?}", ss.archive_name, ss.file_stats, ss.sym_link_stats),
+                    Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err)
+                };
+
+            },
+            Err(err) => panic!("{:?}", err)
+        }
     }
 }
