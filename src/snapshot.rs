@@ -13,8 +13,8 @@ use serde_json;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local crates access
-use archive::{AError, Exclusions};
-use content::{ContentMgmtKey, ContentManager, ContentError};
+use archive::{AError, Exclusions, ArchiveData, get_archive_data};
+use content::{ContentMgmtKey, ContentManager, CError, get_content_mgmt_key};
 use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
@@ -28,6 +28,7 @@ enum SSError {
     SnapshotReadIOError(io::Error),
     SnapshotReadJsonError(serde_json::Error),
     ArchiveError(AError),
+    ContentError(CError),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -195,7 +196,7 @@ impl SnapshotDir {
             Ok(ct) => ct,
             Err(err) => {
                 match err {
-                    ContentError::FileSystemError(io_err) => {
+                    CError::FileSystemError(io_err) => {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
                         return
                     },
@@ -342,9 +343,7 @@ impl SnapshotPersistentData {
 #[derive(Debug)]
 struct SnapshotGenerator {
     snapshot: Option<SnapshotPersistentData>,
-    base_dir_path: PathBuf,
-    exclusions: Exclusions,
-    content_mgmt_key: ContentMgmtKey,
+    archive_data: ArchiveData,
 }
 
 impl Drop for SnapshotGenerator {
@@ -356,18 +355,13 @@ impl Drop for SnapshotGenerator {
 }
 
 impl SnapshotGenerator {
-    pub fn new(bdp: &Path, rmk: ContentMgmtKey) -> Result<SnapshotGenerator, SSError> {
-        let exclusions = Exclusions::new_dummy().map_err(|err| SSError::ArchiveError(err))?;
-        let generator = SnapshotGenerator {
-            snapshot: None,
-            base_dir_path: bdp.to_path_buf(),
-            exclusions: exclusions,
-            content_mgmt_key: rmk,
-        };
-        Ok(generator)
+    pub fn new(archive_name: &str) -> Result<SnapshotGenerator, SSError> {
+        let archive_data = get_archive_data(archive_name).map_err(|err| SSError::ArchiveError(err))?;
+        let snapshot: Option<SnapshotPersistentData> = None;
+        Ok(SnapshotGenerator{ snapshot, archive_data })
     }
 
-    fn snapshot_available(&self) -> bool {
+    pub fn snapshot_available(&self) -> bool {
         self.snapshot.is_some()
     }
 
@@ -376,10 +370,14 @@ impl SnapshotGenerator {
             // This snapshot is being thrown away so we release its contents
             self.release_snapshot();
         }
-        let mut snapshot = SnapshotPersistentData::new(&self.content_mgmt_key);
-        if let Err(err) = snapshot.add_dir(&self.base_dir_path, &self.exclusions) {
-            ignore_report_or_crash(&err, &self.base_dir_path);
-        };
+        let mut snapshot = SnapshotPersistentData::new(&self.archive_data.content_mgmt_key);
+        for abs_path in self.archive_data.includes.iter() {
+            if abs_path.is_dir() {
+                if let Err(err) = snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
+                    ignore_report_or_crash(&err, &abs_path);
+                };
+            }
+        }
         snapshot.finished_create = time::SystemTime::now();
         let duration = snapshot.creation_duration();
         self.snapshot = Some(snapshot);
@@ -401,10 +399,10 @@ impl SnapshotGenerator {
         self.snapshot = None;
     }
 
-    fn write_snapshot_to(&mut self, dir_path: &Path) -> Result<PathBuf, SSError> {
+    fn write_snapshot(&mut self) -> Result<PathBuf, SSError> {
         let file_path = match self.snapshot {
             Some(ref snapshot) => {
-                snapshot.write_to_dir(dir_path)?
+                snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?
             },
             None => return Err(SSError::NoSnapshotAvailable)
         };
@@ -458,13 +456,11 @@ mod tests {
 
     #[test]
     fn test_write_snapshot() {
-        let content_mgmt_key = ContentMgmtKey::new_dummy();
-        let p = Path::new(".").canonicalize().unwrap();
-        let mut sg = SnapshotGenerator::new(&p, content_mgmt_key).unwrap();
+        let mut sg = SnapshotGenerator::new("dummy").unwrap();
         sg.generate_snapshot();
-        println!("Generating for {:?} took {:?}", &p, sg.generation_duration());
+        println!("Generating for {:?} took {:?}", "dummy", sg.generation_duration());
         assert!(sg.snapshot_available());
-        let result = sg.write_snapshot_to(Path::new("/home/peter/TEST/"));
+        let result = sg.write_snapshot();
         assert!(result.is_ok());
         assert!(!sg.snapshot_available());
     }
