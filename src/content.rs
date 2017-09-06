@@ -4,8 +4,12 @@ use std::io::prelude::*;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use hex::ToHex;
+
 use crypto;
 use crypto::digest::Digest;
+
+use crypto_hash;
 
 pub fn get_content_mgmt_key(repo_name: &str) -> Result<ContentMgmtKey, CError> {
     if repo_name == "dummy" {
@@ -62,6 +66,33 @@ impl Drop for ContentManager {
     }
 }
 
+const use_crypto_hash: bool = true;
+
+fn file_digest(file: &mut File) -> Result<String, io::Error> {
+    let mut buffer = [0; 1000000];
+    if use_crypto_hash {
+        let mut hasher = crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA1);
+        loop {
+            let n_bytes = file.read(&mut buffer)?;
+            if n_bytes == 0 {
+                break;
+            };
+            hasher.write_all(&buffer[..n_bytes]);
+        }
+        Ok(hasher.finish().to_hex())
+    } else {
+        let mut hasher = crypto::sha1::Sha1::new();
+        loop {
+            let n_bytes = file.read(&mut buffer)?;
+            if n_bytes == 0 {
+                break;
+            };
+            hasher.input(&buffer[..n_bytes]);
+        }
+        Ok(hasher.result_str())
+    }
+}
+
 impl ContentManager {
     pub fn new(content_mgmt_key: &ContentMgmtKey, for_write: bool) -> ContentManager {
         ContentManager{count: Cell::new(0)}
@@ -70,16 +101,8 @@ impl ContentManager {
     pub fn store_file_contents(&self, abs_file_path: &Path) -> Result<String, CError> {
         self.count.replace(self.count.get() + 1);
         let mut file = File::open(abs_file_path).map_err(|err| CError::FileSystemError(err))?;
-        let mut buffer = [0; 1000000];
-        let mut hasher = crypto::sha1::Sha1::new();
-        loop {
-            let n_bytes = file.read(&mut buffer).map_err(|err| CError::FileSystemError(err))?;
-            if n_bytes == 0 {
-                break;
-            };
-            hasher.input(&buffer);
-        }
-        Ok(hasher.result_str())
+        let digest = file_digest(&mut file).map_err(|err| CError::FileSystemError(err))?;
+        Ok(digest)
     }
 
     pub fn release_contents(&self, content_token: &str) -> Result<(), CError> {
