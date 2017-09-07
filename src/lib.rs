@@ -2,7 +2,6 @@
 extern crate serde_derive;
 
 extern crate chrono;
-extern crate crypto;
 extern crate crypto_hash;
 extern crate globset;
 extern crate hex;
