@@ -11,6 +11,7 @@ use std::time;
 // cargo.io crates acess
 use chrono::prelude::*;
 use serde_json;
+use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local crates access
@@ -366,7 +367,8 @@ impl SnapshotPersistentData {
         let path = dir_path.join(file_name);
         let mut file = File::create(&path).map_err(|err| SSError::IOError(err))?;
         let json_text = self.serialize()?;
-        file.write_all(json_text.as_bytes()).map_err(|err| SSError::IOError(err))?;
+        let mut snappy_wtr = snap::Writer::new(file);
+        snappy_wtr.write_all(json_text.as_bytes()).map_err(|err| SSError::IOError(err))?;
         Ok(path)
     }
 }
@@ -376,7 +378,8 @@ impl SnapshotPersistentData {
         match File::open(file_path) {
             Ok(mut file) => {
                 let mut spd_str = String::new();
-                match file.read_to_string(&mut spd_str) {
+                let mut snappy_rdr = snap::Reader::new(file);
+                match snappy_rdr.read_to_string(&mut spd_str) {
                     Err(err) => return Err(SSError::SnapshotReadIOError(err)),
                     _ => ()
                 };
@@ -516,6 +519,10 @@ mod tests {
         assert!(!sg.snapshot_available());
         match result {
             Ok(ref ss_file_path) => {
+                match fs::metadata(ss_file_path) {
+                    Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.st_size()),
+                    Err(err) => panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
+                };
                 match SnapshotPersistentData::from_file(ss_file_path) {
                     Ok(ss) => println!("{:?}: {:?} {:?}", ss.archive_name, ss.file_stats, ss.sym_link_stats),
                     Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err)
