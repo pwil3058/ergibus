@@ -14,4 +14,4 @@ mod archive;
 mod content;
 mod pathux;
 mod report;
-mod snapshot;
+pub mod snapshot;

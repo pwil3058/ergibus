@@ -1,8 +1,15 @@
-use std::str::FromStr;
-use std::io::{stdout, stderr};
 extern crate argparse;
 
+extern crate ergibus;
+//mod snapshot;
+
+use std::io::{stdout, stderr};
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use argparse::{ArgumentParser, StoreTrue, Store, List};
+
+use ergibus::snapshot;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
@@ -22,7 +29,7 @@ impl FromStr for Command {
     }
 }
 
-fn backup_command(verbose: bool, args: Vec<String>) {
+fn backup_command(args: Vec<String>) {
     let mut archive = "".to_string();
     {
         let mut ap = ArgumentParser::new();
@@ -37,10 +44,16 @@ fn backup_command(verbose: bool, args: Vec<String>) {
             }
         }
     }
-    println!("Verbosity: {}, Archive: {}", verbose, archive);
+    match snapshot::generate_snapshot(&archive) {
+        Ok(()) => {}
+        Err(err) => {
+            println!("{:?}", err);
+            std::process::exit(1);
+        }
+    }
 }
 
-fn delete_command(verbose: bool, args: Vec<String>) {
+fn delete_command(args: Vec<String>) {
     let mut file = "".to_string();
     {
         let mut ap = ArgumentParser::new();
@@ -55,19 +68,22 @@ fn delete_command(verbose: bool, args: Vec<String>) {
             }
         }
     }
-    println!("Verbosity: {}, File: {}", verbose, file);
+    let path = PathBuf::from(file);
+    match snapshot::delete_snapshot_file(&path) {
+        Ok(()) => {}
+        Err(err) => {
+            println!("{:?}", err);
+            std::process::exit(1);
+        }
+    }
 }
 
 fn main() {
-    let mut verbose = false;
     let mut subcommand = Command::backup;
     let mut args = vec!();
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("Manage file back ups");
-        ap.refer(&mut verbose)
-            .add_option(&["-v", "--verbose"], StoreTrue,
-            "Be verbose");
         ap.refer(&mut subcommand).required()
             .add_argument("command", Store,
                 "Command to run (either \"backup\" or \"delete\")");
@@ -80,7 +96,7 @@ fn main() {
 
     args.insert(0, format!("ergibus {:?}", subcommand));
     match subcommand {
-        Command::backup => backup_command(verbose, args),
-        Command::delete => delete_command(verbose, args),
+        Command::backup => backup_command(args),
+        Command::delete => delete_command(args),
     }
 }

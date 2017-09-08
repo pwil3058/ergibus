@@ -21,7 +21,7 @@ use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Debug)]
-enum SSError {
+pub enum SSError {
     NoSnapshotAvailable,
     SnapshotMismatch,
     SnapshotMismatchDirty(io::Error),
@@ -484,6 +484,20 @@ impl SnapshotGenerator {
             }
         }
     }
+}
+
+pub fn generate_snapshot(archive_name: &str) -> Result<(), SSError> {
+    let mut sg = SnapshotGenerator::new(archive_name)?;
+    sg.generate_snapshot();
+    sg.write_snapshot()?;
+    Ok(())
+}
+
+pub fn delete_snapshot_file(ss_file_path: &Path) -> Result<(), SSError> {
+    let snapshot = SnapshotPersistentData::from_file(ss_file_path)?;
+    fs::remove_file(ss_file_path).map_err(|err| SSError::IOError(err))?;
+    snapshot.release_contents();
+    Ok(())
 }
 
 #[cfg(test)]

@@ -81,9 +81,9 @@ impl Drop for ContentManager {
 fn file_digest(hash_algorithm: HashAlgorithm, file: &mut File) -> Result<String, io::Error> {
     let mut buffer = [0; 512000];
     let mut hasher = match hash_algorithm {
-        Sha1 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA1),
-        Sha256 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA256),
-        Sha512 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA512),
+        HashAlgorithm::Sha1 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA1),
+        HashAlgorithm::Sha256 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA256),
+        HashAlgorithm::Sha512 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA512),
     };
     loop {
         let n_bytes = file.read(&mut buffer)?;

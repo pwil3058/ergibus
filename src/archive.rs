@@ -23,10 +23,6 @@ pub struct Exclusions {
 }
 
 impl Exclusions {
-    pub fn new_dummy() -> Result<Exclusions, AError> {
-        Exclusions::new(&vec!["lost+found", "TEST"], &vec!["*.o", "*.a"])
-    }
-
     pub fn new(dir_patterns: &Vec<&str>, file_patterns: &Vec<&str>) -> Result<Exclusions, AError> {
         let mut dgs_builder = GlobSetBuilder::new();
         for pattern in dir_patterns {
