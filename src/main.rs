@@ -1,102 +1,73 @@
-extern crate argparse;
+#[macro_use]
+extern crate clap;
 
 extern crate ergibus;
-//mod snapshot;
 
 use std::io::{stdout, stderr};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use argparse::{ArgumentParser, StoreTrue, Store, List};
-
 use ergibus::snapshot;
 
-#[allow(non_camel_case_types)]
-#[derive(Debug)]
-enum Command {
-    backup,
-    delete,
-}
-
-impl FromStr for Command {
-    type Err = ();
-    fn from_str(src: &str) -> Result<Command, ()> {
-        return match src {
-            "backup" | "bu" => Ok(Command::backup),
-            "delete" | "del" => Ok(Command::delete),
-            _ => Err(()),
-        };
-    }
-}
-
-fn backup_command(args: Vec<String>) {
-    let mut archive = "".to_string();
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description("Takes a back up snapshot");
-        ap.refer(&mut archive).required()
-            .add_option(&["--archive"], Store,
-                r#"name of archive specifying what to back up"#);
-        match ap.parse(args, &mut stdout(), &mut stderr()) {
-            Ok(()) =>  {}
-            Err(x) => {
-                std::process::exit(x);
+fn backup_command(arg_matches: &clap::ArgMatches) {
+    let mut had_errors = false;
+    // safe to unwrap here as "archive" is a required option
+    for archive in arg_matches.values_of("archive").unwrap() {
+        match snapshot::generate_snapshot(&archive) {
+            Ok(()) => {}
+            Err(err) => {
+                println!("{:?}", err);
+                had_errors = true;
             }
         }
     }
-    match snapshot::generate_snapshot(&archive) {
-        Ok(()) => {}
-        Err(err) => {
-            println!("{:?}", err);
-            std::process::exit(1);
-        }
+    if had_errors {
+        std::process::exit(1);
     }
 }
 
-fn delete_command(args: Vec<String>) {
-    let mut file = "".to_string();
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description("Deletes a snapshot file");
-        ap.refer(&mut file)
-            .add_option(&["--file"], Store,
-                "Path of snapshot file to delete");
-        match ap.parse(args, &mut stdout(), &mut stderr()) {
-            Ok(()) =>  {}
-            Err(x) => {
-                std::process::exit(x);
+fn delete_command(arg_matches: &clap::ArgMatches) {
+    let mut had_errors = false;
+    // safe to unwrap here as "file" is a required option
+    for file in arg_matches.values_of("file").unwrap() {
+        let path = PathBuf::from(file);
+        match snapshot::delete_snapshot_file(&path) {
+            Ok(()) => {}
+            Err(err) => {
+                println!("{:?}", err);
+                had_errors = true;
             }
         }
     }
-    let path = PathBuf::from(file);
-    match snapshot::delete_snapshot_file(&path) {
-        Ok(()) => {}
-        Err(err) => {
-            println!("{:?}", err);
-            std::process::exit(1);
-        }
+    if had_errors {
+        std::process::exit(1);
     }
 }
 
 fn main() {
-    let mut subcommand = Command::backup;
-    let mut args = vec!();
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description("Manage file back ups");
-        ap.refer(&mut subcommand).required()
-            .add_argument("command", Store,
-                "Command to run (either \"backup\" or \"delete\")");
-        ap.refer(&mut args)
-            .add_argument("arguments", List,
-                "Arguments for command");
-        ap.stop_on_first_argument(true);
-        ap.parse_args_or_exit();
-    }
-
-    args.insert(0, format!("ergibus {:?}", subcommand));
-    match subcommand {
-        Command::backup => backup_command(args),
-        Command::delete => delete_command(args),
+    let matches = clap_app!(ergibus =>
+        (author: "Peter Williams <pwil3058@gmail.com>")
+        (about: "manage file backups")
+        (@subcommand bu =>
+            (about: "Generate a backup snapshot for the specified archive(s)")
+            (@arg archive:
+                -A --archive ...
+                +required +takes_value
+                "the name of the archive to generate backup snapshot for"
+            )
+        )
+        (@subcommand del =>
+            (about: "Delete the specified snapshot file(s)")
+            (@arg file:
+                -F --file ...
+                +required +takes_value
+                "path of snapshot file to be deleted"
+            )
+        )
+    ).get_matches();
+    match matches.subcommand() {
+        ("bu", Some(sub_matches)) => backup_command(sub_matches),
+        ("del", Some(sub_matches)) => delete_command(sub_matches),
+        _ => panic!("what happened")
     }
 }
