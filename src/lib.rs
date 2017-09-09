@@ -7,6 +7,7 @@ extern crate globset;
 extern crate hex;
 extern crate serde;
 extern crate serde_json;
+extern crate serde_yaml;
 extern crate snap;
 extern crate walkdir;
 
