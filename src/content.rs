@@ -23,20 +23,14 @@ use hex::ToHex;
 
 use crypto_hash;
 
+use eerror::CError;
+
 pub fn get_content_mgmt_key(repo_name: &str) -> Result<ContentMgmtKey, CError> {
     if repo_name == "dummy" {
         Ok(ContentMgmtKey::new_dummy())
     } else {
         Err(CError::UnknownRepo(repo_name.to_string()))
     }
-}
-
-#[derive(Debug)]
-pub enum CError {
-    UnknownRepo(String),
-    IOError(io::Error, PathBuf),
-    UnknownToken(String),
-    FileSystemError(io::Error),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]

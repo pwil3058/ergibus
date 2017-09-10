@@ -17,9 +17,7 @@ extern crate clap;
 
 extern crate ergibus;
 
-use std::io::{stdout, stderr};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use ergibus::snapshot;
 

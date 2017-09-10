@@ -20,17 +20,9 @@ use std::path::{Path, PathBuf};
 use globset::{self, Glob, GlobSet, GlobSetBuilder};
 use serde_yaml;
 
-use content::{ContentMgmtKey, CError, get_content_mgmt_key};
+use content::{ContentMgmtKey, get_content_mgmt_key};
+use eerror::{AError, CError};
 use pathux::{expand_home_dir};
-
-#[derive(Debug)]
-pub enum AError {
-    GlobError(globset::Error),
-    IOError(io::Error, PathBuf),
-    RelativeIncludePath(PathBuf),
-    ContentError(CError),
-    YamlError(serde_yaml::Error),
-}
 
 #[derive(Debug)]
 pub struct Exclusions {

@@ -29,23 +29,11 @@ use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local modules access
-use archive::{AError, Exclusions, ArchiveData, get_archive_data};
-use content::{ContentMgmtKey, ContentManager, CError, get_content_mgmt_key};
+use archive::{Exclusions, ArchiveData, get_archive_data};
+use content::{ContentMgmtKey, ContentManager, get_content_mgmt_key};
+use eerror::{AError, CError, SSError};
 use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
-
-#[derive(Debug)]
-pub enum SSError {
-    NoSnapshotAvailable,
-    SnapshotMismatch,
-    SnapshotMismatchDirty(io::Error),
-    IOError(io::Error),
-    JsonError(serde_json::Error),
-    SnapshotReadIOError(io::Error),
-    SnapshotReadJsonError(serde_json::Error),
-    ArchiveError(AError),
-    ContentError(CError),
-}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Attributes {

@@ -27,6 +27,7 @@ extern crate walkdir;
 
 mod archive;
 mod content;
+mod eerror;
 mod pathux;
 mod report;
 pub mod snapshot;
