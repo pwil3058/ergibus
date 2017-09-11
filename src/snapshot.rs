@@ -31,7 +31,7 @@ use walkdir::{WalkDir, WalkDirIterator};
 // local modules access
 use archive::{Exclusions, ArchiveData, get_archive_data};
 use content::{ContentMgmtKey, ContentManager, get_content_mgmt_key};
-use eerror::{AError, CError, SSError};
+use eerror::{EError, EResult};
 use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
@@ -205,7 +205,7 @@ impl SnapshotDir {
             Ok(ct) => ct,
             Err(err) => {
                 match err {
-                    CError::FileSystemError(io_err) => {
+                    EError::ContentStoreIOError(io_err) => {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
                         return FileStats{file_count: 0, byte_count: 0}
                     },
@@ -310,10 +310,10 @@ impl SnapshotPersistentData {
         }
     }
 
-    fn serialize(&self) -> Result<String, SSError> {
+    fn serialize(&self) -> EResult<String> {
         match serde_json::to_string(self) {
             Ok(string) => Ok(string),
-            Err(err) => Err(SSError::JsonError(err)),
+            Err(err) => Err(EError::SnapshotSerializeError(err)),
         }
     }
 
@@ -364,34 +364,34 @@ impl SnapshotPersistentData {
         PathBuf::from(format!("{}", dt.format("%Y-%m-%d-%H-%M-%SZ")))
     }
 
-    fn write_to_dir(&self, dir_path: &Path) -> Result<PathBuf, SSError> {
+    fn write_to_dir(&self, dir_path: &Path) -> EResult<PathBuf> {
         let file_name = self.file_name();
         let path = dir_path.join(file_name);
-        let mut file = File::create(&path).map_err(|err| SSError::IOError(err))?;
+        let mut file = File::create(&path).map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
         let json_text = self.serialize()?;
         let mut snappy_wtr = snap::Writer::new(file);
-        snappy_wtr.write_all(json_text.as_bytes()).map_err(|err| SSError::IOError(err))?;
+        snappy_wtr.write_all(json_text.as_bytes()).map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
         Ok(path)
     }
 }
 
 impl SnapshotPersistentData {
-    fn from_file(file_path: &Path) -> Result<SnapshotPersistentData, SSError> {
+    fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
         match File::open(file_path) {
             Ok(mut file) => {
                 let mut spd_str = String::new();
                 let mut snappy_rdr = snap::Reader::new(file);
                 match snappy_rdr.read_to_string(&mut spd_str) {
-                    Err(err) => return Err(SSError::SnapshotReadIOError(err)),
+                    Err(err) => return Err(EError::SnapshotReadIOError(err, file_path.to_path_buf())),
                     _ => ()
                 };
                 let spde = serde_json::from_str::<SnapshotPersistentData>(&spd_str);
                 match spde {
                     Ok(snapshot_persistent_data) => Ok(snapshot_persistent_data),
-                    Err(err) => Err(SSError::SnapshotReadJsonError(err))
+                    Err(err) => Err(EError::SnapshotReadJsonError(err, file_path.to_path_buf()))
                 }
             },
-            Err(err) => Err(SSError::SnapshotReadIOError(err))
+            Err(err) => Err(EError::SnapshotReadIOError(err, file_path.to_path_buf()))
         }
     }
 }
@@ -411,8 +411,8 @@ impl Drop for SnapshotGenerator {
 }
 
 impl SnapshotGenerator {
-    pub fn new(archive_name: &str) -> Result<SnapshotGenerator, SSError> {
-        let archive_data = get_archive_data(archive_name).map_err(|err| SSError::ArchiveError(err))?;
+    pub fn new(archive_name: &str) -> EResult<SnapshotGenerator> {
+        let archive_data = get_archive_data(archive_name)?;
         let snapshot: Option<SnapshotPersistentData> = None;
         Ok(SnapshotGenerator{ snapshot, archive_data })
     }
@@ -440,10 +440,10 @@ impl SnapshotGenerator {
         duration
     }
 
-    fn generation_duration(&self) -> Result<time::Duration, SSError> {
+    pub fn generation_duration(&self) -> EResult<time::Duration> {
         match self.snapshot {
             Some(ref snapshot) => Ok(snapshot.creation_duration()),
-            None => Err(SSError::NoSnapshotAvailable)
+            None => Err(EError::NoSnapshotAvailable)
         }
     }
 
@@ -455,12 +455,12 @@ impl SnapshotGenerator {
         self.snapshot = None;
     }
 
-    fn write_snapshot(&mut self) -> Result<PathBuf, SSError> {
+    fn write_snapshot(&mut self) -> EResult<PathBuf> {
         let file_path = match self.snapshot {
             Some(ref snapshot) => {
                 snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?
             },
-            None => return Err(SSError::NoSnapshotAvailable)
+            None => return Err(EError::NoSnapshotAvailable)
         };
         // check that the snapshot can be rebuilt from the file
         match SnapshotPersistentData::from_file(&file_path) {
@@ -472,8 +472,8 @@ impl SnapshotGenerator {
                 } else {
                     // The file is mangled so remove it
                     match fs::remove_file(&file_path) {
-                        Ok(_) => Err(SSError::SnapshotMismatch),
-                        Err(err) => Err(SSError::SnapshotMismatchDirty(err))
+                        Ok(_) => Err(EError::SnapshotMismatch(file_path.to_path_buf())),
+                        Err(err) => Err(EError::SnapshotMismatchDirty(err, file_path.to_path_buf()))
                     }
                 }
             },
@@ -488,16 +488,16 @@ impl SnapshotGenerator {
     }
 }
 
-pub fn generate_snapshot(archive_name: &str) -> Result<(), SSError> {
+pub fn generate_snapshot(archive_name: &str) -> EResult<()> {
     let mut sg = SnapshotGenerator::new(archive_name)?;
     sg.generate_snapshot();
     sg.write_snapshot()?;
     Ok(())
 }
 
-pub fn delete_snapshot_file(ss_file_path: &Path) -> Result<(), SSError> {
+pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     let snapshot = SnapshotPersistentData::from_file(ss_file_path)?;
-    fs::remove_file(ss_file_path).map_err(|err| SSError::IOError(err))?;
+    fs::remove_file(ss_file_path).map_err(|err| EError::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
     snapshot.release_contents();
     Ok(())
 }

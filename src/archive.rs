@@ -21,7 +21,7 @@ use globset::{self, Glob, GlobSet, GlobSetBuilder};
 use serde_yaml;
 
 use content::{ContentMgmtKey, get_content_mgmt_key};
-use eerror::{AError, CError};
+use eerror::{EError, EResult};
 use pathux::{expand_home_dir};
 
 #[derive(Debug)]
@@ -31,20 +31,20 @@ pub struct Exclusions {
 }
 
 impl Exclusions {
-    fn new(dir_patterns: &Vec<String>, file_patterns: &Vec<String>) -> Result<Exclusions, AError> {
+    fn new(dir_patterns: &Vec<String>, file_patterns: &Vec<String>) -> EResult<Exclusions> {
         let mut dgs_builder = GlobSetBuilder::new();
         for pattern in dir_patterns {
-            let glob = Glob::new(pattern).map_err(|err| AError::GlobError(err))?;
+            let glob = Glob::new(pattern).map_err(|err| EError::GlobError(err))?;
             dgs_builder.add(glob);
         }
-        let dir_globset = dgs_builder.build().map_err(|err| AError::GlobError(err))?;
+        let dir_globset = dgs_builder.build().map_err(|err| EError::GlobError(err))?;
 
         let mut fgs_builder = GlobSetBuilder::new();
         for pattern in file_patterns {
-            let glob = Glob::new(pattern).map_err(|err| AError::GlobError(err))?;
+            let glob = Glob::new(pattern).map_err(|err| EError::GlobError(err))?;
             fgs_builder.add(glob);
         }
-        let file_globset = fgs_builder.build().map_err(|err| AError::GlobError(err))?;
+        let file_globset = fgs_builder.build().map_err(|err| EError::GlobError(err))?;
 
         Ok(Exclusions{dir_globset, file_globset})
     }
@@ -81,21 +81,21 @@ struct ArchiveSpec {
     file_exclusions: Vec<String>
 }
 
-fn read_archive_spec(archive_name: &str) -> Result<ArchiveSpec, AError> {
+fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
     let config_dir_path = Path::new("./TEST/config/archives").canonicalize().unwrap();
     let mut spec_file_path = config_dir_path.join(archive_name);
     spec_file_path.set_extension("aspec");
-    let mut spec_file = File::open(&spec_file_path).map_err(|err| AError::IOError(err, spec_file_path.clone()))?;
-    let spec: ArchiveSpec = serde_yaml::from_reader(&spec_file).map_err(|err| AError::YamlError(err))?;
+    let mut spec_file = File::open(&spec_file_path).map_err(|err| EError::ArchiveReadError(err, spec_file_path.clone()))?;
+    let spec: ArchiveSpec = serde_yaml::from_reader(&spec_file).map_err(|err| EError::ArchiveYamlReadError(err, archive_name.to_string()))?;
     Ok(spec)
 }
 
-fn write_archive_spec(archive_name: &str, archive_spec: &ArchiveSpec) -> Result<(), AError> {
+fn write_archive_spec(archive_name: &str, archive_spec: &ArchiveSpec) -> EResult<()> {
     let config_dir_path = Path::new("./TEST/config/archives").canonicalize().unwrap();
     let mut spec_file_path = config_dir_path.join(archive_name);
     spec_file_path.set_extension("aspec");
-    let mut spec_file = File::create(&spec_file_path).map_err(|err| AError::IOError(err, spec_file_path.clone()))?;
-    serde_yaml::to_writer(&spec_file, archive_spec).map_err(|err| AError::YamlError(err))?;
+    let mut spec_file = File::create(&spec_file_path).map_err(|err| EError::ArchiveWriteError(err, spec_file_path.clone()))?;
+    serde_yaml::to_writer(&spec_file, archive_spec).map_err(|err| EError::ArchiveYamlWriteError(err, archive_name.to_string()))?;
     Ok(())
 }
 
@@ -108,11 +108,11 @@ pub struct ArchiveData {
     pub exclusions: Exclusions,
 }
 
-pub fn get_archive_data(archive_name: &str) -> Result<ArchiveData, AError> {
+pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let archive_spec = read_archive_spec(archive_name)?;
     let name = archive_name.to_string();
-    let content_mgmt_key = get_content_mgmt_key(&archive_spec.content_repo_name).map_err(|err| AError::ContentError(err))?;
-    let snapshot_dir_path = PathBuf::from(&archive_spec.snapshot_dir_path).canonicalize().map_err(|err| AError::IOError(err, PathBuf::from(&archive_spec.snapshot_dir_path)))?;
+    let content_mgmt_key = get_content_mgmt_key(&archive_spec.content_repo_name)?;
+    let snapshot_dir_path = PathBuf::from(&archive_spec.snapshot_dir_path).canonicalize().map_err(|err| EError::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path)))?;
     let mut includes = Vec::new();
     for inclusion in archive_spec.inclusions {
         let included_file_path = if inclusion.starts_with("~") {
@@ -120,7 +120,7 @@ pub fn get_archive_data(archive_name: &str) -> Result<ArchiveData, AError> {
         } else {
             let path_buf = PathBuf::from(inclusion);
             if path_buf.is_relative() {
-                return Err(AError::RelativeIncludePath(path_buf));
+                return Err(EError::RelativeIncludePath(path_buf, archive_name.to_string()));
             };
             path_buf
         };

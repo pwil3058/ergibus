@@ -20,31 +20,25 @@ use serde_json;
 use serde_yaml;
 
 #[derive(Debug)]
-pub enum AError {
+pub enum EError {
+    ArchiveGlobError(globset::Error, String),
     GlobError(globset::Error),
-    IOError(io::Error, PathBuf),
-    RelativeIncludePath(PathBuf),
-    ContentError(CError),
-    YamlError(serde_yaml::Error),
-}
-
-#[derive(Debug)]
-pub enum CError {
+    ArchiveReadError(io::Error, PathBuf),
+    ArchiveWriteError(io::Error, PathBuf),
+    ArchiveDirError(io::Error, PathBuf),
+    RelativeIncludePath(PathBuf, String),
     UnknownRepo(String),
-    IOError(io::Error, PathBuf),
-    UnknownToken(String),
-    FileSystemError(io::Error),
+    ArchiveYamlReadError(serde_yaml::Error, String),
+    ArchiveYamlWriteError(serde_yaml::Error, String),
+    ContentStoreIOError(io::Error),
+    NoSnapshotAvailable,
+    SnapshotWriteIOError(io::Error, PathBuf),
+    SnapshotReadIOError(io::Error, PathBuf),
+    SnapshotDeleteIOError(io::Error, PathBuf),
+    SnapshotReadJsonError(serde_json::Error, PathBuf),
+    SnapshotMismatch(PathBuf),
+    SnapshotMismatchDirty(io::Error, PathBuf),
+    SnapshotSerializeError(serde_json::Error),
 }
 
-#[derive(Debug)]
-pub enum SSError {
-    NoSnapshotAvailable,
-    SnapshotMismatch,
-    SnapshotMismatchDirty(io::Error),
-    IOError(io::Error),
-    JsonError(serde_json::Error),
-    SnapshotReadIOError(io::Error),
-    SnapshotReadJsonError(serde_json::Error),
-    ArchiveError(AError),
-    ContentError(CError),
-}
+pub type EResult<T> = Result<T, EError>;

@@ -23,13 +23,13 @@ use hex::ToHex;
 
 use crypto_hash;
 
-use eerror::CError;
+use eerror::{EError, EResult};
 
-pub fn get_content_mgmt_key(repo_name: &str) -> Result<ContentMgmtKey, CError> {
+pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
     if repo_name == "dummy" {
         Ok(ContentMgmtKey::new_dummy())
     } else {
-        Err(CError::UnknownRepo(repo_name.to_string()))
+        Err(EError::UnknownRepo(repo_name.to_string()))
     }
 }
 
@@ -108,14 +108,14 @@ impl ContentManager {
         ContentManager{count: Cell::new(0), content_mgmt_key: content_mgmt_key.clone()}
     }
 
-    pub fn store_file_contents(&self, abs_file_path: &Path) -> Result<String, CError> {
+    pub fn store_file_contents(&self, abs_file_path: &Path) -> EResult<String> {
         self.count.replace(self.count.get() + 1);
-        let mut file = File::open(abs_file_path).map_err(|err| CError::FileSystemError(err))?;
-        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| CError::FileSystemError(err))?;
+        let mut file = File::open(abs_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
         Ok(digest)
     }
 
-    pub fn release_contents(&self, content_token: &str) -> Result<(), CError> {
+    pub fn release_contents(&self, content_token: &str) -> EResult<()> {
         self.count.replace(self.count.get() - 1);
         Ok(())
     }
