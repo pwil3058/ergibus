@@ -26,6 +26,7 @@ extern crate snap;
 extern crate walkdir;
 
 mod archive;
+mod config;
 mod content;
 mod eerror;
 mod pathux;

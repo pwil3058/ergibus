@@ -65,13 +65,13 @@ pub fn first_subpath_as_string(path: &Path) -> Option<String> {
     None
 }
 
-pub fn expand_home_dir(rel_path: &Path) -> PathBuf {
-    let parts = split_rel_path(rel_path);
+pub fn expand_home_dir(rel_path_str: &str) -> PathBuf {
+    let parts = split_rel_path(&PathBuf::from(rel_path_str));
     let mut path_buf = PathBuf::new();
     if parts[0] == "~" {
         path_buf.push(env::home_dir().unwrap());
     } else {
-        panic!("Illegal input: {:?}", rel_path);
+        panic!("Illegal input: {:?}", rel_path_str);
     };
     for part in &parts[1..] {
         path_buf.push(part);
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn test_expand_home_dir() {
         let home_dir = env::home_dir().unwrap();
-        assert_eq!(home_dir, expand_home_dir(&PathBuf::from("~")));
-        assert_eq!(home_dir.join("SRC/GITHUB"), expand_home_dir(&PathBuf::from("~/SRC/GITHUB")));
+        assert_eq!(home_dir, expand_home_dir("~"));
+        assert_eq!(home_dir.join("SRC/GITHUB"), expand_home_dir("~/SRC/GITHUB"));
     }
 }

@@ -504,6 +504,7 @@ pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use super::*;
 
     #[test]
@@ -526,6 +527,7 @@ mod tests {
 
     #[test]
     fn test_write_snapshot() {
+        env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
         let mut sg = SnapshotGenerator::new("dummy").unwrap();
         sg.generate_snapshot();
         println!("Generating for {:?} took {:?}", "dummy", sg.generation_duration());

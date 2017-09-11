@@ -14,12 +14,13 @@
 
 use std::io;
 use std::io::prelude::*;
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 use globset::{self, Glob, GlobSet, GlobSetBuilder};
 use serde_yaml;
 
+use config;
 use content::{ContentMgmtKey, get_content_mgmt_key};
 use eerror::{EError, EResult};
 use pathux::{expand_home_dir};
@@ -82,7 +83,7 @@ struct ArchiveSpec {
 }
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
-    let config_dir_path = Path::new("./TEST/config/archives").canonicalize().unwrap();
+    let config_dir_path = config::get_archive_config_dir_path();
     let mut spec_file_path = config_dir_path.join(archive_name);
     spec_file_path.set_extension("aspec");
     let mut spec_file = File::open(&spec_file_path).map_err(|err| EError::ArchiveReadError(err, spec_file_path.clone()))?;
@@ -91,7 +92,10 @@ fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
 }
 
 fn write_archive_spec(archive_name: &str, archive_spec: &ArchiveSpec) -> EResult<()> {
-    let config_dir_path = Path::new("./TEST/config/archives").canonicalize().unwrap();
+    let config_dir_path = config::get_archive_config_dir_path();
+    if !config_dir_path.exists() {
+        fs::create_dir_all(&config_dir_path).map_err(|err| EError::ArchiveWriteError(err, config_dir_path.clone()))?;
+    }
     let mut spec_file_path = config_dir_path.join(archive_name);
     spec_file_path.set_extension("aspec");
     let mut spec_file = File::create(&spec_file_path).map_err(|err| EError::ArchiveWriteError(err, spec_file_path.clone()))?;
@@ -116,7 +120,7 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let mut includes = Vec::new();
     for inclusion in archive_spec.inclusions {
         let included_file_path = if inclusion.starts_with("~") {
-            expand_home_dir(&PathBuf::from(inclusion))
+            expand_home_dir(&inclusion)
         } else {
             let path_buf = PathBuf::from(inclusion);
             if path_buf.is_relative() {
@@ -133,6 +137,7 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use super::*;
 
     #[test]
@@ -171,6 +176,7 @@ mod tests {
 
     #[test]
     fn test_get_archive() {
+        env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
         let archive = get_archive_data("dummy");
         assert!(archive.is_ok());
         //assert_eq!("dummy".to_string(), archive.name);
@@ -201,6 +207,7 @@ file_exclusions:\n
 
     #[test]
     fn test_read_write_archive_spec() {
+        env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
         let spec: ArchiveSpec = read_archive_spec("dummy").unwrap();
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(spec.snapshot_dir_path, "./TEST/store/ergibus/archives/dummy");
