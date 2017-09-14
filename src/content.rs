@@ -22,8 +22,14 @@ use std::str::FromStr;
 use hex::ToHex;
 
 use crypto_hash;
+use serde_yaml;
 
+use config;
 use eerror::{EError, EResult};
+
+pub fn content_repo_exists(repo_name: &str) -> bool {
+    repo_name == "dummy"
+}
 
 pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
     if repo_name == "dummy" {
@@ -31,6 +37,25 @@ pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
     } else {
         Err(EError::UnknownRepo(repo_name.to_string()))
     }
+}
+
+pub fn create_new_repo(name: &str, location: &str, hash_algortithm_str: &str) -> EResult<()> {
+    if content_repo_exists(name) {
+        return Err(EError::RepoExists(name.to_string()))
+    }
+    let hash_algorithm = HashAlgorithm::from_str(hash_algortithm_str)?;
+    let mut repo_dir_path = PathBuf::from(location);
+    repo_dir_path.push("ergibus");
+    repo_dir_path.push("repos");
+    repo_dir_path.push(name);
+    fs::create_dir_all(&repo_dir_path).map_err(|err| EError::RepoCreateError(err, repo_dir_path.clone()))?;
+    // TODO: create lock file and reference count file
+    let spec = RepoSpec {
+        base_dir_path: repo_dir_path,
+        hash_algorithm: hash_algorithm
+    };
+    write_repo_spec(name, &spec)?;
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
@@ -41,17 +66,52 @@ pub enum HashAlgorithm {
 }
 
 impl FromStr for HashAlgorithm {
-    type Err = ();
-    fn from_str(src: &str) -> Result<HashAlgorithm, ()> {
-        return match src {
+    type Err = EError;
+    fn from_str(src: &str) -> Result<HashAlgorithm, EError> {
+        match src {
             "Sha1" | "SHA1" | "sha1" => Ok(HashAlgorithm::Sha1),
             "Sha256" | "SHA256" | "sha256" => Ok(HashAlgorithm::Sha256),
             "Sha512" | "SHA512" | "sha512" => Ok(HashAlgorithm::Sha512),
-            _ => Err(()),
-        };
+            _ => Err(EError::UnknownKeyAlgorithm(src.to_string())),
+        }
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+struct RepoSpec {
+    base_dir_path: PathBuf,
+    hash_algorithm: HashAlgorithm
+}
+
+fn get_repo_spec_file_path(repo_name: &str) -> PathBuf {
+    let config_dir_path = config::get_repo_config_dir_path();
+    let mut spec_file_path = config_dir_path.join(repo_name);
+    spec_file_path.set_extension("rspec");
+    spec_file_path
+}
+
+fn read_repo_spec(repo_name: &str) -> EResult<RepoSpec> {
+    let mut spec_file_path = get_repo_spec_file_path(repo_name);
+    let mut spec_file = File::open(&spec_file_path).map_err(|err| EError::RepoReadError(err, spec_file_path.clone()))?;
+    let spec: RepoSpec = serde_yaml::from_reader(&spec_file).map_err(|err| EError::RepoYamlReadError(err, repo_name.to_string()))?;
+    Ok(spec)
+}
+
+fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> EResult<()> {
+    let mut spec_file_path = get_repo_spec_file_path(repo_name);
+    if spec_file_path.exists() {
+        return Err(EError::RepoExists(repo_name.to_string()))
+    }
+    match spec_file_path.parent() {
+        Some(config_dir_path) => if !config_dir_path.exists() {
+            fs::create_dir_all(&config_dir_path).map_err(|err| EError::RepoWriteError(err, config_dir_path.to_path_buf()))?;
+        },
+        None => (),
+    }
+    let mut spec_file = File::create(&spec_file_path).map_err(|err| EError::RepoWriteError(err, spec_file_path.clone()))?;
+    serde_yaml::to_writer(&spec_file, repo_spec).map_err(|err| EError::RepoYamlWriteError(err, repo_name.to_string()))?;
+    Ok(())
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct ContentMgmtKey {

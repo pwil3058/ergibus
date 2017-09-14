@@ -22,15 +22,25 @@ use serde_yaml;
 #[derive(Debug)]
 pub enum EError {
     ArchiveGlobError(globset::Error, String),
+    ArchiveExists(String),
     GlobError(globset::Error),
     ArchiveReadError(io::Error, PathBuf),
     ArchiveWriteError(io::Error, PathBuf),
     ArchiveDirError(io::Error, PathBuf),
     RelativeIncludePath(PathBuf, String),
-    UnknownRepo(String),
     ArchiveYamlReadError(serde_yaml::Error, String),
     ArchiveYamlWriteError(serde_yaml::Error, String),
+
+    RepoExists(String),
+    UnknownRepo(String),
+    UnknownKeyAlgorithm(String),
     ContentStoreIOError(io::Error),
+    RepoCreateError(io::Error, PathBuf),
+    RepoReadError(io::Error, PathBuf),
+    RepoWriteError(io::Error, PathBuf),
+    RepoYamlWriteError(serde_yaml::Error, String),
+    RepoYamlReadError(serde_yaml::Error, String),
+
     NoSnapshotAvailable,
     SnapshotWriteIOError(io::Error, PathBuf),
     SnapshotReadIOError(io::Error, PathBuf),

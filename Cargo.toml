@@ -5,16 +5,18 @@ authors = ["Peter Williams <pwil3058@gmail.com>"]
 
 [dependencies]
 chrono = "0.4"
-clap = "~2.19.0"
+clap = "~2.26.0"
 #{version = "~2.19.0", features = ["yaml"]}
 crypto-hash = "0.3.0"
 globset = "0.1"
 hex = "0.2"
+hostname = "^0.1"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.7.1"
 snap = "0.2"
+users = "0.5.0"
 walkdir = "1.0.7"
 
 [workspace]
