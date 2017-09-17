@@ -110,7 +110,7 @@ impl SnapshotDir {
 
     fn release_contents(&self, content_mgr: &ContentManager) {
         for file_data in self.files.values() {
-            content_mgr.release_contents(&file_data.content_token).unwrap();
+            content_mgr.release_contents(&file_data.content_token);
         }
         for subdir in self.subdirs.values() {
             subdir.release_contents(content_mgr);
@@ -360,8 +360,8 @@ impl SnapshotPersistentData {
     }
 
     fn file_name(&self) -> PathBuf {
-        let dt = DateTime::<Utc>::from(self.finished_create);
-        PathBuf::from(format!("{}", dt.format("%Y-%m-%d-%H-%M-%SZ")))
+        let dt = DateTime::<Local>::from(self.finished_create);
+        PathBuf::from(format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z")))
     }
 
     fn write_to_dir(&self, dir_path: &Path) -> EResult<PathBuf> {
