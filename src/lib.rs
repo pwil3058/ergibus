@@ -36,3 +36,5 @@ mod eerror;
 pub mod pathux;
 mod report;
 pub mod snapshot;
+
+pub mod gui;

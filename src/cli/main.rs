@@ -100,19 +100,15 @@ fn new_archive_command(arg_matches: &clap::ArgMatches) {
 }
 
 fn new_repo_command(arg_matches: &clap::ArgMatches) {
-    println!("{:?}", arg_matches);
     let repo_name = arg_matches.value_of("repo_name").ok_or(0).unwrap_or_else(
         |_| panic!("{:?}: line {:?}", file!(), line!())
     );
-    println!("Repository name: {:?}", repo_name);
     let location = arg_matches.value_of("location").ok_or(0).unwrap_or_else(
         |_| panic!("{:?}: line {:?}", file!(), line!())
     );
-    println!("Location: {:?}", location);
     let algorithm = arg_matches.value_of("key_hash_algorithm").ok_or(0).unwrap_or_else(
         |_| panic!("{:?}: line {:?}", file!(), line!())
     );
-    println!("Algorithm: {:?}", algorithm);
     if let Err(err) = content::create_new_repo(repo_name, location, algorithm) {
         println!("{:?}", err);
         std::process::exit(1);
