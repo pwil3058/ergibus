@@ -33,6 +33,7 @@ pub enum EError {
 
     RepoExists(String),
     UnknownRepo(String),
+    UnknownContentKey(String),
     UnknownKeyAlgorithm(String),
     ContentStoreIOError(io::Error),
     RepoCreateError(io::Error, PathBuf),
@@ -40,6 +41,10 @@ pub enum EError {
     RepoWriteError(io::Error, PathBuf),
     RepoYamlWriteError(serde_yaml::Error, String),
     RepoYamlReadError(serde_yaml::Error, String),
+    RefCounterReadIOError(io::Error),
+    RefCounterWriteIOError(io::Error),
+    RefCounterReadJsonError(serde_json::Error),
+    RefCounterSerializeError(serde_json::Error),
 
     NoSnapshotAvailable,
     SnapshotWriteIOError(io::Error, PathBuf),

@@ -23,7 +23,7 @@ use serde_yaml;
 use users;
 
 use config;
-use content::{ContentMgmtKey, get_content_mgmt_key, content_repo_exists};
+use content::{self, ContentMgmtKey, get_content_mgmt_key, content_repo_exists};
 use eerror::{EError, EResult};
 use pathux::{expand_home_dir};
 
@@ -225,9 +225,12 @@ mod tests {
     #[test]
     fn test_get_archive() {
         env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
-        let archive = get_archive_data("dummy");
-        assert!(archive.is_ok());
-        //assert_eq!("dummy".to_string(), archive.name);
+        if let Err(err) = get_archive_data("dummy") {
+            match err {
+                EError::UnknownRepo(_) => (),
+                _ => panic!("ERR: {:?}", err)
+            }
+        };
     }
 
     #[test]

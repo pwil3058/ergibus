@@ -1,0 +1,2 @@
+A lock file to help stop unit tests that set environment variables from
+interfering with each other.

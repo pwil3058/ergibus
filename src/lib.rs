@@ -17,6 +17,7 @@ extern crate serde_derive;
 
 extern crate chrono;
 extern crate crypto_hash;
+extern crate fs2;
 extern crate globset;
 extern crate hex;
 extern crate hostname;
@@ -24,6 +25,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
 extern crate snap;
+extern crate tempdir;
 extern crate users;
 extern crate walkdir;
 
