@@ -25,8 +25,10 @@ use ergibus::snapshot;
 
 fn backup_command(arg_matches: &clap::ArgMatches) {
     let mut had_errors = false;
-    // safe to unwrap here as "archive" is a required option
-    for archive in arg_matches.values_of("archive").unwrap() {
+    let archives = arg_matches.values_of("archive").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
+    for archive in archives {
         match snapshot::generate_snapshot(&archive) {
             Ok(()) => {}
             Err(err) => {
@@ -42,8 +44,10 @@ fn backup_command(arg_matches: &clap::ArgMatches) {
 
 fn delete_command(arg_matches: &clap::ArgMatches) {
     let mut had_errors = false;
-    // safe to unwrap here as "file" is a required option
-    for file in arg_matches.values_of("file").unwrap() {
+    let files = arg_matches.values_of("file").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
+    for file in files {
         let path = PathBuf::from(file);
         match snapshot::delete_snapshot_file(&path) {
             Ok(()) => {}
@@ -59,13 +63,15 @@ fn delete_command(arg_matches: &clap::ArgMatches) {
 }
 
 fn new_archive_command(arg_matches: &clap::ArgMatches) {
-//    let mut had_errors = false;
-    // unwrap should be safe here
-    let archive_name = arg_matches.value_of("archive_name").unwrap();
-    // unwrap should be safe here
-    let repo_name = arg_matches.value_of("repo_name").unwrap();
-    // unwrap should be safe here
-    let location = arg_matches.value_of("location").unwrap();
+    let archive_name = arg_matches.value_of("archive_name").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
+    let repo_name = arg_matches.value_of("repo_name").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
+    let location = arg_matches.value_of("location").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
     let mut inclusions: Vec<String> = Vec::new();
     match arg_matches.values_of("inclusions") {
         Some(inclusion_values) => for inclusion in inclusion_values {
@@ -95,14 +101,17 @@ fn new_archive_command(arg_matches: &clap::ArgMatches) {
 
 fn new_repo_command(arg_matches: &clap::ArgMatches) {
     println!("{:?}", arg_matches);
-    // unwrap should be safe here
-    let repo_name = arg_matches.value_of("repo_name").unwrap();
+    let repo_name = arg_matches.value_of("repo_name").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
     println!("Repository name: {:?}", repo_name);
-    // unwrap should be safe here
-    let location = arg_matches.value_of("location").unwrap();
+    let location = arg_matches.value_of("location").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
     println!("Location: {:?}", location);
-    // unwrap should be safe here
-    let algorithm = arg_matches.value_of("key_hash_algorithm").unwrap();
+    let algorithm = arg_matches.value_of("key_hash_algorithm").ok_or(0).unwrap_or_else(
+        |_| panic!("{:?}: line {:?}", file!(), line!())
+    );
     println!("Algorithm: {:?}", algorithm);
     if let Err(err) = content::create_new_repo(repo_name, location, algorithm) {
         println!("{:?}", err);

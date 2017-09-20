@@ -33,6 +33,6 @@ pub mod archive;
 mod config;
 pub mod content;
 mod eerror;
-mod pathux;
+pub mod pathux;
 mod report;
 pub mod snapshot;

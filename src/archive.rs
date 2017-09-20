@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
-use std::io::prelude::*;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
-use globset::{self, Glob, GlobSet, GlobSetBuilder};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use hostname;
 use serde_yaml;
 use users;
 
 use config;
-use content::{self, ContentMgmtKey, get_content_mgmt_key, content_repo_exists};
+use content::{ContentMgmtKey, get_content_mgmt_key, content_repo_exists};
 use eerror::{EError, EResult};
 use pathux::{expand_home_dir};
 
@@ -58,7 +56,10 @@ impl Exclusions {
         } else if self.dir_globset.is_match(abs_dir_path) {
             return true;
         } else {
-            let dir_name = abs_dir_path.file_name().unwrap();
+            let dir_name = match abs_dir_path.file_name() {
+                Some(dir_name) => dir_name,
+                None => panic!("{:?}: line {:?}", file!(), line!())
+            };
             return self.dir_globset.is_match(&dir_name);
         }
     }
@@ -69,7 +70,10 @@ impl Exclusions {
         } else if self.file_globset.is_match(abs_file_path) {
             return true;
         } else {
-            let file_name = abs_file_path.file_name().unwrap();
+            let file_name = match abs_file_path.file_name() {
+                Some(file_name) => file_name,
+                None => panic!("{:?}: line {:?}", file!(), line!())
+            };
             return self.file_globset.is_match(&file_name);
         }
     }
@@ -92,14 +96,14 @@ fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
 }
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
-    let mut spec_file_path = get_archive_spec_file_path(archive_name);
-    let mut spec_file = File::open(&spec_file_path).map_err(|err| EError::ArchiveReadError(err, spec_file_path.clone()))?;
+    let spec_file_path = get_archive_spec_file_path(archive_name);
+    let spec_file = File::open(&spec_file_path).map_err(|err| EError::ArchiveReadError(err, spec_file_path.clone()))?;
     let spec: ArchiveSpec = serde_yaml::from_reader(&spec_file).map_err(|err| EError::ArchiveYamlReadError(err, archive_name.to_string()))?;
     Ok(spec)
 }
 
 fn write_archive_spec(archive_name: &str, archive_spec: &ArchiveSpec, overwrite: bool) -> EResult<()> {
-    let mut spec_file_path = get_archive_spec_file_path(archive_name);
+    let spec_file_path = get_archive_spec_file_path(archive_name);
     if !overwrite && spec_file_path.exists() {
         return Err(EError::ArchiveExists(archive_name.to_string()))
     }
@@ -109,7 +113,7 @@ fn write_archive_spec(archive_name: &str, archive_spec: &ArchiveSpec, overwrite:
         },
         None => (),
     }
-    let mut spec_file = File::create(&spec_file_path).map_err(|err| EError::ArchiveWriteError(err, spec_file_path.clone()))?;
+    let spec_file = File::create(&spec_file_path).map_err(|err| EError::ArchiveWriteError(err, spec_file_path.clone()))?;
     serde_yaml::to_writer(&spec_file, archive_spec).map_err(|err| EError::ArchiveYamlWriteError(err, archive_name.to_string()))?;
     Ok(())
 }
@@ -149,9 +153,13 @@ pub fn create_new_archive(name: &str, content_repo_name: &str, location: &str, i
     };
     snapshot_dir_path.push(name);
     fs::create_dir_all(&snapshot_dir_path).map_err(|err| EError::ArchiveWriteError(err, snapshot_dir_path.clone()))?;
+    let sdp_str = match snapshot_dir_path.to_str() {
+        Some(sdp_ostr) => sdp_ostr.to_string(),
+        None => panic!("{:?}: line {:?}", file!(), line!())
+    };
     let spec = ArchiveSpec {
         content_repo_name: content_repo_name.to_string(),
-        snapshot_dir_path: snapshot_dir_path.to_str().unwrap().to_string(),
+        snapshot_dir_path: sdp_str,
         inclusions: inclusions,
         dir_exclusions: dir_exclusions,
         file_exclusions: file_exclusions
@@ -190,7 +198,9 @@ mod tests {
 
     #[test]
     fn test_file_exclusions() {
-        let excl = Exclusions::new(&vec![], &vec!["*.[ao]".to_string(), "this.*".to_string()]).unwrap();
+        let excl = Exclusions::new(&vec![], &vec!["*.[ao]".to_string(), "this.*".to_string()]).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         assert!(excl.is_excluded_file(&Path::new("whatever.o")));
         assert!(excl.is_excluded_file(&Path::new("whatever.a")));
         assert!(!excl.is_excluded_file(&Path::new("whatever.c")));
@@ -207,7 +217,9 @@ mod tests {
 
     #[test]
     fn test_dir_exclusions() {
-        let excl = Exclusions::new(&vec!["*.[ao]".to_string(), "this.*".to_string()], &vec![]).unwrap();
+        let excl = Exclusions::new(&vec!["*.[ao]".to_string(), "this.*".to_string()], &vec![]).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         assert!(excl.is_excluded_dir(&Path::new("whatever.o")));
         assert!(excl.is_excluded_dir(&Path::new("whatever.a")));
         assert!(!excl.is_excluded_dir(&Path::new("whatever.c")));
@@ -248,7 +260,9 @@ file_exclusions:\n
    - \"*.[oa]\"\n
    - \"*.py[co]\"\n
 ";
-        let spec: ArchiveSpec = serde_yaml::from_str(&yaml_str).unwrap();
+        let spec: ArchiveSpec = serde_yaml::from_str(&yaml_str).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(spec.snapshot_dir_path, "./TEST/store/ergibus/archives/dummy");
         assert_eq!(spec.inclusions, vec!["~/SRC/GITHUB/ergibus.git/src", "~/SRC/GITHUB/ergibus.git/target"]);
@@ -259,7 +273,9 @@ file_exclusions:\n
     #[test]
     fn test_read_write_archive_spec() {
         env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
-        let spec: ArchiveSpec = read_archive_spec("dummy").unwrap();
+        let spec: ArchiveSpec = read_archive_spec("dummy").unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(spec.snapshot_dir_path, "./TEST/store/ergibus/archives/dummy");
         assert_eq!(spec.inclusions, vec!["~/SRC/GITHUB/ergibus.git/src", "~/SRC/GITHUB/ergibus.git/target"]);
@@ -268,7 +284,9 @@ file_exclusions:\n
         if let Err(err) = write_archive_spec("dummy", &spec, true) {
             panic!("write spec failed")
         };
-        let spec: ArchiveSpec = read_archive_spec("dummy").unwrap();
+        let spec: ArchiveSpec = read_archive_spec("dummy").unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(spec.snapshot_dir_path, "./TEST/store/ergibus/archives/dummy");
         assert_eq!(spec.inclusions, vec!["~/SRC/GITHUB/ergibus.git/src", "~/SRC/GITHUB/ergibus.git/target"]);

@@ -29,8 +29,8 @@ use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local modules access
-use archive::{self, Exclusions, ArchiveData, get_archive_data};
-use content::{self, ContentMgmtKey, ContentManager, get_content_mgmt_key};
+use archive::{Exclusions, ArchiveData, get_archive_data};
+use content::{ContentMgmtKey, ContentManager};
 use eerror::{EError, EResult};
 use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
@@ -111,7 +111,7 @@ impl SnapshotDir {
     fn release_contents(&self, content_mgr: &ContentManager) {
         for file_data in self.files.values() {
             if let Err(err) = content_mgr.release_contents(&file_data.content_token) {
-                panic!("key error: {:?}", err);
+                panic!("{:?}: line {:?}: token error: {:?}", file!(), line!(), err);
             };
         }
         for subdir in self.subdirs.values() {
@@ -119,6 +119,7 @@ impl SnapshotDir {
         }
     }
 
+    #[test]
     fn find_subdir(&self, abs_subdir_path: &PathBuf) -> Option<&SnapshotDir> {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path) {
@@ -151,9 +152,12 @@ impl SnapshotDir {
                     let snapshot_dir = SnapshotDir::new(Some(&path_buf))?;
                     self.subdirs.insert(first_name.clone(), snapshot_dir);
                 }
-                return self.subdirs.get_mut(&first_name).unwrap().find_or_add_subdir(abs_subdir_path)
+                match self.subdirs.get_mut(&first_name) {
+                    Some(subdir) => subdir.find_or_add_subdir(abs_subdir_path),
+                    None => panic!("{:?}: line {:?}", file!(), line!())
+                }
             },
-            Err(err) => panic!(err),
+            Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err),
         }
     }
 
@@ -192,7 +196,9 @@ impl SnapshotDir {
     }
 
     fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> FileStats {
-        let file_name = dir_entry.file_name().into_string().unwrap();
+        let file_name = dir_entry.file_name().into_string().unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         if self.files.contains_key(&file_name) {
             return FileStats{file_count: 0, byte_count: 0}
         }
@@ -211,7 +217,7 @@ impl SnapshotDir {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
                         return FileStats{file_count: 0, byte_count: 0}
                     },
-                    _ => panic!("should not happen")
+                    _ => panic!("{:?}: line {:?}: should not happen: {:?}", file!(), line!(), err)
                 }
             }
         };
@@ -221,7 +227,9 @@ impl SnapshotDir {
     }
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
-        let file_name = dir_entry.file_name().into_string().unwrap();
+        let file_name = dir_entry.file_name().into_string().unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
             return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
         }
@@ -300,7 +308,9 @@ struct SnapshotPersistentData {
 
 impl SnapshotPersistentData {
     fn new(archive_name: &str, rmk: &ContentMgmtKey) -> SnapshotPersistentData {
-        let sd = SnapshotDir::new(None).unwrap();
+        let sd = SnapshotDir::new(None).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         SnapshotPersistentData{
             root_dir: sd,
             content_mgmt_key: rmk.clone(),
@@ -320,21 +330,17 @@ impl SnapshotPersistentData {
     }
 
     fn release_contents(&self) {
-        // TODO: make sure unwrap() is OK here
-        let content_mgr = match self.content_mgmt_key.open_content_manager(true) {
-            Ok(cm) => cm,
-            Err(err) => panic!("realease contents: {:?}", err)
-        };
+        let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
+        );
         self.root_dir.release_contents(&content_mgr);
     }
 
     fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> io::Result<()> {
         let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
-        // TODO: make sure unwrap() is OK here
-        let content_mgr = match self.content_mgmt_key.open_content_manager(true) {
-            Ok(cm) => cm,
-            Err(err) => panic!("add dir: {:?}", err)
-        };
+        let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
+        );
         dir.populate(exclusions, &content_mgr);
         for entry in WalkDir::new(abs_dir_path).into_iter().filter_entry(|e| e.file_type().is_dir()) {
             match entry {
@@ -353,9 +359,12 @@ impl SnapshotPersistentData {
                     }
                 },
                 Err(err) => {
-                    let path = err.path().unwrap().to_path_buf();
+                    let path_buf = match err.path() {
+                        Some(path) => path.to_path_buf(),
+                        None => panic!("{:?}: line {:?}", file!(), line!())
+                    };
                     let io_error = io::Error::from(err);
-                    ignore_report_or_crash(&io_error, &path);
+                    ignore_report_or_crash(&io_error, &path_buf);
                 },
             }
         }
@@ -520,76 +529,95 @@ mod tests {
     use fs2::FileExt;
     use tempdir::TempDir;
     use super::*;
+    use content;
+    use archive;
 
     #[test]
     fn find_or_add_subdir_works() {
-        let mut sd = SnapshotDir::new(None).unwrap();
+        let mut sd = SnapshotDir::new(None).unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         let p = PathBuf::from("/home/peter/TEST");
         {
             let ssd = sd.find_or_add_subdir(&p);
             assert!(ssd.is_ok());
-            let ssd = ssd.unwrap();
+            let ssd = ssd.unwrap_or_else(
+                |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+            );
             assert!(ssd.path == p.as_path());
         }
-        let ssd = sd.find_subdir(&p);
-        assert!(ssd.unwrap().path == p.as_path());
+        let ssd = match sd.find_subdir(&p) {
+            Some(ssd) => ssd,
+            None => panic!("{:?}: line {:?}", file!(), line!())
+        };
+        assert!(ssd.path == p.as_path());
         let sdp = PathBuf::from("/home/peter");
-        assert_eq!(sd.find_subdir(&sdp).unwrap().path, sdp.as_path());
+        let ssd = match sd.find_subdir(&sdp) {
+            Some(ssd) => ssd,
+            None => panic!("{:?}: line {:?}", file!(), line!())
+        };
+        assert_eq!(ssd.path, sdp.as_path());
         let sdp1 = PathBuf::from("/home/peter/TEST/patch_diff/gui");
         assert_eq!(sd.find_subdir(&sdp1), None);
     }
 
     #[test]
     fn test_write_snapshot() {
-        let file = fs::OpenOptions::new().write(true).open("./test_lock_file").unwrap();
+        let file = fs::OpenOptions::new().write(true).open("./test_lock_file").unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
         if let Err(err) = file.lock_exclusive() {
-            panic!("lock failed");
+            panic!("lock failed: {:?}", err);
         };
-        if let Ok(dir) = TempDir::new("SS_TEST") {
-            env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
-            let data_dir = dir.path().join("data");
-            let data_dir_str = data_dir.to_str().unwrap();
-            if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
-                panic!("new repo: {:?}", err);
-            }
-            let inclusions = vec!["~/Documents".to_string(), "~/Downloads".to_string()];
-            let dir_exclusions = vec!["lost+found".to_string()];
-            let file_exclusions = vec!["*.iso".to_string()];
-            if let Err(err) = archive::create_new_archive("test_ss", "test_repo", data_dir_str, inclusions, dir_exclusions, file_exclusions) {
-                panic!("new archive: {:?}", err);
-            }
-            { // need this to let sg finish before the temporary directory is destroyed
-                let mut sg = match SnapshotGenerator::new("test_ss") {
-                    Ok(snapshot_generator) => snapshot_generator,
-                    Err(err) => panic!("new SG: {:?}", err)
-                };
-                sg.generate_snapshot();
-                println!("Generating for {:?} took {:?}", "test_ss", sg.generation_duration());
-                assert!(sg.snapshot_available());
-                let result = sg.write_snapshot();
-                assert!(result.is_ok());
-                assert!(!sg.snapshot_available());
-                match result {
-                    Ok(ref ss_file_path) => {
-                        match fs::metadata(ss_file_path) {
-                            Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.st_size()),
-                            Err(err) => panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
-                        };
-                        match SnapshotPersistentData::from_file(ss_file_path) {
-                            Ok(ss) => println!("{:?}: {:?} {:?}", ss.archive_name, ss.file_stats, ss.sym_link_stats),
-                            Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err)
-                        };
-
-                    },
-                    Err(err) => panic!("{:?}", err)
-                }
-            }
-            if let Err(err) = dir.close() {
-                panic!("remove temporary directory failed")
+        let dir = TempDir::new("SS_TEST").unwrap_or_else(
+            |err| panic!("open temp dir failed: {:?}", err)
+        );
+        env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
+        let data_dir = dir.path().join("data");
+        let data_dir_str = match data_dir.to_str() {
+            Some(data_dir_str) => data_dir_str,
+            None => panic!("{:?}: line {:?}", file!(), line!())
+        };
+        if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
+            panic!("new repo: {:?}", err);
+        }
+        let inclusions = vec!["~/Documents".to_string(), "~/Downloads".to_string()];
+        let dir_exclusions = vec!["lost+found".to_string()];
+        let file_exclusions = vec!["*.iso".to_string()];
+        if let Err(err) = archive::create_new_archive("test_ss", "test_repo", data_dir_str, inclusions, dir_exclusions, file_exclusions) {
+            panic!("new archive: {:?}", err);
+        }
+        { // need this to let sg finish before the temporary directory is destroyed
+            let mut sg = match SnapshotGenerator::new("test_ss") {
+                Ok(snapshot_generator) => snapshot_generator,
+                Err(err) => panic!("new SG: {:?}", err)
             };
+            sg.generate_snapshot();
+            println!("Generating for {:?} took {:?}", "test_ss", sg.generation_duration());
+            assert!(sg.snapshot_available());
+            let result = sg.write_snapshot();
+            assert!(result.is_ok());
+            assert!(!sg.snapshot_available());
+            match result {
+                Ok(ref ss_file_path) => {
+                    match fs::metadata(ss_file_path) {
+                        Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.st_size()),
+                        Err(err) => panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
+                    };
+                    match SnapshotPersistentData::from_file(ss_file_path) {
+                        Ok(ss) => println!("{:?}: {:?} {:?}", ss.archive_name, ss.file_stats, ss.sym_link_stats),
+                        Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err)
+                    };
+
+                },
+                Err(err) => panic!("{:?}", err)
+            }
+        }
+        if let Err(err) = dir.close() {
+            panic!("remove temporary directory failed: {:?}", err)
         };
         if let Err(err) = file.unlock() {
-            panic!("unlock failed");
+            panic!("unlock failed: {:?}", err);
         };
     }
 }

@@ -14,7 +14,7 @@
 
 use std::error::Error;
 use std::io::{self, ErrorKind};
-use std::path::{Path, PathBuf, Component};
+use std::path::{Path};
 
 pub fn ignore_report_or_crash(err: &io::Error, path: &Path) {
     if err.kind() != ErrorKind::NotFound {

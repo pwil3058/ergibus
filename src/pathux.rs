@@ -21,8 +21,10 @@ pub fn split_abs_path(abs_path: &Path) -> Vec<String> {
     for c in abs_path.components() {
         match c {
             Component::Normal(component) => {
-                let oss = component.to_os_string();
-                vec.push(oss.into_string().unwrap());
+                let oss = component.to_os_string().into_string().unwrap_or_else(
+                    |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+                );
+                vec.push(oss);
             },
             Component::Prefix(_) => panic!("Not implemented for Windows"),
             Component::ParentDir => panic!("Illegal component"),
@@ -38,8 +40,10 @@ pub fn split_rel_path(rel_path: &Path) -> Vec<String> {
     for c in rel_path.components() {
         match c {
             Component::Normal(component) => {
-                let oss = component.to_os_string();
-                vec.push(oss.into_string().unwrap());
+                let oss = component.to_os_string().into_string().unwrap_or_else(
+                    |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+                );
+                vec.push(oss);
             },
             Component::Prefix(_) => panic!("Not implemented for Windows"),
             Component::ParentDir => panic!("Illegal component"),
@@ -54,8 +58,10 @@ pub fn first_subpath_as_string(path: &Path) -> Option<String> {
         match c {
             Component::RootDir => continue,
             Component::Normal(component) => {
-                let oss = component.to_os_string();
-                return Some(oss.into_string().unwrap());
+                match component.to_os_string().into_string() {
+                    Ok(oss) => return Some(oss),
+                    Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+                };
             },
             Component::Prefix(_) => panic!("Not implemented for Windows"),
             Component::ParentDir => panic!("Illegal component"),
@@ -69,7 +75,10 @@ pub fn expand_home_dir(rel_path_str: &str) -> PathBuf {
     let parts = split_rel_path(&PathBuf::from(rel_path_str));
     let mut path_buf = PathBuf::new();
     if parts[0] == "~" {
-        path_buf.push(env::home_dir().unwrap());
+        match env::home_dir() {
+            Some(home_dir) => path_buf.push(home_dir),
+            None => panic!("{:?}: line {:?}: badly designed OS", file!(), line!())
+        }
     } else {
         panic!("Illegal input: {:?}", rel_path_str);
     };
@@ -105,7 +114,10 @@ mod tests {
 
     #[test]
     fn test_expand_home_dir() {
-        let home_dir = env::home_dir().unwrap();
+        let home_dir = match env::home_dir() {
+            Some(home_dir) => home_dir,
+            None => panic!("{:?}: line {:?}: badly designed OS", file!(), line!())
+        };
         assert_eq!(home_dir, expand_home_dir("~"));
         assert_eq!(home_dir.join("SRC/GITHUB"), expand_home_dir("~/SRC/GITHUB"));
     }

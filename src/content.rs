@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::prelude::*;
 use std::io;
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -329,11 +328,13 @@ pub struct ContentManager {
 impl Drop for ContentManager {
     fn drop(&mut self) {
         if self.ref_counter.is_mutable() {
-            // we have no option but to unwrap() here
-            self.ref_counter.write_to_file(&mut self.hash_map_file).unwrap();
-        }
-        // we have no option but to unwrap() here
-        self.hash_map_file.unlock().unwrap();
+            if let Err(err) = self.ref_counter.write_to_file(&mut self.hash_map_file) {
+                panic!("{:?}: line {:?}: {:?}", file!(), line!(), err);
+            };
+        };
+        if let Err(err) = self.hash_map_file.unlock() {
+            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err);
+        };
     }
 }
 
@@ -343,8 +344,10 @@ impl ContentManager {
         let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
         let done = self.ref_counter.incr_ref_count_for_token(&digest);
         if !done {
-            // unwrap() should be OK here as we have the file open
-            let content_size = file.metadata().unwrap().len();
+            let content_size = match file.metadata() {
+                Ok(metadata) => metadata.len(),
+                Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+            };
             // TODO: write the file contents to disc
             let rcd = RefCountData{
                 content_size: content_size,
@@ -374,64 +377,76 @@ mod tests {
 
     #[test]
     fn repo_works() {
-        let file = OpenOptions::new().write(true).open("./test_lock_file").unwrap();
-        file.lock_exclusive();
-        if let Ok(dir) = TempDir::new("REPO_TEST") {
-            env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
-            let data_dir = dir.path().join("data");
-            let data_dir_str = data_dir.to_str().unwrap();
-            if let Err(err) = create_new_repo("test_repo", data_dir_str, "Sha1") {
-                panic!("new repo: {:?}", err);
-            }
-            assert!(dir.path().join("config").join("repos").join("test_repo.rspec").exists());
-            assert!(dir.path().join("data").join("ergibus").join("repos").join("test_repo").join("ref_count").exists());
-            let key = match get_content_mgmt_key("test_repo") {
-                Ok(cmk) => cmk,
-                Err(err) => panic!("get key: {:?}", err),
-            };
-            {
-                let cm = match key.open_content_manager(true) {
-                    Ok(content_manager) => content_manager,
-                    Err(err) => panic!("open cm: {:?}", err),
-                };
-                for i in 1..5 {
-                    let token = match cm.store_file_contents(&PathBuf::from("./src/content.rs")) {
-                        Ok(tkn) => tkn,
-                        Err(err) => panic!("sfc: {:?}", err),
-                    };
-                    match cm.get_ref_count_for_token(&token) {
-                        Ok(count) => assert!(count == i),
-                        Err(err) => panic!("get ref count #{:?}: {:?}", i, err)
-                    };
-                };
-                for i in 1..5 {
-                    let token = match cm.store_file_contents(&PathBuf::from("./src/snapshot.rs")) {
-                        Ok(tkn) => tkn,
-                        Err(err) => panic!("sfc: {:?}", err),
-                    };
-                    match cm.get_ref_count_for_token(&token) {
-                        Ok(count) => assert!(count == i),
-                        Err(err) => panic!("get ref count #{:?}: {:?}", i, err)
-                    };
-                };
-            }
-            {
-                if let Err(err) = key.open_content_manager(true) {
-                    panic!("reread: {:?}", err);
-                };
-            }
-            {
-                let cm1 = match key.open_content_manager(false) {
-                    Ok(content_manager) => content_manager,
-                    Err(err) => panic!("open cm non exclusive: {:?}", err),
-                };
-                let cm2 = match key.open_content_manager(false) {
-                    Ok(content_manager) => content_manager,
-                    Err(err) => panic!("open second cm non exclusive: {:?}", err),
-                };
-            }
-            dir.close().unwrap();
+        let file = OpenOptions::new().write(true).open("./test_lock_file").unwrap_or_else (
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
+        if let Err(err) = file.lock_exclusive() {
+            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        };
+        let temp_dir = TempDir::new("REPO_TEST").unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
+        env::set_var("ERGIBUS_CONFIG_DIR", temp_dir.path().join("config"));
+        let data_dir = temp_dir.path().join("data");
+        let data_dir_str = match data_dir.to_str() {
+            Some(data_dir_str) => data_dir_str,
+            None => panic!("{:?}: line {:?}", file!(), line!())
+        };
+        if let Err(err) = create_new_repo("test_repo", data_dir_str, "Sha1") {
+            panic!("new repo: {:?}", err);
         }
-        file.unlock();
+        assert!(temp_dir.path().join("config").join("repos").join("test_repo.rspec").exists());
+        assert!(temp_dir.path().join("data").join("ergibus").join("repos").join("test_repo").join("ref_count").exists());
+        let key = match get_content_mgmt_key("test_repo") {
+            Ok(cmk) => cmk,
+            Err(err) => panic!("get key: {:?}", err),
+        };
+        {
+            let cm = match key.open_content_manager(true) {
+                Ok(content_manager) => content_manager,
+                Err(err) => panic!("open cm: {:?}", err),
+            };
+            for i in 1..5 {
+                let token = match cm.store_file_contents(&PathBuf::from("./src/content.rs")) {
+                    Ok(tkn) => tkn,
+                    Err(err) => panic!("sfc: {:?}", err),
+                };
+                match cm.get_ref_count_for_token(&token) {
+                    Ok(count) => assert!(count == i),
+                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err)
+                };
+            };
+            for i in 1..5 {
+                let token = match cm.store_file_contents(&PathBuf::from("./src/snapshot.rs")) {
+                    Ok(tkn) => tkn,
+                    Err(err) => panic!("sfc: {:?}", err),
+                };
+                match cm.get_ref_count_for_token(&token) {
+                    Ok(count) => assert!(count == i),
+                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err)
+                };
+            };
+        }
+        {
+            if let Err(err) = key.open_content_manager(true) {
+                panic!("reread: {:?}", err);
+            };
+        }
+        {
+            let cm1 = match key.open_content_manager(false) {
+                Ok(content_manager) => content_manager,
+                Err(err) => panic!("open cm non exclusive: {:?}", err),
+            };
+            let cm2 = match key.open_content_manager(false) {
+                Ok(content_manager) => content_manager,
+                Err(err) => panic!("open second cm non exclusive: {:?}", err),
+            };
+        }
+        if let Err(err) = temp_dir.close() {
+            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        };
+        if let Err(err) = file.unlock() {
+            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        };
     }
 }
