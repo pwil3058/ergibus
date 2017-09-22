@@ -181,21 +181,10 @@ fn main() {
                 "the hash algorithm to use when generating repo content keys (Sha1, Sha256, Sha512)"
             )
         )
-        (@subcommand lss =>
-            (about: "List the snapshots for a nominated archive (or in a nominated directory)")
-            (@group which =>
-                (@arg archive_name:
-                    -A --archive <name>
-                    "the name of the archive for whose snapshots are to be listed"
-                )
-                (@arg exigency_dir_path:
-                    -X --exigency <dir_path>
-                    "the path of the directory containing the snapshots that are to be listed
-                    (should only be used when the configuration data has been lost)"
-                )
-            )
-        )
-    ).get_matches();
+    )
+    .subcommand(cli::subcmd_lss::sub_cmd())
+    .get_matches();
+
     match matches.subcommand() {
         ("bu", Some(sub_matches)) => backup_command(sub_matches),
         ("del", Some(sub_matches)) => delete_command(sub_matches),

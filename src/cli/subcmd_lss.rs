@@ -17,6 +17,31 @@ use std::path::Path;
 use clap;
 use snapshot;
 
+pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
+    clap::SubCommand::with_name("lss")
+        .about("List the snapshots for a nominated archive (or in a nominated directory)")
+        .arg(clap::Arg::with_name("archive_name")
+            .short("A").long("archive").value_name("name")
+            .required(true).takes_value(true)
+            .help("the name of the archive for whose snapshots are to be listed")
+        )
+        .arg(clap::Arg::with_name("exigency_dir_path")
+            .short("X").long("exigency").value_name("dir_path")
+            .required(true).takes_value(true)
+            .long_help(
+"the path of the directory containing the snapshots that are to be listed.
+This option is intended for use in those cases where the configuration
+data has been lost (possibly due to file system failure).  Individual
+snapshot files contain sufficient data for file recovery/extraction
+without the need for the configuration files provided their content
+repositories are also intact."
+            )
+        )
+        .group(clap::ArgGroup::with_name("which")
+            .args(&["archive_name", "exigency_dir_path"]).required(true)
+        )
+}
+
 pub fn run_cmd(arg_matches: &clap::ArgMatches) {
     if arg_matches.is_present("archive_name") {
         let archive_name = arg_matches.value_of("archive_name").ok_or(0).unwrap_or_else(
