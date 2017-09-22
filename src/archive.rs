@@ -89,10 +89,7 @@ struct ArchiveSpec {
 }
 
 fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
-    let config_dir_path = config::get_archive_config_dir_path();
-    let mut spec_file_path = config_dir_path.join(archive_name);
-    spec_file_path.set_extension("aspec");
-    spec_file_path
+    config::get_archive_config_dir_path().join(archive_name)
 }
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {

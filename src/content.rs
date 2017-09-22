@@ -97,10 +97,7 @@ struct RepoSpec {
 }
 
 fn get_repo_spec_file_path(repo_name: &str) -> PathBuf {
-    let config_dir_path = config::get_repo_config_dir_path();
-    let mut spec_file_path = config_dir_path.join(repo_name);
-    spec_file_path.set_extension("rspec");
-    spec_file_path
+    config::get_repo_config_dir_path().join(repo_name)
 }
 
 fn read_repo_spec(repo_name: &str) -> EResult<RepoSpec> {
@@ -395,7 +392,7 @@ mod tests {
         if let Err(err) = create_new_repo("test_repo", data_dir_str, "Sha1") {
             panic!("new repo: {:?}", err);
         }
-        assert!(temp_dir.path().join("config").join("repos").join("test_repo.rspec").exists());
+        assert!(temp_dir.path().join("config").join("repos").join("test_repo").exists());
         assert!(temp_dir.path().join("data").join("ergibus").join("repos").join("test_repo").join("ref_count").exists());
         let key = match get_content_mgmt_key("test_repo") {
             Ok(cmk) => cmk,
