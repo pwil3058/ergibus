@@ -97,6 +97,7 @@ fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
+    // TODO: map error to a more specific EError.
     let spec_file = File::open(&spec_file_path).map_err(|err| EError::ArchiveReadError(err, spec_file_path.clone()))?;
     let spec: ArchiveSpec = serde_yaml::from_reader(&spec_file).map_err(|err| EError::ArchiveYamlReadError(err, archive_name.to_string()))?;
     Ok(spec)
@@ -189,6 +190,16 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let exclusions = Exclusions::new(&archive_spec.dir_exclusions, &archive_spec.file_exclusions)?;
 
     Ok(ArchiveData{name, content_mgmt_key, snapshot_dir_path, includes, exclusions,})
+}
+
+// for read only snapshot actions we only need the snapshot directory path
+// as the content manager key data is in the snapshot file.
+// NB: this means that we can use snapshots even if the configuration
+// data has been lost due to a file system failure (but in that case
+// the user will have to browse the file system to find the snapshots).
+pub fn get_archive_snapshot_dir_path(archive_name: &str)  -> EResult<PathBuf> {
+    let archive_spec = read_archive_spec(archive_name)?;
+    PathBuf::from(&archive_spec.snapshot_dir_path).canonicalize().map_err(|err| EError::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path)))
 }
 
 #[cfg(test)]

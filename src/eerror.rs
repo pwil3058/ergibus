@@ -47,6 +47,7 @@ pub enum EError {
     RefCounterSerializeError(serde_json::Error),
 
     NoSnapshotAvailable,
+    SnapshotDirIOError(io::Error, PathBuf),
     SnapshotWriteIOError(io::Error, PathBuf),
     SnapshotReadIOError(io::Error, PathBuf),
     SnapshotDeleteIOError(io::Error, PathBuf),

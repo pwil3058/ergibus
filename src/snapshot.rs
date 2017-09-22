@@ -14,7 +14,7 @@
 
 // Standard Library access
 use std::collections::HashMap;
-use std::fs::{self, Metadata, File};
+use std::fs::{self, Metadata, File, DirEntry};
 use std::io::prelude::*;
 use std::io;
 use std::ops::{AddAssign};
@@ -24,12 +24,13 @@ use std::time;
 
 // cargo.io crates acess
 use chrono::prelude::*;
+use regex;
 use serde_json;
 use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // local modules access
-use archive::{Exclusions, ArchiveData, get_archive_data};
+use archive::{self, Exclusions, ArchiveData, get_archive_data};
 use content::{ContentMgmtKey, ContentManager};
 use eerror::{EError, EResult};
 use pathux::{first_subpath_as_string};
@@ -394,6 +395,37 @@ impl SnapshotPersistentData {
     }
 }
 
+// Doing this near where the file names are constructed for programming convenience
+lazy_static!{
+    static ref SS_FILE_NAME_RE: regex::Regex = regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
+}
+
+fn entry_is_ss_file(entry: &DirEntry) -> bool {
+    let path = entry.path();
+    if path.is_file() {
+        if let Some(file_name) = path.file_name() {
+            if let Some(file_name) = file_name.to_str() {
+                return SS_FILE_NAME_RE.is_match(file_name);
+            }
+        }
+    }
+    false
+}
+
+fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
+    let dir_entries = fs::read_dir(dir_path).map_err(|err| EError::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+    let mut v = Vec::new();
+    for entry_or_err in dir_entries {
+        match entry_or_err {
+            Ok(entry) => if entry_is_ss_file(&entry) {
+                v.push(entry);
+            },
+            Err(_) => ()
+        }
+    }
+    Ok(v)
+}
+
 impl SnapshotPersistentData {
     fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
         match File::open(file_path) {
@@ -523,6 +555,23 @@ pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     Ok(())
 }
 
+pub fn get_snapshot_names_in_dir(dir_path: &Path) -> EResult<Vec<String>> {
+    let entries = get_ss_entries_in_dir(dir_path)?;
+    let mut v = Vec::new();
+    for entry in entries {
+        match entry.file_name().to_str() {
+            Some(file_name) => v.push(file_name.to_string()),
+            None => panic!("{:?}: line {:?}: {:?}", file!(), line!(), entry.file_name())
+        }
+    };
+    Ok(v)
+}
+
+pub fn get_snapshot_names_for_archive(archive_name: &str) -> EResult<Vec<String>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    get_snapshot_names_in_dir(&snapshot_dir_path)
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -531,6 +580,12 @@ mod tests {
     use super::*;
     use content;
     use archive;
+
+    #[test]
+    fn test_ssf_regex() {
+        assert!(SS_FILE_NAME_RE.is_match("1027-09-14-20-20-59-1000"));
+        assert!(SS_FILE_NAME_RE.is_match("1027-09-14-20-20-59+1000"));
+    }
 
     #[test]
     fn find_or_add_subdir_works() {
