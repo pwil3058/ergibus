@@ -199,6 +199,25 @@ pub fn get_archive_snapshot_dir_path(archive_name: &str)  -> EResult<PathBuf> {
     PathBuf::from(&archive_spec.snapshot_dir_path).canonicalize().map_err(|err| EError::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path)))
 }
 
+pub fn get_archive_names() -> Vec<String> {
+    let mut names = Vec::new();
+    if let Ok(dir_entries) = fs::read_dir(config::get_archive_config_dir_path()) {
+        for entry_or_err in dir_entries {
+            if let Ok(entry) = entry_or_err {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(file_name) = path.file_name() {
+                        if let Some(file_name) = file_name.to_str() {
+                            names.push(file_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    };
+    names
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
