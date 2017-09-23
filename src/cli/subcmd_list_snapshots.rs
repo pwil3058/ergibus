@@ -15,14 +15,15 @@
 use std;
 use std::path::Path;
 use clap;
+
+use cli;
 use snapshot;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
-    clap::SubCommand::with_name("lss")
+    clap::SubCommand::with_name("list_snapshots").visible_alias("lss")
         .about("List the snapshots for a nominated archive (or in a nominated directory)")
-        .arg(clap::Arg::with_name("archive_name")
-            .short("A").long("archive").value_name("name")
-            .required(true).takes_value(true)
+        .arg(cli::arg_archive_name()
+            .required(true)
             .help("the name of the archive for whose snapshots are to be listed")
         )
         .arg(clap::Arg::with_name("exigency_dir_path")
