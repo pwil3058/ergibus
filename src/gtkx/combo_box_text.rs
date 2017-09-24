@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use gtk;
-use gtk::{ComboBoxExt, ComboBoxTextExt, TreeModelExt};
+use gtk::prelude::{ComboBoxExt, ComboBoxTextExt, TreeModelExt};
 
 pub trait SortedUnique {
     fn get_item_index(&self, item: &str) -> (bool, i32);

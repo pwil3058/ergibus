@@ -3,17 +3,23 @@ extern crate gio;
 
 extern crate ergibus;
 
-use gtk::prelude::*;
 use gio::ApplicationExt;
 
-use ergibus::archive;
+use gtk::prelude::*;
+
+use ergibus::gui::g_archive;
 
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
     window.set_title("ERGIBUS GUI");
     window.set_default_size(200, 200);
+    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let archive_selector = g_archive::ArchiveSelector::new();
+    archive_selector.update_contents();
+    vbox.pack_start(&archive_selector.hbox, false, false, 0);
     let label = gtk::Label::new("GUI is under construction");
-    window.add(&label);
+    vbox.pack_start(&label, true, true, 0);
+    window.add(&vbox);
     window.show_all();
 }
 
