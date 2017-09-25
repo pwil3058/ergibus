@@ -19,11 +19,29 @@ use archive;
 
 use gtkx::combo_box_text;
 use gtkx::combo_box_text::SortedUnique;
-use gtkx::combo_box_text::Updateable;
 
 pub type ArchiveComboBox = gtk::ComboBoxText;
 
-impl combo_box_text::Updateable for ArchiveComboBox {
+pub trait Updateable: SortedUnique {
+    fn get_updated_item_list(&self) -> Vec<String>;
+
+    fn update_contents(&self) {
+        let new_item_list = self.get_updated_item_list();
+        let current_item_list = self.get_text_items();
+        for item in &current_item_list {
+            if !new_item_list.contains(&item) {
+                self.remove_text_item(&item);
+            }
+        }
+        for item in new_item_list {
+            if !current_item_list.contains(&item) {
+                self.insert_text_item(&item);
+            }
+        }
+    }
+}
+
+impl Updateable for ArchiveComboBox {
     fn get_updated_item_list(&self) -> Vec<String> {
         archive::get_archive_names()
     }
