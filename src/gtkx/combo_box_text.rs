@@ -118,17 +118,17 @@ mod tests {
 
     static mut invocation: u32 = 0;
 
-    impl Updateable for gtk::ComboBoxText {
-        fn get_updated_item_list(&self) -> Vec<String> {
-            unsafe{
-                match invocation {
-                    0 => vec!["one".to_string(), "two".to_string(), "three".to_string()],
-                    1 => vec!["one".to_string(), "three".to_string(), "four".to_string()],
-                    _ => vec!["one".to_string(), "three".to_string(), "four".to_string(), "five".to_string()],
-                }
-            }
-        }
-    }
+    //impl Updateable for gtk::ComboBoxText {
+        //fn get_updated_item_list(&self) -> Vec<String> {
+            //unsafe{
+                //match invocation {
+                    //0 => vec!["one".to_string(), "two".to_string(), "three".to_string()],
+                    //1 => vec!["one".to_string(), "three".to_string(), "four".to_string()],
+                    //_ => vec!["one".to_string(), "three".to_string(), "four".to_string(), "five".to_string()],
+                //}
+            //}
+        //}
+    //}
 
     #[test]
     fn gtkx_combo_box_text_sorted_unique() {
@@ -156,30 +156,30 @@ mod tests {
         ]);
     }
 
-    #[test]
-    fn gtkx_combo_box_text_updateable() {
-        if !gtk::is_initialized() {
-            gtk::init();
-        }
-        let cbt = gtk::ComboBoxText::new();
-        assert_eq!(cbt.get_text_items().len(), 0);
-        cbt.update_contents();
-        assert_eq!(cbt.get_text_items(), vec![
-            "one", "three", "two"
-        ]);
-        unsafe {
-            invocation = 1;
-        }
-        cbt.update_contents();
-        assert_eq!(cbt.get_text_items(), vec![
-            "four", "one", "three"
-        ]);
-        unsafe {
-            invocation = 2;
-        }
-        cbt.update_contents();
-        assert_eq!(cbt.get_text_items(), vec![
-            "five", "four", "one", "three"
-        ]);
-    }
+    //#[test]
+    //fn gtkx_combo_box_text_updateable() {
+        //if !gtk::is_initialized() {
+            //gtk::init();
+        //}
+        //let cbt = gtk::ComboBoxText::new();
+        //assert_eq!(cbt.get_text_items().len(), 0);
+        //cbt.update_contents();
+        //assert_eq!(cbt.get_text_items(), vec![
+            //"one", "three", "two"
+        //]);
+        //unsafe {
+            //invocation = 1;
+        //}
+        //cbt.update_contents();
+        //assert_eq!(cbt.get_text_items(), vec![
+            //"four", "one", "three"
+        //]);
+        //unsafe {
+            //invocation = 2;
+        //}
+        //cbt.update_contents();
+        //assert_eq!(cbt.get_text_items(), vec![
+            //"five", "four", "one", "three"
+        //]);
+    //}
 }
