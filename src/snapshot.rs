@@ -38,15 +38,37 @@ use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Attributes {
+    st_dev: u64,
+    st_ino: u64,
+    st_nlink: u64,
     st_mode: u32,
+    st_uid: u32,
+    st_gid: u32,
     st_size: u64,
+    st_atime: i64,
+    st_atime_nsec: i64,
+    st_mtime: i64,
+    st_mtime_nsec: i64,
+    st_ctime: i64,
+    st_ctime_nsec: i64,
 }
 
 impl Attributes {
     pub fn new(metadata: &Metadata) -> Attributes {
         Attributes{
+            st_dev: metadata.st_dev(),
+            st_ino: metadata.st_ino(),
+            st_nlink: metadata.st_nlink(),
             st_mode: metadata.st_mode(),
+            st_uid: metadata.st_uid(),
+            st_gid: metadata.st_gid(),
             st_size: metadata.st_size(),
+            st_atime: metadata.st_atime(),
+            st_atime_nsec: metadata.st_atime_nsec(),
+            st_mtime: metadata.st_mtime(),
+            st_mtime_nsec: metadata.st_mtime_nsec(),
+            st_ctime: metadata.st_ctime(),
+            st_ctime_nsec: metadata.st_ctime_nsec(),
         }
     }
 }
