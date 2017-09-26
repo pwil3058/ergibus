@@ -1,3 +1,4 @@
+extern crate gdk;
 extern crate gtk;
 extern crate gio;
 
@@ -8,11 +9,28 @@ use gio::ApplicationExt;
 use gtk::prelude::*;
 
 use ergibus::gui::g_archive;
+use ergibus::gui::recollections;
+
+fn format_geometry(event: &gdk::EventConfigure) ->String {
+    let (x, y) = event.get_position();
+    let (w, h) = event.get_size();
+    format!("{}x{}+{}+{}", w, h, x, y)
+}
 
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
     window.set_title("ERGIBUS GUI");
-    window.set_default_size(200, 200);
+    if let Some(geometry) = recollections().recall("main_window:geometry") {
+        window.parse_geometry(&geometry);
+    } else {
+        window.set_default_size(200, 200);
+    };
+    window.connect_configure_event(
+        |_, event| {
+            recollections().remember("main_window:geometry", &format_geometry(event));
+            false
+        }
+    );
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let archive_selector = g_archive::ArchiveSelector::new();
     archive_selector.update_contents();

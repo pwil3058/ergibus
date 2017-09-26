@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(recollections.recall("anything"), None);
         assert_eq!(recollections.recall_or_else("anything", "but"), "but");
         recollections.remember("anything", "whatever");
-        assert_eq!(recollections.recall("anything"), "whatever");
+        assert_eq!(recollections.recall("anything"), Some("whatever".to_string()));
         assert_eq!(recollections.recall_or_else("anything", "but"), "whatever");
         fs::remove_file(recollection_file);
     }

@@ -42,6 +42,10 @@ pub fn get_archive_config_dir_path() -> PathBuf {
     get_config_dir_path().join("archives")
 }
 
+pub fn get_gui_config_dir_path() -> PathBuf {
+    get_config_dir_path().join("gui")
+}
+
 pub fn get_repo_config_dir_path() -> PathBuf {
     get_config_dir_path().join("repos")
 }
