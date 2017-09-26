@@ -1,4 +1,3 @@
-extern crate gdk;
 extern crate gtk;
 extern crate gio;
 
@@ -8,14 +7,9 @@ use gio::ApplicationExt;
 
 use gtk::prelude::*;
 
+use ergibus::gdkx::format_geometry;
 use ergibus::gui::g_archive;
 use ergibus::gui::recollections;
-
-fn format_geometry(event: &gdk::EventConfigure) ->String {
-    let (x, y) = event.get_position();
-    let (w, h) = event.get_size();
-    format!("{}x{}+{}+{}", w, h, x, y)
-}
 
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
