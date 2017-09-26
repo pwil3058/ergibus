@@ -85,6 +85,21 @@ struct SnapshotDir {
     subdir_links: HashMap<String, LinkData>,
 }
 
+fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
+    let parent_dir_path = path.parent().unwrap_or_else(
+        || panic!("{:?}: line {:?}: can't find parent directory")
+    );
+    let entries = fs::read_dir(&parent_dir_path)?;
+    for entry_or_err in entries {
+        if let Ok(entry) = entry_or_err {
+            if entry.path() == path {
+                return Ok(entry);
+            }
+        }
+    };
+    Err(io::Error::new(io::ErrorKind::NotFound, format!("{:?}: not found", path)))
+}
+
 impl SnapshotDir {
     fn new(opt_rootdir: Option<&Path>) -> io::Result<SnapshotDir> {
         let rootdir = match opt_rootdir {
@@ -372,6 +387,28 @@ impl SnapshotPersistentData {
         Ok(())
     }
 
+    fn add_other(&mut self, abs_file_path: &Path) -> io::Result<()> {
+        let entry = get_entry_for_path(abs_file_path)?;
+        let dir_path = abs_file_path.parent().unwrap_or_else(
+            || panic!("{:?}: line {:?}", file!(), line!())
+        );
+        let dir = self.root_dir.find_or_add_subdir(&dir_path)?;
+        match entry.file_type() {
+            Ok(e_type) => {
+                if e_type.is_file() {
+                    let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
+                        |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
+                    );
+                    self.file_stats += dir.add_file(&entry, &content_mgr);
+                } else if e_type.is_symlink() {
+                    self.sym_link_stats += dir.add_symlink(&entry);
+                }
+            },
+            Err(err) => ignore_report_or_crash(&err, abs_file_path)
+        };
+        Ok(())
+    }
+
     fn creation_duration(&self) -> time::Duration {
         match self.finished_create.duration_since(self.started_create) {
             Ok(duration) => duration,
@@ -482,6 +519,10 @@ impl SnapshotGenerator {
         for abs_path in self.archive_data.includes.iter() {
             if abs_path.is_dir() {
                 if let Err(err) = snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
+                    ignore_report_or_crash(&err, &abs_path);
+                };
+            } else {
+                if let Err(err) = snapshot.add_other(&abs_path) {
                     ignore_report_or_crash(&err, &abs_path);
                 };
             }
@@ -636,7 +677,13 @@ mod tests {
         if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
             panic!("new repo: {:?}", err);
         }
-        let inclusions = vec!["~/Documents".to_string(), "~/Downloads".to_string()];
+        let my_file = Path::new("./src/snapshot.rs").canonicalize().unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
+        let my_file = my_file.to_str().unwrap_or_else(
+            || panic!("{:?}: line {:?}", file!(), line!())
+        );
+        let inclusions = vec!["~/Documents".to_string(), "~/Downloads".to_string(), my_file.to_string()];
         let dir_exclusions = vec!["lost+found".to_string()];
         let file_exclusions = vec!["*.iso".to_string()];
         if let Err(err) = archive::create_new_archive("test_ss", "test_repo", data_dir_str, inclusions, dir_exclusions, file_exclusions) {
