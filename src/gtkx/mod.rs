@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod combo_box_text;
+pub mod list_store;
 
 pub mod recollect {
     use std::collections::HashMap;
