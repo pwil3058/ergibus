@@ -110,6 +110,7 @@ macro_rules! set_row_values {
 macro_rules! are_equal_as {
     ( $v1:expr, $v2:expr, $t:ty ) => {
         {
+            assert_eq!($v1.type_(), $v2.type_());
             // TODO: panic if extracted values are None
             let v1: Option<$t> = $v1.get();
             let v2: Option<$t> = $v2.get();
@@ -121,9 +122,7 @@ macro_rules! are_equal_as {
 macro_rules! are_eq_values {
     ( $v1:expr, $v2:expr ) => {
         {
-            let v1_type = $v1.type_();
-            assert_eq!(v1_type, $v2.type_());
-            match v1_type {
+            match $v1.type_() {
                 gtk::Type::I8 => are_equal_as!($v1, $v2, i8),
                 gtk::Type::U8 => are_equal_as!($v1, $v2, u8),
                 gtk::Type::Bool => are_equal_as!($v1, $v2, bool),
@@ -134,7 +133,7 @@ macro_rules! are_eq_values {
                 gtk::Type::F32 => are_equal_as!($v1, $v2, f32),
                 gtk::Type::F64 => are_equal_as!($v1, $v2, f64),
                 gtk::Type::String => are_equal_as!($v1, $v2, String),
-                _ => panic!("operation not defined for: {:?}", v1_type)
+                _ => panic!("operation not defined for: {:?}", $v1.type_())
             }
         }
     }
@@ -167,13 +166,15 @@ pub trait SimpleRowOps {
         iter
     }
 
-    fn find_row_index(&self, row: &Row) -> Option<i32> {
+    fn find_row_where<F>(&self, this_is_the_row: F) -> Option<(i32, gtk::TreeIter)>
+        where F: Fn(&gtk::ListStore, &gtk::TreeIter) -> bool
+    {
         let list_store = self.get_list_store();
         let mut index: i32 = 0;
         if let Some(iter) = list_store.get_iter_first() {
             loop {
-                if matches_list_row!(row, list_store, iter) {
-                    return Some(index);
+                if this_is_the_row(&list_store, &iter) {
+                    return Some((index, iter));
                 };
                 index += 1;
                 if !list_store.iter_next(&iter) {
@@ -184,19 +185,24 @@ pub trait SimpleRowOps {
         None
     }
 
+    fn find_row(&self, row: &Row) -> Option<(i32, gtk::TreeIter)> {
+        self.find_row_where(
+            |list_store, iter| matches_list_row!(row, list_store, iter)
+        )
+    }
+
+    fn find_row_index(&self, row: &Row) -> Option<i32> {
+        match self.find_row(row) {
+            Some((index, _)) => Some(index),
+            None => None
+        }
+    }
+
     fn find_row_iter(&self, row: &Row) -> Option<gtk::TreeIter> {
-        let list_store = self.get_list_store();
-        if let Some(iter) = list_store.get_iter_first() {
-            loop {
-                if matches_list_row!(row, list_store, iter) {
-                    return Some(iter);
-                };
-                if !list_store.iter_next(&iter) {
-                    break;
-                }
-            }
-        };
-        None
+        match self.find_row(row) {
+            Some((_, iter)) => Some(iter),
+            None => None
+        }
     }
 
     fn insert_row(&self, position: i32, row: &Row) -> gtk::TreeIter {
