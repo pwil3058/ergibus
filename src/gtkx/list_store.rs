@@ -107,19 +107,33 @@ macro_rules! set_row_values {
     }
 }
 
+macro_rules! are_equal_as {
+    ( $v1:expr, $v2:expr, $t:ty ) => {
+        {
+            // TODO: panic if extracted values are None
+            let v1: Option<$t> = $v1.get();
+            let v2: Option<$t> = $v2.get();
+            v1 == v2
+        }
+    }
+}
+
 macro_rules! are_eq_values {
     ( $v1:expr, $v2:expr ) => {
         {
             let v1_type = $v1.type_();
             assert_eq!(v1_type, $v2.type_());
-            // TODO: handle more types
-            // TODO: panic if extracted values are None
             match v1_type {
-                gtk::Type::String => {
-                    let v1: Option<String> = $v1.get();
-                    let v2: Option<String> = $v2.get();
-                    v1 == v2
-                },
+                gtk::Type::I8 => are_equal_as!($v1, $v2, i8),
+                gtk::Type::U8 => are_equal_as!($v1, $v2, u8),
+                gtk::Type::Bool => are_equal_as!($v1, $v2, bool),
+                gtk::Type::I32 => are_equal_as!($v1, $v2, i32),
+                gtk::Type::U32 => are_equal_as!($v1, $v2, u32),
+                gtk::Type::I64 => are_equal_as!($v1, $v2, i64),
+                gtk::Type::U64 => are_equal_as!($v1, $v2, u64),
+                gtk::Type::F32 => are_equal_as!($v1, $v2, f32),
+                gtk::Type::F64 => are_equal_as!($v1, $v2, f64),
+                gtk::Type::String => are_equal_as!($v1, $v2, String),
                 _ => panic!("operation not defined for: {:?}", v1_type)
             }
         }
