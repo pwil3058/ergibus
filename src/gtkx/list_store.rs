@@ -17,7 +17,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gtk;
-use gtk::ToValue;
+use gtk::prelude::*;
 
 pub type Digest = Vec<u8>;
 
@@ -93,6 +93,110 @@ pub trait RowBuffer<RawData: Default> {
         let core = self.get_core();
         let rows = core.borrow().rows.clone();
         rows
+    }
+}
+
+macro_rules! set_row_values {
+    ( $s:expr, $i:expr, $r:expr ) => {
+        {
+            assert_eq!($s.get_n_columns(), $r.len() as i32);
+            for (index, item) in $r.iter().enumerate() {
+                $s.set_value(&$i, index as u32, &item);
+            }
+        }
+    }
+}
+
+macro_rules! are_eq_values {
+    ( $v1:expr, $v2:expr ) => {
+        {
+            let v1_type = $v1.type_();
+            assert_eq!(v1_type, $v2.type_());
+            // TODO: handle more types
+            // TODO: panic if extracted values are None
+            match v1_type {
+                gtk::Type::String => {
+                    let v1: Option<String> = $v1.get();
+                    let v2: Option<String> = $v2.get();
+                    v1 == v2
+                },
+                _ => panic!("operation not defined for: {:?}", v1_type)
+            }
+        }
+    }
+}
+
+macro_rules! matches_list_row {
+    ( $r:expr, $s:expr, $i:expr ) => {
+        {
+            assert_eq!($s.get_n_columns(), $r.len() as i32);
+            let mut result = true;
+            for (index, item) in $r.iter().enumerate() {
+                let value = $s.get_value(&$i, index as i32);
+                if !are_eq_values!(item, value) {
+                    result = false;
+                    break
+                }
+            };
+            result
+        }
+    }
+}
+
+pub trait SimpleRowOps {
+    fn get_list_store(&self) -> gtk::ListStore;
+
+    fn append_row(&self, row: &Row) -> gtk::TreeIter {
+        let list_store = self.get_list_store();
+        let iter = list_store.append();
+        set_row_values!(list_store, iter, row);
+        iter
+    }
+
+    fn find_row_index(&self, row: &Row) -> Option<i32> {
+        let list_store = self.get_list_store();
+        let mut index: i32 = 0;
+        if let Some(iter) = list_store.get_iter_first() {
+            loop {
+                if matches_list_row!(row, list_store, iter) {
+                    return Some(index);
+                };
+                index += 1;
+                if !list_store.iter_next(&iter) {
+                    break;
+                }
+            }
+        };
+        None
+    }
+
+    fn find_row_iter(&self, row: &Row) -> Option<gtk::TreeIter> {
+        let list_store = self.get_list_store();
+        if let Some(iter) = list_store.get_iter_first() {
+            loop {
+                if matches_list_row!(row, list_store, iter) {
+                    return Some(iter);
+                };
+                if !list_store.iter_next(&iter) {
+                    break;
+                }
+            }
+        };
+        None
+    }
+
+    fn insert_row(&self, position: i32, row: &Row) -> gtk::TreeIter {
+        let list_store = self.get_list_store();
+        let iter = list_store.insert(position);
+        set_row_values!(list_store, iter, row);
+        iter
+    }
+
+    fn prepend_row(&self, row: &Row)  -> gtk::TreeIter {
+        let list_store = self.get_list_store();
+        let iter = list_store.prepend();
+        set_row_values!(list_store, iter, row);
+        iter
     }
 }
 
@@ -172,4 +276,46 @@ mod tests {
         assert_eq!(rows[1][0].get(), Some("two"));
         assert_eq!(rows[2][0].get(), Some("three"));
     }
+
+    #[test]
+    fn simple_row_ops_work()  {
+        if !gtk::is_initialized() {
+            gtk::init();
+        }
+
+        struct TestListStore {
+            list_store: gtk::ListStore
+        }
+
+        impl TestListStore {
+            pub fn new() -> TestListStore {
+                let list_store = gtk::ListStore::new(&[gtk::Type::String, gtk::Type::String, gtk::Type::String]);
+                TestListStore{list_store: list_store}
+            }
+        }
+
+        impl SimpleRowOps for TestListStore {
+            fn get_list_store(&self) -> gtk::ListStore {
+                self.list_store.clone()
+            }
+        }
+
+        let test_list_store = TestListStore::new();
+        let row1 = vec!["one".to_value(), "two".to_value(), "three".to_value()];
+        let row2 = vec!["four".to_value(), "five".to_value(), "six".to_value()];
+        let row3 = vec!["seven".to_value(), "eight".to_value(), "nine".to_value()];
+        test_list_store.append_row(&row1);
+        assert_eq!(test_list_store.find_row_index(&row1), Some(0));
+        assert_eq!(test_list_store.find_row_index(&row2), None);
+        assert_eq!(test_list_store.find_row_index(&row3), None);
+        test_list_store.prepend_row(&row2);
+        assert_eq!(test_list_store.find_row_index(&row1), Some(1));
+        assert_eq!(test_list_store.find_row_index(&row2), Some(0));
+        assert_eq!(test_list_store.find_row_index(&row3), None);
+        test_list_store.insert_row(1, &row3);
+        assert_eq!(test_list_store.find_row_index(&row1), Some(2));
+        assert_eq!(test_list_store.find_row_index(&row2), Some(0));
+        assert_eq!(test_list_store.find_row_index(&row3), Some(1));
+    }
+
 }
