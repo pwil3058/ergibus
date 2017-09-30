@@ -21,6 +21,8 @@ globset = "0.1"
 hex = "0.2"
 hostname = "^0.1"
 lazy_static = "0.2.8"
+#pw_gix = { git = "https://github.com/pwil3058/rs_pw_gix.git" }
+pw_gix = { git = "file:/home/peter/SRC/GITHUB/rs_pw_gix.git" }
 regex = "0.2"
 serde = "1.0"
 serde_derive = "1.0"

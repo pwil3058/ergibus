@@ -22,6 +22,8 @@ extern crate hex;
 extern crate hostname;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate pw_gix;
 extern crate regex;
 extern crate serde;
 #[macro_use]
@@ -44,8 +46,8 @@ pub mod pathux;
 mod report;
 pub mod snapshot;
 
-pub mod gdkx;
-pub mod gtkx;
+//pub mod gdkx;
+//pub mod gtkx;
 
 pub mod cli;
 pub mod gui;

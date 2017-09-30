@@ -17,8 +17,8 @@ use gtk::prelude::*;
 
 use archive;
 
-use gtkx::combo_box_text;
-use gtkx::combo_box_text::SortedUnique;
+use pw_gix::gtkx::combo_box_text;
+use pw_gix::gtkx::combo_box_text::SortedUnique;
 
 pub type ArchiveComboBox = gtk::ComboBoxText;
 

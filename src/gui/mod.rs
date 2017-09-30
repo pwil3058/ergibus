@@ -13,9 +13,10 @@
 // limitations under the License.
 
 pub mod g_archive;
+pub mod g_snapshot;
 
 use config;
-use gtkx;
+use pw_gix::gtkx;
 
 pub fn recollections() -> gtkx::recollect::Recollections {
     gtkx::recollect::Recollections::new(&config::get_gui_config_dir_path().join("recollections"))

@@ -1,13 +1,16 @@
 extern crate gtk;
 extern crate gio;
 
+extern crate pw_gix;
+
 extern crate ergibus;
 
 use gio::ApplicationExt;
 
 use gtk::prelude::*;
 
-use ergibus::gdkx::format_geometry;
+use pw_gix::gdkx::format_geometry;
+
 use ergibus::gui::g_archive;
 use ergibus::gui::recollections;
 
