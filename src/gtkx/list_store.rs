@@ -218,6 +218,36 @@ pub trait SimpleRowOps {
         set_row_values!(list_store, iter, row);
         iter
     }
+
+    // NB: this function assumes that all rows are unique and that order isn't important
+    fn update_with(&self, rows: &Vec<Row>) {
+        let list_store = self.get_list_store();
+        // First remove the rows that have gone away
+        if let Some(iter) = list_store.get_iter_first() {
+            while list_store.iter_is_valid(&iter) {
+                let mut found = false;
+                for row in rows.iter() {
+                    if matches_list_row!(row, list_store, iter) {
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    // NB: this call updates the iter
+                    list_store.remove(&iter);
+                } else {
+                    list_store.iter_next(&iter);
+                }
+            }
+        }
+        // Now add any new ones
+        for row in rows.iter() {
+            let position = self.find_row(row);
+            if position.is_none() {
+                self.append_row(row);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -336,6 +366,13 @@ mod tests {
         assert_eq!(test_list_store.find_row_index(&row1), Some(2));
         assert_eq!(test_list_store.find_row_index(&row2), Some(0));
         assert_eq!(test_list_store.find_row_index(&row3), Some(1));
+        let row4 = vec!["ten".to_value(), "eleven".to_value(), "twelve".to_value()];
+        let rows = vec![row1.clone(), row2.clone(), row4.clone()];
+        test_list_store.update_with(&rows);
+        assert_eq!(test_list_store.find_row_index(&row1), Some(1));
+        assert_eq!(test_list_store.find_row_index(&row2), Some(0));
+        assert_eq!(test_list_store.find_row_index(&row3), None);
+        assert_eq!(test_list_store.find_row_index(&row4), Some(2));
     }
 
 }
