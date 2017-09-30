@@ -48,7 +48,7 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
         let archive_name = arg_matches.value_of("archive_name").ok_or(0).unwrap_or_else(
             |_| panic!("{:?}: line {:?}", file!(), line!())
         );
-        match snapshot::get_snapshot_names_for_archive(&archive_name) {
+        match snapshot::get_snapshot_names_for_archive(&archive_name, false) {
             Ok(snapshot_names) => for name in snapshot_names {
                 println!("{:?}", name);
             },

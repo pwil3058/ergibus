@@ -630,9 +630,14 @@ pub fn get_snapshot_names_in_dir(dir_path: &Path) -> EResult<Vec<String>> {
     Ok(v)
 }
 
-pub fn get_snapshot_names_for_archive(archive_name: &str) -> EResult<Vec<String>> {
+pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    get_snapshot_names_in_dir(&snapshot_dir_path)
+    let mut snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path)?;
+    snapshot_names.sort();
+    if reverse {
+        snapshot_names.reverse();
+    };
+    Ok(snapshot_names)
 }
 
 #[cfg(test)]
