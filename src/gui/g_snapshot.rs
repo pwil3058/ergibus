@@ -23,7 +23,7 @@ use crypto_hash::{Hasher, Algorithm};
 
 use pw_gix::gtkx::list_store::{
     Row, RowBuffer, RowBufferCore, Digest, invalid_digest,
-    SimpleRowOps
+    SimpleRowOps, Updateable
 };
 use snapshot;
 
@@ -88,7 +88,7 @@ impl SnapshotRowBuffer {
 
 struct SnapshotNameListStore {
     list_store: gtk::ListStore,
-    snapshot_row_buffer: SnapshotRowBuffer
+    snapshot_row_buffer: Rc<RefCell<SnapshotRowBuffer>>
 }
 
 impl SimpleRowOps for SnapshotNameListStore {
@@ -97,35 +97,28 @@ impl SimpleRowOps for SnapshotNameListStore {
     }
 }
 
+impl Updateable<Vec<String>> for SnapshotNameListStore {
+    fn get_row_buffer(&self) -> Rc<RefCell<RowBuffer<Vec<String>>>> {
+        self.snapshot_row_buffer.clone()
+    }
+}
+
 impl SnapshotNameListStore {
     pub fn new(archive_name: Option<String>) -> SnapshotNameListStore {
         let mut list_store = SnapshotNameListStore {
             list_store: gtk::ListStore::new(&[gtk::Type::String]),
-            snapshot_row_buffer: SnapshotRowBuffer::new(None)
+            snapshot_row_buffer: Rc::new(RefCell::new(SnapshotRowBuffer::new(None)))
         };
         list_store.set_archive_name(archive_name);
         list_store
     }
 
     pub fn set_archive_name(&mut self, archive_name: Option<String>) {
-        if self.snapshot_row_buffer.archive_name == archive_name {
+        if self.snapshot_row_buffer.borrow().archive_name == archive_name {
             return; // nothing to do
         }
-        self.snapshot_row_buffer.archive_name = archive_name;
-        self.populate();
-    }
-
-    pub fn populate(&mut self) {
-        self.list_store.clear();
-        self.snapshot_row_buffer.init();
-        for row in self.snapshot_row_buffer.get_rows().iter() {
-            self.append_row(row);
-        }
-    }
-
-    pub fn update_contents(&mut self) {
-        self.snapshot_row_buffer.reset();
-        self.update_with(&*self.snapshot_row_buffer.get_rows());
+        self.snapshot_row_buffer.borrow_mut().archive_name = archive_name;
+        self.repopulate();
     }
 }
 
