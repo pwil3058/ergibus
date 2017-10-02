@@ -20,45 +20,18 @@ use archive;
 use pw_gix::gtkx::combo_box_text;
 use pw_gix::gtkx::combo_box_text::SortedUnique;
 
-pub type ArchiveComboBox = gtk::ComboBoxText;
-
-pub trait Updateable: SortedUnique {
-    fn get_updated_item_list(&self) -> Vec<String>;
-
-    fn update_contents(&self) {
-        let new_item_list = self.get_updated_item_list();
-        let current_item_list = self.get_text_items();
-        for item in &current_item_list {
-            if !new_item_list.contains(&item) {
-                self.remove_text_item(&item);
-            }
-        }
-        for item in new_item_list {
-            if !current_item_list.contains(&item) {
-                self.insert_text_item(&item);
-            }
-        }
-    }
-}
-
-impl Updateable for ArchiveComboBox {
-    fn get_updated_item_list(&self) -> Vec<String> {
-        archive::get_archive_names()
-    }
-}
-
 pub struct ArchiveSelector {
     pub hbox: gtk::Box,
     // make combo "pub" as mapping connect_x() functions is to hard
-    pub combo: ArchiveComboBox,
+    pub combo: gtk::ComboBoxText,
 }
 
 impl ArchiveSelector {
     pub fn new() -> ArchiveSelector {
         let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        let label = gtk::Label::new("Archive:");
+        let label = gtk::Label::new("Archive:"); // I18N needed here
         hbox.pack_start(&label, false, false, 0);
-        let combo = ArchiveComboBox::new();
+        let combo = gtk::ComboBoxText::new();
         hbox.pack_start(&combo, true, true, 5);
         ArchiveSelector{hbox, combo}
     }
@@ -72,7 +45,8 @@ impl ArchiveSelector {
     }
 
     pub fn update_contents(&self) {
-        self.combo.update_contents()
+        let new_item_list = archive::get_archive_names();
+        self.combo.update_with(&new_item_list);
     }
 }
 
