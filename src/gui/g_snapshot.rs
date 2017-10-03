@@ -23,9 +23,12 @@ use crypto_hash::{Hasher, Algorithm};
 
 use pw_gix::gtkx::list_store::{
     Row, RowBuffer, RowBufferCore, Digest, invalid_digest,
-    SimpleRowOps, Updateable
+    SimpleRowOps, BufferedUpdate
 };
+
 use snapshot;
+
+use gui::g_archive;
 
 struct SnapshotRowBuffer {
     archive_name: Option<String>,
@@ -91,13 +94,11 @@ struct SnapshotNameListStore {
     snapshot_row_buffer: Rc<RefCell<SnapshotRowBuffer>>
 }
 
-impl SimpleRowOps for SnapshotNameListStore {
+impl BufferedUpdate<Vec<String>, gtk::ListStore> for SnapshotNameListStore {
     fn get_list_store(&self) -> gtk::ListStore {
         self.list_store.clone()
     }
-}
 
-impl Updateable<Vec<String>> for SnapshotNameListStore {
     fn get_row_buffer(&self) -> Rc<RefCell<RowBuffer<Vec<String>>>> {
         self.snapshot_row_buffer.clone()
     }
@@ -114,11 +115,75 @@ impl SnapshotNameListStore {
     }
 
     pub fn set_archive_name(&mut self, archive_name: Option<String>) {
+        println!("set archive: {:?}", archive_name);
         if self.snapshot_row_buffer.borrow().archive_name == archive_name {
             return; // nothing to do
         }
         self.snapshot_row_buffer.borrow_mut().archive_name = archive_name;
         self.repopulate();
+    }
+}
+
+pub struct SnapshotNameTable {
+    pub view: gtk::TreeView,
+    list_store: RefCell<SnapshotNameListStore>
+}
+
+impl SnapshotNameTable {
+    pub fn new(archive_name: Option<String>) -> SnapshotNameTable {
+        let list_store = RefCell::new(SnapshotNameListStore::new(archive_name));
+
+        let view = gtk::TreeView::new_with_model(&list_store.borrow().get_list_store());
+        view.set_headers_visible(true);
+
+        view.get_selection().set_mode(gtk::SelectionMode::Multiple);
+
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Snapshot Time"); // I18N need here
+        col.set_expand(false);
+        col.set_resizable(false);
+
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(false);
+        cell.set_property_max_width_chars(29);
+        cell.set_property_width_chars(29);
+        cell.set_property_xalign(0.0);
+
+        col.pack_start(&cell, false);
+        col.add_attribute(&cell, "text", 0);
+
+        view.append_column(&col);
+        view.show_all();
+
+        SnapshotNameTable{view, list_store}
+    }
+
+    pub fn set_archive(&self, archive_name: Option<String>) {
+        self.list_store.borrow_mut().set_archive_name(archive_name);
+    }
+}
+
+pub struct SnapshotSelector {
+    pub vbox: gtk::Box,
+    archive_selector: Rc<g_archive::ArchiveSelector>,
+    snapshot_name_table: Rc<SnapshotNameTable>
+}
+
+impl SnapshotSelector {
+    pub fn new() -> SnapshotSelector {
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let archive_selector = Rc::new(g_archive::ArchiveSelector::new());
+        archive_selector.update_contents();
+        vbox.pack_start(&archive_selector.hbox, false, false, 0);
+        let snapshot_name_table = Rc::new(SnapshotNameTable::new(archive_selector.get_selected_archive()));
+        vbox.pack_start(&snapshot_name_table.view, false, false, 0);
+        vbox.show_all();
+        let snt = snapshot_name_table.clone();
+        let ars = archive_selector.clone();
+        archive_selector.combo.connect_changed(
+            move |_| snt.set_archive(ars.get_selected_archive())
+        );
+        SnapshotSelector{vbox, archive_selector, snapshot_name_table}
     }
 }
 
