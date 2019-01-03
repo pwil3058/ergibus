@@ -23,7 +23,7 @@ use crypto_hash::{Hasher, Algorithm};
 
 use pw_gix::gtkx::list_store::{
     Row, RowBuffer, RowBufferCore, Digest, invalid_digest,
-    SimpleRowOps, BufferedUpdate
+    BufferedUpdate
 };
 
 use snapshot;
@@ -80,7 +80,7 @@ impl RowBuffer<Vec<String>> for SnapshotRowBuffer {
 impl SnapshotRowBuffer {
     fn new(archive_name: Option<String>) -> SnapshotRowBuffer {
         let core = RowBufferCore::<Vec<String>>::default();
-        let mut buffer = SnapshotRowBuffer {
+        let buffer = SnapshotRowBuffer {
             archive_name: archive_name,
             row_buffer_core: Rc::new(RefCell::new(core)),
         };

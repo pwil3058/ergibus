@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std;
-use std::path::Path;
+//use std::path::Path;
 use clap;
 
 use cli;

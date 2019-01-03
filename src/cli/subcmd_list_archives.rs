@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std;
-use std::path::Path;
+//use std;
+//use std::path::Path;
 use clap;
 
-use cli;
+//use cli;
 use archive;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
@@ -24,7 +24,7 @@ pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
         .about("List all defined snapshot archives")
 }
 
-pub fn run_cmd(arg_matches: &clap::ArgMatches) {
+pub fn run_cmd(_arg_matches: &clap::ArgMatches) {
     for archive_name in archive::get_archive_names() {
         println!("{}", archive_name);
     }

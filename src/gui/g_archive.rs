@@ -17,7 +17,7 @@ use gtk::prelude::*;
 
 use archive;
 
-use pw_gix::gtkx::combo_box_text;
+//use pw_gix::gtkx::combo_box_text;
 use pw_gix::gtkx::combo_box_text::SortedUnique;
 
 pub struct ArchiveSelector {

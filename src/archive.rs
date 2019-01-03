@@ -23,7 +23,7 @@ use users;
 use config;
 use content::{ContentMgmtKey, get_content_mgmt_key, content_repo_exists};
 use eerror::{EError, EResult};
-use pathux::{expand_home_dir};
+use pw_pathux::{expand_home_dir};
 
 #[derive(Debug)]
 pub struct Exclusions {
@@ -174,7 +174,10 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let mut includes = Vec::new();
     for inclusion in archive_spec.inclusions {
         let included_file_path = if inclusion.starts_with("~") {
-            expand_home_dir(&inclusion)
+            match expand_home_dir(&PathBuf::from(inclusion)) {
+                Some(expanded_path) => expanded_path,
+                None => panic!("{:?}: line {:?}: home dir expansion failed", file!(), line!())
+            }
         } else {
             let path_buf = PathBuf::from(inclusion);
             if path_buf.is_relative() {

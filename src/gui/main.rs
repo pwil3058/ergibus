@@ -6,26 +6,29 @@ extern crate pw_gix;
 extern crate ergibus;
 
 use gio::ApplicationExt;
+use gio::ApplicationExtManual;
 
 use gtk::prelude::*;
 
 use pw_gix::gdkx::format_geometry;
+use pw_gix::recollections;
 
-use ergibus::gui::g_archive;
+//use ergibus::gui::g_archive;
 use ergibus::gui::g_snapshot;
-use ergibus::gui::recollections;
+
+use ergibus::config;
 
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
     window.set_title("ERGIBUS GUI");
-    if let Some(geometry) = recollections().recall("main_window:geometry") {
+    if let Some(geometry) = recollections::recall("main_window:geometry") {
         window.parse_geometry(&geometry);
     } else {
         window.set_default_size(200, 200);
     };
     window.connect_configure_event(
         |_, event| {
-            recollections().remember("main_window:geometry", &format_geometry(event));
+            recollections::remember("main_window:geometry", &format_geometry(event));
             false
         }
     );
@@ -39,6 +42,7 @@ fn activate(app: &gtk::Application) {
 }
 
 fn main() {
+    recollections::init(&config::get_gui_config_dir_path().join("recollections"));
     let flags = gio::ApplicationFlags::empty();
     let app = gtk::Application::new("gergibus.pw.nest", flags).unwrap_or_else(
         |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)

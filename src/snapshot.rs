@@ -29,11 +29,13 @@ use serde_json;
 use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
+// PW crate access
+use pw_pathux::{first_subpath_as_string};
+
 // local modules access
 use archive::{self, Exclusions, ArchiveData, get_archive_data};
 use content::{ContentMgmtKey, ContentManager};
 use eerror::{EError, EResult};
-use pathux::{first_subpath_as_string};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 extern crate chrono;
-#[macro_use]
+//#[macro_use]
 extern crate clap;
 extern crate crypto_hash;
 extern crate fs2;
@@ -22,8 +22,9 @@ extern crate hex;
 extern crate hostname;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
+//#[macro_use]
 extern crate pw_gix;
+extern crate pw_pathux;
 extern crate regex;
 extern crate serde;
 #[macro_use]
@@ -39,10 +40,10 @@ extern crate gdk;
 extern crate gtk;
 
 pub mod archive;
-mod config;
+pub mod config;
 pub mod content;
 mod eerror;
-pub mod pathux;
+//pub mod pathux;
 mod report;
 pub mod snapshot;
 
