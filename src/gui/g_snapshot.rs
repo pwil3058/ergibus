@@ -133,7 +133,7 @@ pub struct SnapshotNameTable {
 impl_widget_wrapper!(view: gtk::TreeView, SnapshotNameTable);
 
 impl SnapshotNameTable {
-    pub fn new(archive_name: Option<String>) -> SnapshotNameTable {
+    pub fn new_rc(archive_name: Option<String>) -> Rc<SnapshotNameTable> {
         let list_store = RefCell::new(SnapshotNameListStore::new(archive_name));
 
         let view = gtk::TreeView::new_with_model(&list_store.borrow().get_list_store());
@@ -158,7 +158,7 @@ impl SnapshotNameTable {
         view.append_column(&col);
         view.show_all();
 
-        SnapshotNameTable{view, list_store}
+        Rc::new(SnapshotNameTable{view, list_store})
     }
 
     pub fn set_archive(&self, archive_name: Option<String>) {
@@ -167,7 +167,7 @@ impl SnapshotNameTable {
 }
 
 pub struct SnapshotSelector {
-    pub vbox: gtk::Box,
+    vbox: gtk::Box,
     archive_selector: Rc<g_archive::ArchiveSelector>,
     snapshot_name_table: Rc<SnapshotNameTable>
 }
@@ -175,20 +175,18 @@ pub struct SnapshotSelector {
 impl_widget_wrapper!(vbox: gtk::Box, SnapshotSelector);
 
 impl SnapshotSelector {
-    pub fn new() -> SnapshotSelector {
+    pub fn new_rc() -> Rc<SnapshotSelector> {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let archive_selector = Rc::new(g_archive::ArchiveSelector::new());
-        archive_selector.update_contents();
+        let archive_selector = g_archive::ArchiveSelector::new_rc();
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
-        let snapshot_name_table = Rc::new(SnapshotNameTable::new(archive_selector.get_selected_archive()));
+        let snapshot_name_table = SnapshotNameTable::new_rc(archive_selector.get_selected_archive());
         vbox.pack_start(&snapshot_name_table.pwo(), false, false, 0);
         vbox.show_all();
-        let snapshot_selector = SnapshotSelector{vbox, archive_selector, snapshot_name_table};
+        let snapshot_selector = Rc::new(SnapshotSelector{vbox, archive_selector, snapshot_name_table});
 
         let snt = snapshot_selector.snapshot_name_table.clone();
-        let ars = snapshot_selector.archive_selector.clone();
-        snapshot_selector.archive_selector.combo.connect_changed(
-            move |_| snt.set_archive(ars.get_selected_archive())
+        snapshot_selector.archive_selector.connect_changed(
+            move |new_archive_name| snt.set_archive(new_archive_name)
         );
 
         snapshot_selector
