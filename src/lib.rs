@@ -22,7 +22,7 @@ extern crate hex;
 extern crate hostname;
 #[macro_use]
 extern crate lazy_static;
-//#[macro_use]
+#[macro_use]
 extern crate pw_gix;
 extern crate pw_pathux;
 extern crate regex;

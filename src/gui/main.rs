@@ -12,6 +12,7 @@ use gtk::prelude::*;
 
 use pw_gix::gdkx::format_geometry;
 use pw_gix::recollections;
+use pw_gix::wrapper::*;
 
 //use ergibus::gui::g_archive;
 use ergibus::gui::g_snapshot;
@@ -34,7 +35,7 @@ fn activate(app: &gtk::Application) {
     );
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let snapshot_selector = g_snapshot::SnapshotSelector::new();
-    vbox.pack_start(&snapshot_selector.vbox, false, false, 0);
+    vbox.pack_start(&snapshot_selector.pwo(), false, false, 0);
     let label = gtk::Label::new("GUI is under construction");
     vbox.pack_start(&label, true, true, 0);
     window.add(&vbox);

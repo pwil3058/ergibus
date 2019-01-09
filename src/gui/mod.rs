@@ -15,6 +15,10 @@
 pub mod g_archive;
 pub mod g_snapshot;
 
+pub trait SimpleCreateInterface {
+    fn create() -> Self;
+}
+
 //use config;
 //use pw_gix;
 

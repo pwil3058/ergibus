@@ -25,6 +25,7 @@ use pw_gix::gtkx::list_store::{
     Row, RowBuffer, RowBufferCore, Digest, invalid_digest,
     BufferedUpdate
 };
+use pw_gix::wrapper::*;
 
 use snapshot;
 
@@ -129,6 +130,8 @@ pub struct SnapshotNameTable {
     list_store: RefCell<SnapshotNameListStore>
 }
 
+impl_widget_wrapper!(view: gtk::TreeView, SnapshotNameTable);
+
 impl SnapshotNameTable {
     pub fn new(archive_name: Option<String>) -> SnapshotNameTable {
         let list_store = RefCell::new(SnapshotNameListStore::new(archive_name));
@@ -169,21 +172,26 @@ pub struct SnapshotSelector {
     snapshot_name_table: Rc<SnapshotNameTable>
 }
 
+impl_widget_wrapper!(vbox: gtk::Box, SnapshotSelector);
+
 impl SnapshotSelector {
     pub fn new() -> SnapshotSelector {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let archive_selector = Rc::new(g_archive::ArchiveSelector::new());
         archive_selector.update_contents();
-        vbox.pack_start(&archive_selector.hbox, false, false, 0);
+        vbox.pack_start(&archive_selector.pwo(), false, false, 0);
         let snapshot_name_table = Rc::new(SnapshotNameTable::new(archive_selector.get_selected_archive()));
-        vbox.pack_start(&snapshot_name_table.view, false, false, 0);
+        vbox.pack_start(&snapshot_name_table.pwo(), false, false, 0);
         vbox.show_all();
-        let snt = snapshot_name_table.clone();
-        let ars = archive_selector.clone();
-        archive_selector.combo.connect_changed(
+        let snapshot_selector = SnapshotSelector{vbox, archive_selector, snapshot_name_table};
+
+        let snt = snapshot_selector.snapshot_name_table.clone();
+        let ars = snapshot_selector.archive_selector.clone();
+        snapshot_selector.archive_selector.combo.connect_changed(
             move |_| snt.set_archive(ars.get_selected_archive())
         );
-        SnapshotSelector{vbox, archive_selector, snapshot_name_table}
+
+        snapshot_selector
     }
 }
 

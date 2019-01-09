@@ -19,12 +19,15 @@ use archive;
 
 //use pw_gix::gtkx::combo_box_text;
 use pw_gix::gtkx::combo_box_text::SortedUnique;
+use pw_gix::wrapper::*;
 
 pub struct ArchiveSelector {
     pub hbox: gtk::Box,
-    // make combo "pub" as mapping connect_x() functions is to hard
+    // make combo "pub" as mapping connect_x() functions is too hard
     pub combo: gtk::ComboBoxText,
 }
+
+impl_widget_wrapper!(hbox: gtk::Box, ArchiveSelector);
 
 impl ArchiveSelector {
     pub fn new() -> ArchiveSelector {
