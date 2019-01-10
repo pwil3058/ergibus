@@ -159,7 +159,7 @@ impl SnapshotDir {
         }
     }
 
-    #[test]
+    #[cfg(test)]
     fn find_subdir(&self, abs_subdir_path: &PathBuf) -> Option<&SnapshotDir> {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path) {
@@ -529,7 +529,7 @@ impl SnapshotGenerator {
         Ok(SnapshotGenerator{ snapshot, archive_data })
     }
 
-    #[test]
+    #[cfg(test)]
     pub fn snapshot_available(&self) -> bool {
         self.snapshot.is_some()
     }
@@ -557,7 +557,7 @@ impl SnapshotGenerator {
         duration
     }
 
-    #[test]
+    #[cfg(test)]
     pub fn generation_duration(&self) -> EResult<time::Duration> {
         match self.snapshot {
             Some(ref snapshot) => Ok(snapshot.creation_duration()),
