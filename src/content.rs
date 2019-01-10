@@ -41,7 +41,7 @@ pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
         Err(EError::UnknownRepo(repo_name.to_string()))
     } else {
         let spec = read_repo_spec(repo_name)?;
-        Ok(ContentMgmtKey::from_spec(&spec))
+        Ok(ContentMgmtKey::from(&spec))
     }
 }
 
@@ -63,7 +63,7 @@ pub fn create_new_repo(name: &str, location: &str, hash_algortithm_str: &str) ->
         hash_algorithm: hash_algorithm
     };
 
-    let key = ContentMgmtKey::from_spec(&spec);
+    let key = ContentMgmtKey::from(&spec);
     let mut file = File::create(&key.ref_counter_path).map_err(|err| EError::RefCounterWriteIOError(err))?;
     write_ref_count_hash_map(&mut file, &RefCountHashMap::new())?;
 
@@ -130,21 +130,23 @@ pub struct ContentMgmtKey {
     hash_algortithm: HashAlgorithm,
 }
 
+impl From<&RepoSpec> for ContentMgmtKey {
+    fn from(spec: &RepoSpec) -> ContentMgmtKey {
+        let base_dir_path = PathBuf::from(&spec.base_dir_path);
+        ContentMgmtKey {
+            ref_counter_path: base_dir_path.join("ref_count"),
+            base_dir_path: base_dir_path,
+            hash_algortithm: spec.hash_algorithm,
+        }
+    }
+}
+
 impl ContentMgmtKey {
     pub fn new_dummy() -> ContentMgmtKey {
         ContentMgmtKey {
             base_dir_path: PathBuf::from("whatever"),
             ref_counter_path: PathBuf::from("whatever"),
             hash_algortithm: HashAlgorithm::Sha1,
-        }
-    }
-
-    fn from_spec(spec: &RepoSpec) -> ContentMgmtKey {
-        let base_dir_path = PathBuf::from(&spec.base_dir_path);
-        ContentMgmtKey {
-            ref_counter_path: base_dir_path.join("ref_count"),
-            base_dir_path: base_dir_path,
-            hash_algortithm: spec.hash_algorithm,
         }
     }
 
