@@ -662,7 +662,7 @@ mod tests {
         let mut sd = SnapshotDir::new(None).unwrap_or_else(
             |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         );
-        let p = PathBuf::from("/home/peter/TEST");
+        let p = PathBuf::from("/mnt/TEST");
         {
             let ssd = sd.find_or_add_subdir(&p);
             assert!(ssd.is_ok());
@@ -676,13 +676,13 @@ mod tests {
             None => panic!("{:?}: line {:?}", file!(), line!())
         };
         assert!(ssd.path == p.as_path());
-        let sdp = PathBuf::from("/home/peter");
+        let sdp = PathBuf::from("/mnt");
         let ssd = match sd.find_subdir(&sdp) {
             Some(ssd) => ssd,
             None => panic!("{:?}: line {:?}", file!(), line!())
         };
         assert_eq!(ssd.path, sdp.as_path());
-        let sdp1 = PathBuf::from("/home/peter/TEST/patch_diff/gui");
+        let sdp1 = PathBuf::from("/mnt/TEST/patch_diff/gui");
         assert_eq!(sd.find_subdir(&sdp1), None);
     }
 
