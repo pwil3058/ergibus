@@ -172,6 +172,14 @@ impl ContentMgmtKey {
             hash_map_file: hash_map_file
         })
     }
+
+    fn token_content_file_path(&self, token: &str) -> PathBuf {
+        let mut path_buf = self.base_dir_path.clone();
+        path_buf.push(PathBuf::from(&token[0..3]));
+        path_buf.push(PathBuf::from(&token[3..]));
+
+        path_buf
+    }
 }
 
 fn file_digest(hash_algorithm: HashAlgorithm, file: &mut File) -> Result<String, io::Error> {
@@ -401,6 +409,12 @@ mod tests {
             Err(err) => panic!("get key: {:?}", err),
         };
         {
+            // check token file path works as expected
+            let token_file_path = key.token_content_file_path("AAGH");
+            let expected_tfp = temp_dir.path().join("data").join("ergibus").join("repos").join("test_repo").join("AAG").join("H");
+            assert!(token_file_path == expected_tfp);
+        }
+        {
             let cm = match key.open_content_manager(true) {
                 Ok(content_manager) => content_manager,
                 Err(err) => panic!("open cm: {:?}", err),
@@ -432,11 +446,11 @@ mod tests {
             };
         }
         {
-            let cm1 = match key.open_content_manager(false) {
+            let _cm1 = match key.open_content_manager(false) {
                 Ok(content_manager) => content_manager,
                 Err(err) => panic!("open cm non exclusive: {:?}", err),
             };
-            let cm2 = match key.open_content_manager(false) {
+            let _cm2 = match key.open_content_manager(false) {
                 Ok(content_manager) => content_manager,
                 Err(err) => panic!("open second cm non exclusive: {:?}", err),
             };

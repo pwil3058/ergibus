@@ -312,7 +312,7 @@ file_exclusions:\n
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);
         assert_eq!(spec.file_exclusions, vec!["*.[oa]", "*.py[co]"]);
         if let Err(err) = write_archive_spec("dummy", &spec, true) {
-            panic!("write spec failed")
+            panic!("write spec failed: {:?}", err)
         };
         let spec: ArchiveSpec = read_archive_spec("dummy").unwrap_or_else(
             |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
