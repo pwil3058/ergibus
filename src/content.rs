@@ -14,7 +14,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File, OpenOptions, copy, create_dir_all};
 use std::io::prelude::*;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -355,7 +355,13 @@ impl ContentManager {
                 Ok(metadata) => metadata.len(),
                 Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
             };
-            // TODO: write the file contents to disc
+            // write the file contents to disc
+            let content_file_path = self.content_mgmt_key.token_content_file_path(&digest);
+            let content_dir_path = content_file_path.parent().expect("Failed to extract content directory path");
+            if !content_dir_path.exists() {
+                create_dir_all(content_dir_path).map_err(|err| EError::ContentStoreIOError(err))?;
+            }
+            copy(abs_file_path, &content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
             let rcd = RefCountData{
                 content_size: content_size,
                 stored_size: content_size,
