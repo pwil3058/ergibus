@@ -14,7 +14,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions, copy, create_dir_all};
+use std::fs::{self, File, OpenOptions, copy, create_dir_all, read};
 use std::io::prelude::*;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -370,6 +370,24 @@ impl ContentManager {
             self.ref_counter.insert(&digest, rcd);
         };
         Ok(digest)
+    }
+
+    pub fn copy_contents_for_token(&self, content_token: &str, target_path: &Path) -> EResult<u64> {
+        let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
+        if !content_file_path.exists() {
+            return Err(EError::UnknownContentKey(content_token.to_string()));
+        }
+        let n = copy(content_file_path, target_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        Ok(n)
+    }
+
+    pub fn read_contents_for_token(&self, content_token: &str) -> EResult<Vec<u8>> {
+        let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
+        if !content_file_path.exists() {
+            return Err(EError::UnknownContentKey(content_token.to_string()));
+        }
+        let contents = read(content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        Ok(contents)
     }
 
     pub fn release_contents(&self, content_token: &str) -> EResult<u64> {
