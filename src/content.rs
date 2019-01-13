@@ -14,7 +14,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions, copy, create_dir_all, read};
+use std::fs::{self, File, OpenOptions, create_dir_all};
 use std::io::prelude::*;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -361,10 +361,13 @@ impl ContentManager {
             if !content_dir_path.exists() {
                 create_dir_all(content_dir_path).map_err(|err| EError::ContentStoreIOError(err))?;
             }
-            copy(abs_file_path, &content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+            file.seek(io::SeekFrom::Start(0)).map_err(|err| EError::ContentStoreIOError(err))?;
+            let content_file = File::create(&content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+            let mut compressed_content_file = snap::Writer::new(content_file);
+            let stored_size = io::copy(&mut file, &mut compressed_content_file).map_err(|err| EError::ContentStoreIOError(err))?;
             let rcd = RefCountData{
                 content_size: content_size,
-                stored_size: content_size,
+                stored_size: stored_size,
                 ref_count: 1
             };
             self.ref_counter.insert(&digest, rcd);
@@ -377,7 +380,10 @@ impl ContentManager {
         if !content_file_path.exists() {
             return Err(EError::UnknownContentKey(content_token.to_string()));
         }
-        let n = copy(content_file_path, target_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let mut target_file = File::create(target_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let content_file = File::open(content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let mut compressed_content_file = snap::Reader::new(content_file);
+        let n = io::copy(&mut compressed_content_file, &mut target_file).map_err(|err| EError::ContentStoreIOError(err))?;
         Ok(n)
     }
 
@@ -386,7 +392,10 @@ impl ContentManager {
         if !content_file_path.exists() {
             return Err(EError::UnknownContentKey(content_token.to_string()));
         }
-        let contents = read(content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let mut contents = Vec::<u8>::new();
+        let content_file = File::open(content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let mut compressed_content_file = snap::Reader::new(content_file);
+        compressed_content_file.read_to_end(&mut contents).map_err(|err| EError::ContentStoreIOError(err))?;
         Ok(contents)
     }
 
