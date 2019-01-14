@@ -712,7 +712,13 @@ mod tests {
         let my_file = my_file.to_str().unwrap_or_else(
             || panic!("{:?}: line {:?}", file!(), line!())
         );
-        let inclusions = vec!["~/Documents".to_string(), "~/Downloads".to_string(), my_file.to_string()];
+        let cli_dir = Path::new("./src/cli").canonicalize().unwrap_or_else(
+            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+        );
+        let cli_dir = cli_dir.to_str().unwrap_or_else(
+            || panic!("{:?}: line {:?}", file!(), line!())
+        );
+        let inclusions = vec!["~/Documents".to_string(), cli_dir.to_string(), my_file.to_string()];
         let dir_exclusions = vec!["lost+found".to_string()];
         let file_exclusions = vec!["*.iso".to_string()];
         if let Err(err) = archive::create_new_archive("test_ss", "test_repo", data_dir_str, inclusions, dir_exclusions, file_exclusions) {
@@ -723,6 +729,7 @@ mod tests {
                 Ok(snapshot_generator) => snapshot_generator,
                 Err(err) => panic!("new SG: {:?}", err)
             };
+            println!("Generating for {:?}", "test_ss");
             sg.generate_snapshot();
             println!("Generating for {:?} took {:?}", "test_ss", sg.generation_duration());
             assert!(sg.snapshot_available());
