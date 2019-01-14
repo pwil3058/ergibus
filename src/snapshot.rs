@@ -203,7 +203,7 @@ impl SnapshotDir {
 
     fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) -> (FileStats, SymLinkStats) {
         let mut file_stats = FileStats::default();
-        let mut sym_link_stats = SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0};
+        let mut sym_link_stats = SymLinkStats::default();
         match fs::read_dir(&self.path) {
             Ok(entries) => {
                 for entry_or_err in entries {
@@ -271,27 +271,27 @@ impl SnapshotDir {
             |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         );
         if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
-            return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
+            return SymLinkStats::default()
         }
         let attributes = match dir_entry.metadata() {
             Ok(ref metadata) => Attributes::new(metadata),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
+                return SymLinkStats::default()
             }
         };
         let link_target = match dir_entry.path().read_link() {
             Ok(lt) => lt,
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
+                return SymLinkStats::default()
             }
         };
         let abs_target_path = match self.path.join(link_target.clone()).canonicalize() {
             Ok(atp) => atp,
             Err(ref err) => {
                 report_broken_link_or_crash(err, &dir_entry.path(), &link_target);
-                return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
+                return SymLinkStats::default()
             }
         };
         if abs_target_path.is_file() {
@@ -301,7 +301,7 @@ impl SnapshotDir {
             self.subdir_links.insert(file_name, LinkData{attributes, link_target});
             return SymLinkStats{dir_sym_link_count: 1, file_sym_link_count: 0};
         }
-        SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0}
+        SymLinkStats::default()
     }
 }
 
@@ -322,7 +322,7 @@ impl AddAssign for FileStats {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
 struct SymLinkStats {
     dir_sym_link_count: u64,
     file_sym_link_count: u64,
@@ -360,7 +360,7 @@ impl SnapshotPersistentData {
             started_create: time::SystemTime::now(),
             finished_create: time::SystemTime::now(),
             file_stats: FileStats::default(),
-            sym_link_stats: SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0},
+            sym_link_stats: SymLinkStats::default(),
         }
     }
 
