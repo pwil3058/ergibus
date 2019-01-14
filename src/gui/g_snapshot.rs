@@ -192,19 +192,3 @@ impl SnapshotSelector {
         snapshot_selector
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn g_snapshot_list_store() {
-        if !gtk::is_initialized() {
-            if let Err(err) = gtk::init() {
-                panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-            };
-        }
-        let mut store = SnapshotNameListStore::new(None);
-        store.set_archive_name(Some("whatever".to_string()));
-    }
-}

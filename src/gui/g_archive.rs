@@ -74,13 +74,3 @@ impl ArchiveSelector {
         self.changed_callbacks.borrow_mut().push(Box::new(callback));
     }
 }
-
-#[cfg(test)]
-mod tests {
-    //use super::*;
-
-    #[test]
-    fn it_works() {
-
-    }
-}

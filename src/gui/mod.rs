@@ -14,14 +14,3 @@
 
 pub mod g_archive;
 pub mod g_snapshot;
-
-pub trait SimpleCreateInterface {
-    fn create() -> Self;
-}
-
-//use config;
-//use pw_gix;
-
-//pub fn recollections() -> pw_gix::recollect::Recollections {
-    //pw_gix::recollect::Recollections::new(&config::get_gui_config_dir_path().join("recollections"))
-//}
