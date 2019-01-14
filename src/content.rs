@@ -346,11 +346,11 @@ impl Drop for ContentManager {
 }
 
 impl ContentManager {
-    pub fn store_file_contents(&self, abs_file_path: &Path) -> EResult<String> {
+    pub fn store_file_contents(&self, abs_file_path: &Path) -> EResult<(String, u64)> {
         let mut file = File::open(abs_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
         let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
         match self.ref_counter.incr_ref_count_for_token(&digest) {
-            Ok(_rcd) => Ok(digest),
+            Ok(rcd) => Ok((digest, rcd.stored_size)),
             Err(_) => {
                 let content_size = match file.metadata() {
                     Ok(metadata) => metadata.len(),
@@ -371,7 +371,7 @@ impl ContentManager {
                     ref_count: 1
                 };
                 self.ref_counter.insert(&digest, rcd);
-                Ok(digest)
+                Ok((digest, stored_size))
             }
         }
     }
@@ -455,7 +455,7 @@ mod tests {
             };
             for i in 1..5 {
                 let token = match cm.store_file_contents(&PathBuf::from("./src/content.rs")) {
-                    Ok(tkn) => tkn,
+                    Ok((tkn, _)) => tkn,
                     Err(err) => panic!("sfc: {:?}", err),
                 };
                 match cm.get_ref_count_for_token(&token) {
@@ -465,7 +465,7 @@ mod tests {
             };
             for i in 1..5 {
                 let token = match cm.store_file_contents(&PathBuf::from("./src/snapshot.rs")) {
-                    Ok(tkn) => tkn,
+                    Ok((tkn, _)) => tkn,
                     Err(err) => panic!("sfc: {:?}", err),
                 };
                 match cm.get_ref_count_for_token(&token) {

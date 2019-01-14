@@ -250,7 +250,7 @@ impl SnapshotDir {
             }
         };
         let content_token = match content_mgr.store_file_contents(&dir_entry.path()) {
-            Ok(ct) => ct,
+            Ok((ct, _)) => ct,
             Err(err) => {
                 match err {
                     EError::ContentStoreIOError(io_err) => {
