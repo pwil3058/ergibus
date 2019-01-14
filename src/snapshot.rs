@@ -202,7 +202,7 @@ impl SnapshotDir {
     }
 
     fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) -> (FileStats, SymLinkStats) {
-        let mut file_stats = FileStats{file_count: 0, byte_count: 0};
+        let mut file_stats = FileStats::default();
         let mut sym_link_stats = SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0};
         match fs::read_dir(&self.path) {
             Ok(entries) => {
@@ -240,28 +240,28 @@ impl SnapshotDir {
             |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         );
         if self.files.contains_key(&file_name) {
-            return FileStats{file_count: 0, byte_count: 0}
+            return FileStats::default()
         }
         let attributes = match dir_entry.metadata() {
             Ok(ref metadata) => Attributes::new(metadata),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return FileStats{file_count: 0, byte_count: 0}
+                return FileStats::default()
             }
         };
-        let content_token = match content_mgr.store_file_contents(&dir_entry.path()) {
-            Ok((ct, _)) => ct,
+        let (content_token, stored_size) = match content_mgr.store_file_contents(&dir_entry.path()) {
+            Ok((ct, ssz)) => (ct, ssz),
             Err(err) => {
                 match err {
                     EError::ContentStoreIOError(io_err) => {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
-                        return FileStats{file_count: 0, byte_count: 0}
+                        return FileStats::default()
                     },
                     _ => panic!("{:?}: line {:?}: should not happen: {:?}", file!(), line!(), err)
                 }
             }
         };
-        let file_stats = FileStats{file_count: 1, byte_count: attributes.st_size};
+        let file_stats = FileStats{file_count: 1, byte_count: attributes.st_size, stored_byte_count: stored_size};
         self.files.insert(file_name, FileData{attributes, content_token});
         file_stats
     }
@@ -305,10 +305,11 @@ impl SnapshotDir {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
 struct FileStats {
     file_count: u64,
     byte_count: u64,
+    stored_byte_count: u64,
 }
 
 impl AddAssign for FileStats {
@@ -316,6 +317,7 @@ impl AddAssign for FileStats {
         *self = FileStats {
             file_count: self.file_count + other.file_count,
             byte_count: self.byte_count + other.byte_count,
+            stored_byte_count: self.stored_byte_count + other.stored_byte_count,
         };
     }
 }
@@ -357,7 +359,7 @@ impl SnapshotPersistentData {
             archive_name: archive_name.to_string(),
             started_create: time::SystemTime::now(),
             finished_create: time::SystemTime::now(),
-            file_stats: FileStats{file_count: 0, byte_count: 0},
+            file_stats: FileStats::default(),
             sym_link_stats: SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 0},
         }
     }
