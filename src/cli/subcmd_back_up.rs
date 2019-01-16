@@ -60,7 +60,7 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
                 );
             },
             Err(err) => {
-                println!("{:?}", err);
+                println!("{:?}: {}", err, archive);
                 had_errors = true;
             }
         }
