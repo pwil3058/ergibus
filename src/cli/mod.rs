@@ -34,6 +34,11 @@ pub fn arg_location<'a, 'b>() -> clap::Arg<'a, 'b> {
         .short("L").long("location").value_name("dir_path").takes_value(true)
 }
 
+pub fn arg_show_stats<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("show_stats")
+        .long("stats").takes_value(false)
+}
+
 pub mod subcmd_back_up;
 pub mod subcmd_delete;
 pub mod subcmd_list_archives;

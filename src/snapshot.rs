@@ -201,9 +201,10 @@ impl SnapshotDir {
         }
     }
 
-    fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) -> (FileStats, SymLinkStats) {
+    fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) -> (FileStats, SymLinkStats, u64) {
         let mut file_stats = FileStats::default();
         let mut sym_link_stats = SymLinkStats::default();
+        let mut delta_repo_size: u64 = 0;
         match fs::read_dir(&self.path) {
             Ok(entries) => {
                 for entry_or_err in entries {
@@ -215,7 +216,9 @@ impl SnapshotDir {
                                         if exclusions.is_excluded_file(&entry.path()) {
                                             continue
                                         }
-                                        file_stats += self.add_file(&entry, &content_mgr);
+                                        let data = self.add_file(&entry, &content_mgr);
+                                        file_stats += data.0;
+                                        delta_repo_size += data.1;
                                     } else if e_type.is_symlink() {
                                         if exclusions.is_excluded_file(&entry.path()) {
                                             continue
@@ -232,30 +235,30 @@ impl SnapshotDir {
             },
             Err(err) => ignore_report_or_crash(&err, &self.path)
         };
-        (file_stats, sym_link_stats)
+        (file_stats, sym_link_stats, delta_repo_size)
     }
 
-    fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> FileStats {
+    fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> (FileStats, u64) {
         let file_name = dir_entry.file_name().into_string().unwrap_or_else(
             |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         );
         if self.files.contains_key(&file_name) {
-            return FileStats::default()
+            return (FileStats::default(), 0)
         }
         let attributes = match dir_entry.metadata() {
             Ok(ref metadata) => Attributes::new(metadata),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return FileStats::default()
+                return (FileStats::default(), 0)
             }
         };
-        let (content_token, stored_size) = match content_mgr.store_file_contents(&dir_entry.path()) {
-            Ok((ct, ssz)) => (ct, ssz),
+        let (content_token, stored_size, delta_repo_size) = match content_mgr.store_file_contents(&dir_entry.path()) {
+            Ok((ct, ssz, drsz)) => (ct, ssz, drsz),
             Err(err) => {
                 match err {
                     EError::ContentStoreIOError(io_err) => {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
-                        return FileStats::default()
+                        return (FileStats::default(), 0)
                     },
                     _ => panic!("{:?}: line {:?}: should not happen: {:?}", file!(), line!(), err)
                 }
@@ -263,7 +266,7 @@ impl SnapshotDir {
         };
         let file_stats = FileStats{file_count: 1, byte_count: attributes.st_size, stored_byte_count: stored_size};
         self.files.insert(file_name, FileData{attributes, content_token});
-        file_stats
+        (file_stats, delta_repo_size)
     }
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
@@ -305,11 +308,11 @@ impl SnapshotDir {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
-struct FileStats {
-    file_count: u64,
-    byte_count: u64,
-    stored_byte_count: u64,
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
+pub struct FileStats {
+    pub file_count: u64,
+    pub byte_count: u64,
+    pub stored_byte_count: u64,
 }
 
 impl AddAssign for FileStats {
@@ -322,10 +325,10 @@ impl AddAssign for FileStats {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
-struct SymLinkStats {
-    dir_sym_link_count: u64,
-    file_sym_link_count: u64,
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
+pub struct SymLinkStats {
+    pub dir_sym_link_count: u64,
+    pub file_sym_link_count: u64,
 }
 
 impl AddAssign for SymLinkStats {
@@ -378,12 +381,15 @@ impl SnapshotPersistentData {
         self.root_dir.release_contents(&content_mgr);
     }
 
-    fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> io::Result<()> {
+    fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> io::Result<u64> {
         let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
         let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
             |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
         );
-        dir.populate(exclusions, &content_mgr);
+        let (file_stats, sym_link_stats, drsz) = dir.populate(exclusions, &content_mgr);
+        self.file_stats += file_stats;
+        self.sym_link_stats += sym_link_stats;
+        let mut delta_repo_size = drsz;
         for entry in WalkDir::new(abs_dir_path).into_iter().filter_entry(|e| e.file_type().is_dir()) {
             match entry {
                 Ok(e_data) => {
@@ -393,9 +399,10 @@ impl SnapshotPersistentData {
                     }
                     match dir.find_or_add_subdir(e_path) {
                         Ok(sub_dir) => {
-                            let (file_stats, sym_link_stats) = sub_dir.populate(exclusions, &content_mgr);
+                            let (file_stats, sym_link_stats, drsz) = sub_dir.populate(exclusions, &content_mgr);
                             self.file_stats += file_stats;
-                            self.sym_link_stats += sym_link_stats
+                            self.sym_link_stats += sym_link_stats;
+                            delta_repo_size += drsz;
                         },
                         Err(err) => ignore_report_or_crash(&err, &e_path)
                     }
@@ -410,29 +417,32 @@ impl SnapshotPersistentData {
                 },
             }
         }
-        Ok(())
+        Ok(delta_repo_size)
     }
 
-    fn add_other(&mut self, abs_file_path: &Path) -> io::Result<()> {
+    fn add_other(&mut self, abs_file_path: &Path) -> io::Result<u64> {
         let entry = get_entry_for_path(abs_file_path)?;
         let dir_path = abs_file_path.parent().unwrap_or_else(
             || panic!("{:?}: line {:?}", file!(), line!())
         );
         let dir = self.root_dir.find_or_add_subdir(&dir_path)?;
+        let mut delta_repo_size: u64 = 0;
         match entry.file_type() {
             Ok(e_type) => {
                 if e_type.is_file() {
                     let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
                         |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
                     );
-                    self.file_stats += dir.add_file(&entry, &content_mgr);
+                    let data = dir.add_file(&entry, &content_mgr);
+                    self.file_stats += data.0;
+                    delta_repo_size += data.1;
                 } else if e_type.is_symlink() {
                     self.sym_link_stats += dir.add_symlink(&entry);
                 }
             },
             Err(err) => ignore_report_or_crash(&err, abs_file_path)
         };
-        Ok(())
+        Ok(delta_repo_size)
     }
 
     fn creation_duration(&self) -> time::Duration {
@@ -536,27 +546,32 @@ impl SnapshotGenerator {
         self.snapshot.is_some()
     }
 
-    fn generate_snapshot(&mut self) -> time::Duration {
+    fn generate_snapshot(&mut self) -> (time::Duration, FileStats, SymLinkStats, u64) {
         if self.snapshot.is_some() {
             // This snapshot is being thrown away so we release its contents
             self.release_snapshot();
         }
+        let mut delta_repo_size: u64 = 0;
         let mut snapshot = SnapshotPersistentData::new(&self.archive_data.name, &self.archive_data.content_mgmt_key);
         for abs_path in self.archive_data.includes.iter() {
             if abs_path.is_dir() {
-                if let Err(err) = snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
-                    ignore_report_or_crash(&err, &abs_path);
+                match snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
+                    Ok(drsz) => delta_repo_size += drsz,
+                    Err(err) => ignore_report_or_crash(&err, &abs_path)
                 };
             } else {
-                if let Err(err) = snapshot.add_other(&abs_path) {
-                    ignore_report_or_crash(&err, &abs_path);
+                match snapshot.add_other(&abs_path) {
+                    Ok(drsz) => delta_repo_size += drsz,
+                    Err(err) => ignore_report_or_crash(&err, &abs_path)
                 };
             }
         }
         snapshot.finished_create = time::SystemTime::now();
         let duration = snapshot.creation_duration();
+        let file_stats = snapshot.file_stats;
+        let sym_link_stats = snapshot.sym_link_stats;
         self.snapshot = Some(snapshot);
-        duration
+        (duration, file_stats, sym_link_stats, delta_repo_size)
     }
 
     #[cfg(test)]
@@ -608,11 +623,11 @@ impl SnapshotGenerator {
     }
 }
 
-pub fn generate_snapshot(archive_name: &str) -> EResult<()> {
+pub fn generate_snapshot(archive_name: &str) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
     let mut sg = SnapshotGenerator::new(archive_name)?;
-    sg.generate_snapshot();
+    let stats = sg.generate_snapshot();
     sg.write_snapshot()?;
-    Ok(())
+    Ok(stats)
 }
 
 pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {

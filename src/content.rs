@@ -346,11 +346,11 @@ impl Drop for ContentManager {
 }
 
 impl ContentManager {
-    pub fn store_file_contents(&self, abs_file_path: &Path) -> EResult<(String, u64)> {
+    pub fn store_file_contents(&self, abs_file_path: &Path) -> EResult<(String, u64, u64)> {
         let mut file = File::open(abs_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
         let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
         match self.ref_counter.incr_ref_count_for_token(&digest) {
-            Ok(rcd) => Ok((digest, rcd.stored_size)),
+            Ok(rcd) => Ok((digest, rcd.stored_size, 0)),
             Err(_) => {
                 let content_size = match file.metadata() {
                     Ok(metadata) => metadata.len(),
@@ -364,14 +364,16 @@ impl ContentManager {
                 file.seek(io::SeekFrom::Start(0)).map_err(|err| EError::ContentStoreIOError(err))?;
                 let content_file = File::create(&content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
                 let mut compressed_content_file = snap::Writer::new(content_file);
-                let stored_size = io::copy(&mut file, &mut compressed_content_file).map_err(|err| EError::ContentStoreIOError(err))?;
+                io::copy(&mut file, &mut compressed_content_file).map_err(|err| EError::ContentStoreIOError(err))?;
+                let metadata = content_file_path.metadata().map_err(|err| EError::ContentStoreIOError(err))?;
+                let stored_size = metadata.len();
                 let rcd = RefCountData{
                     content_size: content_size,
                     stored_size: stored_size,
                     ref_count: 1
                 };
                 self.ref_counter.insert(&digest, rcd);
-                Ok((digest, stored_size))
+                Ok((digest, stored_size, stored_size))
             }
         }
     }
