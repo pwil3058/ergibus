@@ -22,7 +22,7 @@ use content;
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("new_repo").visible_alias("newr")
         .about("Create a new content repository")
-        .arg(cli::arg_file_path()
+        .arg(cli::arg_repo_name()
             .required(true)
             .help("the name of the new content repository to be created")
         )
