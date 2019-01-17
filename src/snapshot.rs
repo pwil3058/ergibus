@@ -496,6 +496,7 @@ fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
             Err(_) => ()
         }
     }
+    v.sort_by_key(|e| e.path());
     Ok(v)
 }
 
@@ -637,14 +638,50 @@ pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     Ok(())
 }
 
+pub fn delete_all_snapshots_but_newest(archive_name: &str, newest_count: usize, clear_fell: bool) -> EResult<(usize)> {
+    let mut deleted_count: usize = 0;
+    if !clear_fell && newest_count == 0 {
+        return Err(EError::LastSnapshot(archive_name.to_string()));
+    }
+    let snapshot_paths = get_snapshot_paths_for_archive(archive_name, false)?;
+    if snapshot_paths.len() == 0 {
+        return Err(EError::ArchiveEmpty(archive_name.to_string()));
+    }
+    if snapshot_paths.len() <= newest_count {
+        return Ok(0);
+    }
+    let last_index = snapshot_paths.len() - newest_count;
+    for snapshot_path in snapshot_paths[0..last_index].iter() {
+        delete_snapshot_file(snapshot_path)?;
+        deleted_count += 1;
+    }
+    Ok(deleted_count)
+}
+
+fn get_snapshot_paths_in_dir(dir_path: &Path) -> EResult<Vec<PathBuf>> {
+    let entries = get_ss_entries_in_dir(dir_path)?;
+    let mut v = Vec::new();
+    for entry in entries {
+        let e_path = dir_path.join(entry.path());
+        v.push(e_path);
+    };
+    Ok(v)
+}
+
+pub fn get_snapshot_paths_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<PathBuf>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let mut snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path)?;
+    if reverse {
+        snapshot_paths.reverse();
+    };
+    Ok(snapshot_paths)
+}
+
 pub fn get_snapshot_names_in_dir(dir_path: &Path) -> EResult<Vec<String>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut v = Vec::new();
     for entry in entries {
-        match entry.file_name().to_str() {
-            Some(file_name) => v.push(file_name.to_string()),
-            None => panic!("{:?}: line {:?}: {:?}", file!(), line!(), entry.file_name())
-        }
+        v.push(String::from(entry.path().to_string_lossy().to_owned()));
     };
     Ok(v)
 }
@@ -652,7 +689,6 @@ pub fn get_snapshot_names_in_dir(dir_path: &Path) -> EResult<Vec<String>> {
 pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     let mut snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path)?;
-    snapshot_names.sort();
     if reverse {
         snapshot_names.reverse();
     };

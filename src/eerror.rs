@@ -22,6 +22,7 @@ use serde_yaml;
 #[derive(Debug)]
 pub enum EError {
     ArchiveGlobError(globset::Error, String),
+    ArchiveEmpty(String),
     ArchiveExists(String),
     GlobError(globset::Error),
     ArchiveReadError(io::Error, PathBuf),
@@ -47,6 +48,7 @@ pub enum EError {
     RefCounterSerializeError(serde_json::Error),
 
     NoSnapshotAvailable,
+    LastSnapshot(String),
     SnapshotDirIOError(io::Error, PathBuf),
     SnapshotWriteIOError(io::Error, PathBuf),
     SnapshotReadIOError(io::Error, PathBuf),

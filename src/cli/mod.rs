@@ -39,7 +39,13 @@ pub fn arg_show_stats<'a, 'b>() -> clap::Arg<'a, 'b> {
         .long("stats").takes_value(false)
 }
 
+pub fn arg_verbose<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("verbose")
+        .short("v").long("verbose").takes_value(false)
+}
+
 pub mod subcmd_back_up;
+pub mod subcmd_delete_snapshot;
 pub mod subcmd_delete_snapshot_file;
 pub mod subcmd_list_archives;
 pub mod subcmd_list_snapshots;
