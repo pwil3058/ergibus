@@ -40,7 +40,7 @@ pub fn arg_show_stats<'a, 'b>() -> clap::Arg<'a, 'b> {
 }
 
 pub mod subcmd_back_up;
-pub mod subcmd_delete;
+pub mod subcmd_delete_snapshot_file;
 pub mod subcmd_list_archives;
 pub mod subcmd_list_snapshots;
 pub mod subcmd_new_archive;

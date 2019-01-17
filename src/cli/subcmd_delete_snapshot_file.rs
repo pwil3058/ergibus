@@ -20,7 +20,7 @@ use cli;
 use snapshot;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
-    clap::SubCommand::with_name("delete").visible_alias("del")
+    clap::SubCommand::with_name("delete_snapshot_file").visible_alias("del_ss_file")
         .about("Delete the specified snapshot file(s)")
         .arg(cli::arg_file_path()
             .required(true).multiple(true)
