@@ -19,6 +19,7 @@ use std::str::FromStr;
 use clap;
 
 use cli;
+use eerror::{EError, EResult};
 use snapshot;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
@@ -57,7 +58,7 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
         }
     };
     let remove_last_ok = arg_matches.is_present("remove_last_ok");
-    match snapshot::delete_all_snapshots_but_newest(archive_name, n, remove_last_ok) {
+    match delete_all_snapshots_but_newest(archive_name, n, remove_last_ok) {
         Ok(n) => if arg_matches.is_present("verbose") {
             println!("{} snapshots deleted", n)
         }
@@ -66,4 +67,24 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
             std::process::exit(1);
         }
     }
+}
+
+pub fn delete_all_snapshots_but_newest(archive_name: &str, newest_count: usize, clear_fell: bool) -> EResult<(usize)> {
+    let mut deleted_count: usize = 0;
+    if !clear_fell && newest_count == 0 {
+        return Err(EError::LastSnapshot(archive_name.to_string()));
+    }
+    let snapshot_paths = snapshot::get_snapshot_paths_for_archive(archive_name, false)?;
+    if snapshot_paths.len() == 0 {
+        return Err(EError::ArchiveEmpty(archive_name.to_string()));
+    }
+    if snapshot_paths.len() <= newest_count {
+        return Ok(0);
+    }
+    let last_index = snapshot_paths.len() - newest_count;
+    for snapshot_path in snapshot_paths[0..last_index].iter() {
+        snapshot::delete_snapshot_file(snapshot_path)?;
+        deleted_count += 1;
+    }
+    Ok(deleted_count)
 }
