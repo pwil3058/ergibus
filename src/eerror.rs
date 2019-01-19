@@ -19,10 +19,12 @@ use globset;
 use serde_json;
 use serde_yaml;
 
+use snapshot::ArchiveOrDirPath;
+
 #[derive(Debug)]
 pub enum EError {
     ArchiveGlobError(globset::Error, String),
-    ArchiveEmpty(String),
+    ArchiveEmpty(ArchiveOrDirPath),
     ArchiveExists(String),
     GlobError(globset::Error),
     ArchiveReadError(io::Error, PathBuf),
@@ -48,7 +50,7 @@ pub enum EError {
     RefCounterSerializeError(serde_json::Error),
 
     NoSnapshotAvailable,
-    LastSnapshot(String),
+    LastSnapshot(ArchiveOrDirPath),
     SnapshotDirIOError(io::Error, PathBuf),
     SnapshotWriteIOError(io::Error, PathBuf),
     SnapshotReadIOError(io::Error, PathBuf),

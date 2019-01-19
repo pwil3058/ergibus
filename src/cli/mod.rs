@@ -44,6 +44,12 @@ pub fn arg_verbose<'a, 'b>() -> clap::Arg<'a, 'b> {
         .short("v").long("verbose").takes_value(false)
 }
 
+pub fn arg_exigency_dir_path<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("exigency_dir_path")
+        .short("X").long("exigency").value_name("dir_path")
+        .required(true).takes_value(true)
+}
+
 pub mod subcmd_back_up;
 pub mod subcmd_delete_snapshot;
 pub mod subcmd_delete_snapshot_file;
