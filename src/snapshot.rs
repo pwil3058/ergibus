@@ -657,21 +657,21 @@ pub fn get_snapshot_paths_for_archive(archive_name: &str, reverse: bool) -> ERes
     Ok(snapshot_paths)
 }
 
-pub fn get_snapshot_names_in_dir(dir_path: &Path) -> EResult<Vec<String>> {
+pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<String>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_names = Vec::new();
     for entry in entries {
         snapshot_names.push(String::from(entry.path().to_string_lossy().to_owned()));
+    };
+    if reverse {
+        snapshot_names.reverse();
     };
     Ok(snapshot_names)
 }
 
 pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let mut snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path)?;
-    if reverse {
-        snapshot_names.reverse();
-    };
+    let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
     Ok(snapshot_names)
 }
 
@@ -682,14 +682,25 @@ pub enum ArchiveOrDirPath {
 }
 
 impl ArchiveOrDirPath {
-    pub fn get_snapshot_paths(&self, reverse: bool) -> EResult<Vec<PathBuf>> {
-        let snapshot_dir_path = match self {
+    fn get_dir_path(&self) -> EResult<PathBuf> {
+        let dir_path = match self {
             ArchiveOrDirPath::Archive(archive_name) => {
                 let path = archive::get_archive_snapshot_dir_path(&archive_name)?;
                 path
             }
             ArchiveOrDirPath::DirPath(path) => path.clone()
         };
+        Ok(dir_path)
+    }
+    
+    pub fn get_snapshot_names(&self, reverse: bool) -> EResult<Vec<String>> {
+        let snapshot_dir_path = self.get_dir_path()?;
+        let snapshot_paths = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
+        Ok(snapshot_paths)
+    }
+
+    pub fn get_snapshot_paths(&self, reverse: bool) -> EResult<Vec<PathBuf>> {
+        let snapshot_dir_path = self.get_dir_path()?;
         let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, reverse)?;
         Ok(snapshot_paths)
     }

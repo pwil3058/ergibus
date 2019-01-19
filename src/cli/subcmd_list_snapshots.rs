@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std;
-use std::path::Path;
+use std::path::PathBuf;
 use clap;
 
 use cli;
@@ -44,31 +44,20 @@ repositories are also intact."
 }
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches) {
-    if arg_matches.is_present("archive_name") {
-        let archive_name = arg_matches.value_of("archive_name").ok_or(0).unwrap_or_else(
-            |_| panic!("{:?}: line {:?}", file!(), line!())
-        );
-        match snapshot::get_snapshot_names_for_archive(&archive_name, false) {
-            Ok(snapshot_names) => for name in snapshot_names {
-                println!("{:?}", name);
-            },
-            Err(err) => {
-                println!("{:?}", err);
-                std::process::exit(1);
-            }
-        }
+    let archive_or_dir_path = if let Some(archive_name) = arg_matches.value_of("archive_name") {
+        snapshot::ArchiveOrDirPath::Archive(archive_name.to_string())
+    } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {
+        snapshot::ArchiveOrDirPath::DirPath(PathBuf::from(dir_path))
     } else {
-        let exigency_dir_path = arg_matches.value_of("exigency_dir_path").ok_or(0).unwrap_or_else(
-            |_| panic!("{:?}: line {:?}", file!(), line!())
-        );
-        match snapshot::get_snapshot_names_in_dir(Path::new(&exigency_dir_path)) {
-            Ok(snapshot_names) => for name in snapshot_names {
-                println!("{:?}", name);
-            },
-            Err(err) => {
-                println!("{:?}", err);
-                std::process::exit(1);
-            }
+        panic!("{:?}: line {:?}", file!(), line!())
+    };
+    match archive_or_dir_path.get_snapshot_names(false) {
+        Ok(snapshot_names) => for name in snapshot_names {
+            println!("{:?}", name);
+        },
+        Err(err) => {
+            println!("{:?}", err);
+            std::process::exit(1);
         }
     }
 }
