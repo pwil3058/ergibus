@@ -30,6 +30,12 @@ pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
             .help("delete all but the newest N snapshots")
             .required(true)
         )
+        .arg(cli::arg_back_n()
+            .required(true)
+        )
+        .group(clap::ArgGroup::with_name("which_ss")
+            .args(&["all_but_newest_n", "back_n"]).required(true)
+        )
         .arg(clap::Arg::with_name("remove_last_ok")
             .long("remove_last_ok").takes_value(false)
             .help("authorise deletion of the last snapshot in the archive.")
@@ -64,25 +70,43 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
     } else {
         panic!("{:?}: line {:?}", file!(), line!())
     };
-    let n_as_str = arg_matches.value_of("all_but_newest_n").ok_or(0).unwrap_or_else(
-        |_| panic!("{:?}: line {:?}", file!(), line!())
-    );
-    let n = match usize::from_str(n_as_str) {
-        Ok(n) => n,
-        Err(_) => {
-            writeln!(stderr(), "Expected unsigned integer: found {}", n_as_str).unwrap();
-            std::process::exit(1);
-        }
-    };
     let remove_last_ok = arg_matches.is_present("remove_last_ok");
-    match delete_all_but_newest(&archive_or_dir_path, n, remove_last_ok) {
-        Ok(n) => if arg_matches.is_present("verbose") {
-            println!("{} snapshots deleted", n)
+    if let Some(n_as_str) = arg_matches.value_of("all_but_newest_n") {
+        let n = match usize::from_str(n_as_str) {
+            Ok(n) => n,
+            Err(_) => {
+                writeln!(stderr(), "Expected unsigned integer: found {}", n_as_str).unwrap();
+                std::process::exit(1);
+            }
+        };
+        match delete_all_but_newest(&archive_or_dir_path, n, remove_last_ok) {
+            Ok(n) => if arg_matches.is_present("verbose") {
+                println!("{} snapshots deleted", n)
+            }
+            Err(err) => {
+                writeln!(stderr(), "{:?}", err).unwrap();
+                std::process::exit(1);
+            }
         }
-        Err(err) => {
-            writeln!(stderr(), "{:?}", err).unwrap();
-            std::process::exit(1);
+    } else if let Some(back_n_as_str) = arg_matches.value_of("back_n") {
+        let n = match i64::from_str(back_n_as_str) {
+            Ok(n) => n,
+            Err(_) => {
+                writeln!(stderr(), "Expected signed integer: found {}", back_n_as_str).unwrap();
+                std::process::exit(1);
+            }
+        };
+        match delete_ss_back_n(&archive_or_dir_path, n, remove_last_ok) {
+            Ok(n) => if arg_matches.is_present("verbose") {
+                println!("{} snapshots deleted", n)
+            }
+            Err(err) => {
+                writeln!(stderr(), "{:?}", err).unwrap();
+                std::process::exit(1);
+            }
         }
+    } else {
+        panic!("{:?}: line {:?}", file!(), line!())
     }
 }
 
@@ -104,4 +128,24 @@ fn delete_all_but_newest(archive_or_dir_path: &snapshot::ArchiveOrDirPath, newes
         deleted_count += 1;
     }
     Ok(deleted_count)
+}
+
+fn delete_ss_back_n(archive_or_dir_path: &snapshot::ArchiveOrDirPath, n: i64, clear_fell: bool) -> EResult<(usize)> {
+    let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
+    if snapshot_paths.len() == 0 {
+        return Err(EError::ArchiveEmpty(archive_or_dir_path.clone()));
+    };
+    let index: usize = if n < 0 {
+        (snapshot_paths.len() as i64 + n) as usize
+    } else {
+        n as usize
+    };
+    if snapshot_paths.len() <= index {
+        return Ok(0);
+    }
+    if !clear_fell && snapshot_paths.len() == 1 {
+        return Err(EError::LastSnapshot(archive_or_dir_path.clone()));
+    }
+    snapshot::delete_snapshot_file(&snapshot_paths[index])?;
+    Ok(1)
 }

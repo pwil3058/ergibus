@@ -50,6 +50,12 @@ pub fn arg_exigency_dir_path<'a, 'b>() -> clap::Arg<'a, 'b> {
         .required(true).takes_value(true)
 }
 
+pub fn arg_back_n<'a, 'b>() -> clap::Arg<'a, 'b> {
+    clap::Arg::with_name("back_n")
+        .long("back").value_name("N").takes_value(true)
+        .help("select the snapshot \"N\" places before the most recent. Use -1 to select oldest.")
+}
+
 pub mod subcmd_back_up;
 pub mod subcmd_delete_snapshot;
 pub mod subcmd_delete_snapshot_file;
