@@ -26,6 +26,7 @@ fn main() {
         .subcommand(cli::subcmd_back_up::sub_cmd())
         .subcommand(cli::subcmd_delete_snapshot::sub_cmd())
         .subcommand(cli::subcmd_delete_snapshot_file::sub_cmd())
+        .subcommand(cli::subcmd_extract::sub_cmd())
         .subcommand(cli::subcmd_list_archives::sub_cmd())
         .subcommand(cli::subcmd_list_snapshots::sub_cmd())
         .subcommand(cli::subcmd_new_archive::sub_cmd())
@@ -36,6 +37,7 @@ fn main() {
         ("back_up", Some(sub_matches)) => cli::subcmd_back_up::run_cmd(sub_matches),
         ("delete_snapshot", Some(sub_matches)) => cli::subcmd_delete_snapshot::run_cmd(sub_matches),
         ("delete_snapshot_file", Some(sub_matches)) => cli::subcmd_delete_snapshot_file::run_cmd(sub_matches),
+        ("extract", Some(sub_matches)) => cli::subcmd_extract::run_cmd(sub_matches),
         ("list_archives", Some(sub_matches)) => cli::subcmd_list_archives::run_cmd(sub_matches),
         ("list_snapshots", Some(sub_matches)) => cli::subcmd_list_snapshots::run_cmd(sub_matches),
         ("new_archive", Some(sub_matches)) => cli::subcmd_new_archive::run_cmd(sub_matches),
