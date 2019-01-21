@@ -14,6 +14,7 @@
 
 // Standard Library access
 use std::collections::HashMap;
+use std::ffi::{OsString};
 use std::fs::{self, Metadata, File, DirEntry};
 use std::io::prelude::*;
 use std::io;
@@ -30,7 +31,7 @@ use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // PW crate access
-use pw_pathux::{first_subpath_as_string};
+use pw_pathux::{first_subpath_as_os_string};
 
 // local modules access
 use archive::{self, Exclusions, ArchiveData, get_archive_data};
@@ -103,10 +104,10 @@ struct LinkData {
 struct SnapshotDir {
     path: PathBuf,
     attributes: Attributes,
-    subdirs: HashMap<String, SnapshotDir>,
-    files: HashMap<String, FileData>,
-    file_links: HashMap<String, LinkData>,
-    subdir_links: HashMap<String, LinkData>,
+    subdirs: HashMap<OsString, SnapshotDir>,
+    files: HashMap<OsString, FileData>,
+    file_links: HashMap<OsString, LinkData>,
+    subdir_links: HashMap<OsString, LinkData>,
 }
 
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
@@ -124,7 +125,7 @@ fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
     Err(io::Error::new(io::ErrorKind::NotFound, format!("{:?}: not found", path)))
 }
 
-impl SnapshotDir {
+impl SnapshotDir { // Creation/destruction methods
     fn new(opt_rootdir: Option<&Path>) -> io::Result<SnapshotDir> {
         let rootdir = match opt_rootdir {
             Some(p) => p,
@@ -133,10 +134,10 @@ impl SnapshotDir {
         let metadata = rootdir.metadata()?;
         let path = rootdir.canonicalize()?;
 
-        let subdirs = HashMap::<String, SnapshotDir>::new();
-        let files = HashMap::<String, FileData>::new();
-        let file_links = HashMap::<String, LinkData>::new();
-        let subdir_links = HashMap::<String, LinkData>::new();
+        let subdirs = HashMap::<OsString, SnapshotDir>::new();
+        let files = HashMap::<OsString, FileData>::new();
+        let file_links = HashMap::<OsString, LinkData>::new();
+        let subdir_links = HashMap::<OsString, LinkData>::new();
 
         Ok(SnapshotDir {
             path: path,
@@ -164,7 +165,7 @@ impl SnapshotDir {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path) {
             Ok(rel_path) => {
-                let first_name = match first_subpath_as_string(rel_path) {
+                let first_name = match first_subpath_as_os_string(rel_path) {
                     Some(fname) => fname,
                     None => return Some(self)
                 };
@@ -181,7 +182,7 @@ impl SnapshotDir {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path.clone()) {
             Ok(rel_path) => {
-                let first_name = match first_subpath_as_string(rel_path) {
+                let first_name = match first_subpath_as_os_string(rel_path) {
                     Some(fname) => fname,
                     None => return Ok(self)
                 };
@@ -239,9 +240,7 @@ impl SnapshotDir {
     }
 
     fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> (FileStats, u64) {
-        let file_name = dir_entry.file_name().into_string().unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
+        let file_name = dir_entry.file_name().as_os_str().to_os_string();
         if self.files.contains_key(&file_name) {
             return (FileStats::default(), 0)
         }
@@ -270,9 +269,7 @@ impl SnapshotDir {
     }
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
-        let file_name = dir_entry.file_name().into_string().unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
+        let file_name = dir_entry.file_name().as_os_str().to_os_string();
         if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
             return SymLinkStats::default()
         }
@@ -692,7 +689,7 @@ impl ArchiveOrDirPath {
         };
         Ok(dir_path)
     }
-    
+
     pub fn get_snapshot_names(&self, reverse: bool) -> EResult<Vec<String>> {
         let snapshot_dir_path = self.get_dir_path()?;
         let snapshot_paths = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
