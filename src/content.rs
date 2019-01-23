@@ -457,7 +457,7 @@ mod tests {
             };
             for i in 1..5 {
                 let token = match cm.store_file_contents(&PathBuf::from("./src/content.rs")) {
-                    Ok((tkn, _)) => tkn,
+                    Ok((tkn, _, _)) => tkn,
                     Err(err) => panic!("sfc: {:?}", err),
                 };
                 match cm.get_ref_count_for_token(&token) {
@@ -467,7 +467,7 @@ mod tests {
             };
             for i in 1..5 {
                 let token = match cm.store_file_contents(&PathBuf::from("./src/snapshot.rs")) {
-                    Ok((tkn, _)) => tkn,
+                    Ok((tkn, _, _)) => tkn,
                     Err(err) => panic!("sfc: {:?}", err),
                 };
                 match cm.get_ref_count_for_token(&token) {

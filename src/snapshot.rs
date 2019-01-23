@@ -76,26 +76,28 @@ impl Attributes {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct SnapshotFile {
-    path: PathBuf,
-    attributes: Attributes,
-}
+//#[derive(Serialize, Deserialize, Debug, PartialEq)]
+//struct SnapshotFile {
+    //path: PathBuf,
+    //attributes: Attributes,
+//}
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct SnapshotSymLink {
-    path: PathBuf,
-    attributes: Attributes,
-}
+//#[derive(Serialize, Deserialize, Debug, PartialEq)]
+//struct SnapshotSymLink {
+    //path: PathBuf,
+    //attributes: Attributes,
+//}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct FileData {
+    file_name: OsString,
     attributes: Attributes,
     content_token: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct LinkData {
+    file_name: OsString,
     attributes: Attributes,
     link_target: PathBuf,
 }
@@ -104,10 +106,10 @@ struct LinkData {
 struct SnapshotDir {
     path: PathBuf,
     attributes: Attributes,
-    subdirs: HashMap<OsString, SnapshotDir>,
-    files: HashMap<OsString, FileData>,
-    file_links: HashMap<OsString, LinkData>,
-    subdir_links: HashMap<OsString, LinkData>,
+    subdirs: HashMap<String, SnapshotDir>,
+    files: HashMap<String, FileData>,
+    file_links: HashMap<String, LinkData>,
+    subdir_links: HashMap<String, LinkData>,
 }
 
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
@@ -134,10 +136,10 @@ impl SnapshotDir { // Creation/destruction methods
         let metadata = rootdir.metadata()?;
         let path = rootdir.canonicalize()?;
 
-        let subdirs = HashMap::<OsString, SnapshotDir>::new();
-        let files = HashMap::<OsString, FileData>::new();
-        let file_links = HashMap::<OsString, LinkData>::new();
-        let subdir_links = HashMap::<OsString, LinkData>::new();
+        let subdirs = HashMap::<String, SnapshotDir>::new();
+        let files = HashMap::<String, FileData>::new();
+        let file_links = HashMap::<String, LinkData>::new();
+        let subdir_links = HashMap::<String, LinkData>::new();
 
         Ok(SnapshotDir {
             path: path,
@@ -169,7 +171,8 @@ impl SnapshotDir { // Creation/destruction methods
                     Some(fname) => fname,
                     None => return Some(self)
                 };
-                match self.subdirs.get(&first_name) {
+                let first_name_key = String::from(first_name.to_string_lossy());
+                match self.subdirs.get(&first_name_key) {
                     Some(sd) => sd.find_subdir(abs_subdir_path),
                     None => None,
                 }
@@ -186,14 +189,15 @@ impl SnapshotDir { // Creation/destruction methods
                     Some(fname) => fname,
                     None => return Ok(self)
                 };
-                if !self.subdirs.contains_key(&first_name) {
+                let first_name_key = String::from(first_name.to_string_lossy());
+                if !self.subdirs.contains_key(&first_name_key) {
                     let mut path_buf = PathBuf::new();
                     path_buf.push(self.path.clone());
                     path_buf.push(first_name.clone());
                     let snapshot_dir = SnapshotDir::new(Some(&path_buf))?;
-                    self.subdirs.insert(first_name.clone(), snapshot_dir);
+                    self.subdirs.insert(first_name_key.clone(), snapshot_dir);
                 }
-                match self.subdirs.get_mut(&first_name) {
+                match self.subdirs.get_mut(&first_name_key) {
                     Some(subdir) => subdir.find_or_add_subdir(abs_subdir_path),
                     None => panic!("{:?}: line {:?}", file!(), line!())
                 }
@@ -241,7 +245,8 @@ impl SnapshotDir { // Creation/destruction methods
 
     fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> (FileStats, u64) {
         let file_name = dir_entry.file_name().as_os_str().to_os_string();
-        if self.files.contains_key(&file_name) {
+        let file_name_key = String::from(file_name.to_string_lossy());
+        if self.files.contains_key(&file_name_key) {
             return (FileStats::default(), 0)
         }
         let attributes = match dir_entry.metadata() {
@@ -264,13 +269,14 @@ impl SnapshotDir { // Creation/destruction methods
             }
         };
         let file_stats = FileStats{file_count: 1, byte_count: attributes.st_size, stored_byte_count: stored_size};
-        self.files.insert(file_name, FileData{attributes, content_token});
+        self.files.insert(file_name_key, FileData{file_name, attributes, content_token});
         (file_stats, delta_repo_size)
     }
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
         let file_name = dir_entry.file_name().as_os_str().to_os_string();
-        if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
+        let file_name_key = String::from(file_name.to_string_lossy());
+        if self.file_links.contains_key(&file_name_key) || self.subdir_links.contains_key(&file_name_key) {
             return SymLinkStats::default()
         }
         let attributes = match dir_entry.metadata() {
@@ -295,10 +301,10 @@ impl SnapshotDir { // Creation/destruction methods
             }
         };
         if abs_target_path.is_file() {
-            self.file_links.insert(file_name, LinkData{attributes, link_target});
+            self.file_links.insert(file_name_key, LinkData{file_name, attributes, link_target});
             return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 1};
         } else if abs_target_path.is_dir() {
-            self.subdir_links.insert(file_name, LinkData{attributes, link_target});
+            self.subdir_links.insert(file_name_key, LinkData{file_name, attributes, link_target});
             return SymLinkStats{dir_sym_link_count: 1, file_sym_link_count: 0};
         }
         SymLinkStats::default()
