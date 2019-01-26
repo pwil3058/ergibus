@@ -29,6 +29,7 @@ use serde_json;
 use serde_yaml;
 use snap;
 
+use attributes::{Attributes, AttributesIfce};
 use config;
 use eerror::{EError, EResult};
 
@@ -378,15 +379,19 @@ impl ContentManager {
         }
     }
 
-    pub fn copy_contents_for_token(&self, content_token: &str, target_path: &Path) -> EResult<u64> {
+    pub fn copy_contents_for_token<W>(&self, content_token: &str, target_path: &Path, attributes: &Attributes, op_errf: Option<&mut W>) -> EResult<u64>
+        where W: std::io::Write
+    {
+        // TODO: add mechanism for setting metadata
         let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
         if !content_file_path.exists() {
             return Err(EError::UnknownContentKey(content_token.to_string()));
         }
-        let mut target_file = File::create(target_path).map_err(|err| EError::ContentStoreIOError(err))?;
-        let content_file = File::open(content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let mut target_file = File::create(target_path).map_err(|err| EError::ContentCopyIOError(err))?;
+        let content_file = File::open(content_file_path).map_err(|err| EError::ContentCopyIOError(err))?;
         let mut compressed_content_file = snap::Reader::new(content_file);
         let n = io::copy(&mut compressed_content_file, &mut target_file).map_err(|err| EError::ContentStoreIOError(err))?;
+        attributes.set_file_attributes(target_path, op_errf).map_err(|err| EError::ContentCopyIOError(err))?;
         Ok(n)
     }
 
@@ -396,9 +401,9 @@ impl ContentManager {
             return Err(EError::UnknownContentKey(content_token.to_string()));
         }
         let mut contents = Vec::<u8>::new();
-        let content_file = File::open(content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let content_file = File::open(content_file_path).map_err(|err| EError::ContentReadIOError(err))?;
         let mut compressed_content_file = snap::Reader::new(content_file);
-        compressed_content_file.read_to_end(&mut contents).map_err(|err| EError::ContentStoreIOError(err))?;
+        compressed_content_file.read_to_end(&mut contents).map_err(|err| EError::ContentReadIOError(err))?;
         Ok(contents)
     }
 
@@ -409,6 +414,12 @@ impl ContentManager {
     pub fn get_ref_count_for_token(&self, token: &str) -> EResult<u64> {
         let rcd = self.ref_counter.get_ref_count_data_for_token(token)?;
         Ok(rcd.ref_count)
+    }
+
+    pub fn check_content_token(&self, file_path: &Path, token: &str) -> EResult<bool> {
+        let mut file = File::open(file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
+        Ok(digest == token)
     }
 }
 

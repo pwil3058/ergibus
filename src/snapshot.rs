@@ -15,15 +15,14 @@
 // Standard Library access
 use std::collections::HashMap;
 use std::ffi::{OsString};
-use std::fs::{self, Metadata, File, DirEntry};
+use std::fs::{self, File, DirEntry};
 use std::io::prelude::*;
 use std::io;
 use std::ops::{AddAssign};
-use std::os::linux::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time;
 
-// cargo.io crates acess
+// cargo.io crates access
 use chrono::prelude::*;
 use regex;
 use serde_json;
@@ -35,58 +34,10 @@ use pw_pathux::{first_subpath_as_os_string};
 
 // local modules access
 use archive::{self, Exclusions, ArchiveData, get_archive_data};
+use attributes::{Attributes, AttributesIfce};
 use content::{ContentMgmtKey, ContentManager};
 use eerror::{EError, EResult};
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct Attributes {
-    st_dev: u64,
-    st_ino: u64,
-    st_nlink: u64,
-    st_mode: u32,
-    st_uid: u32,
-    st_gid: u32,
-    st_size: u64,
-    st_atime: i64,
-    st_atime_nsec: i64,
-    st_mtime: i64,
-    st_mtime_nsec: i64,
-    st_ctime: i64,
-    st_ctime_nsec: i64,
-}
-
-impl Attributes {
-    pub fn new(metadata: &Metadata) -> Attributes {
-        Attributes{
-            st_dev: metadata.st_dev(),
-            st_ino: metadata.st_ino(),
-            st_nlink: metadata.st_nlink(),
-            st_mode: metadata.st_mode(),
-            st_uid: metadata.st_uid(),
-            st_gid: metadata.st_gid(),
-            st_size: metadata.st_size(),
-            st_atime: metadata.st_atime(),
-            st_atime_nsec: metadata.st_atime_nsec(),
-            st_mtime: metadata.st_mtime(),
-            st_mtime_nsec: metadata.st_mtime_nsec(),
-            st_ctime: metadata.st_ctime(),
-            st_ctime_nsec: metadata.st_ctime_nsec(),
-        }
-    }
-}
-
-//#[derive(Serialize, Deserialize, Debug, PartialEq)]
-//struct SnapshotFile {
-    //path: PathBuf,
-    //attributes: Attributes,
-//}
-
-//#[derive(Serialize, Deserialize, Debug, PartialEq)]
-//struct SnapshotSymLink {
-    //path: PathBuf,
-    //attributes: Attributes,
-//}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct FileData {
@@ -159,25 +110,6 @@ impl SnapshotDir { // Creation/destruction methods
         }
         for subdir in self.subdirs.values() {
             subdir.release_contents(content_mgr);
-        }
-    }
-
-    #[cfg(test)]
-    fn find_subdir(&self, abs_subdir_path: &PathBuf) -> Option<&SnapshotDir> {
-        assert!(abs_subdir_path.is_absolute());
-        match abs_subdir_path.strip_prefix(&self.path) {
-            Ok(rel_path) => {
-                let first_name = match first_subpath_as_os_string(rel_path) {
-                    Some(fname) => fname,
-                    None => return Some(self)
-                };
-                let first_name_key = String::from(first_name.to_string_lossy());
-                match self.subdirs.get(&first_name_key) {
-                    Some(sd) => sd.find_subdir(abs_subdir_path),
-                    None => None,
-                }
-            },
-            Err(_) => None
         }
     }
 
@@ -268,7 +200,7 @@ impl SnapshotDir { // Creation/destruction methods
                 }
             }
         };
-        let file_stats = FileStats{file_count: 1, byte_count: attributes.st_size, stored_byte_count: stored_size};
+        let file_stats = FileStats{file_count: 1, byte_count: attributes.size(), stored_byte_count: stored_size};
         self.files.insert(file_name_key, FileData{file_name, attributes, content_token});
         (file_stats, delta_repo_size)
     }
@@ -311,6 +243,39 @@ impl SnapshotDir { // Creation/destruction methods
     }
 }
 
+impl SnapshotDir { // Interrogation/extraction/restoration methods
+    fn find_subdir(&self, abs_subdir_path: &Path) -> Option<&SnapshotDir> {
+        assert!(abs_subdir_path.is_absolute());
+        match abs_subdir_path.strip_prefix(&self.path) {
+            Ok(rel_path) => {
+                let first_name = match first_subpath_as_os_string(rel_path) {
+                    Some(fname) => fname,
+                    None => return Some(self)
+                };
+                let first_name_key = String::from(first_name.to_string_lossy());
+                match self.subdirs.get(&first_name_key) {
+                    Some(sd) => sd.find_subdir(abs_subdir_path),
+                    None => None,
+                }
+            },
+            Err(_) => None
+        }
+    }
+
+    fn find_file(&self, abs_file_path: &Path) -> Option<&FileData> {
+        assert!(abs_file_path.is_absolute());
+        if let Some(abs_dir_path) = abs_file_path.parent() {
+            if let Some(subdir) = self.find_subdir(abs_dir_path) {
+                if let Some(file_name) = abs_file_path.file_name() {
+                    let file_name_key = String::from(file_name.to_string_lossy());
+                    return subdir.files.get(&file_name_key)
+                }
+            }
+        }
+        None
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
 pub struct FileStats {
     pub file_count: u64,
@@ -344,7 +309,7 @@ impl AddAssign for SymLinkStats {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-struct SnapshotPersistentData {
+pub struct SnapshotPersistentData {
     root_dir: SnapshotDir,
     content_mgmt_key: ContentMgmtKey,
     archive_name: String,
@@ -456,8 +421,7 @@ impl SnapshotPersistentData {
     }
 
     fn file_name(&self) -> PathBuf {
-        let dt = DateTime::<Local>::from(self.finished_create);
-        PathBuf::from(format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z")))
+        PathBuf::from(self.snapshot_name())
     }
 
     fn write_to_dir(&self, dir_path: &Path) -> EResult<PathBuf> {
@@ -503,8 +467,19 @@ fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
     Ok(ss_entries)
 }
 
-impl SnapshotPersistentData {
-    fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
+fn move_aside_file_path(path: &Path) -> PathBuf {
+    let dt = DateTime::<Local>::from(time::SystemTime::now());
+    let suffix = format!("{}", dt.format("ema-%Y-%m-%d-%H-%M-%S"));
+    let new_suffix = if let Some(current_suffix) = path.extension() {
+        format!("{:?}-{}", current_suffix, suffix)
+    } else {
+        suffix
+    };
+    path.with_extension(&new_suffix)
+}
+
+impl SnapshotPersistentData { // Interrogation/extraction/restoration methods
+    pub fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
         match File::open(file_path) {
             Ok(file) => {
                 let mut spd_str = String::new();
@@ -521,6 +496,44 @@ impl SnapshotPersistentData {
             },
             Err(err) => Err(EError::SnapshotReadIOError(err, file_path.to_path_buf()))
         }
+    }
+
+    fn archive_name(&self) -> String {
+        self.archive_name.clone()
+    }
+
+    fn snapshot_name(&self) -> String {
+        let dt = DateTime::<Local>::from(self.finished_create);
+        format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
+    }
+
+    pub fn copy_file_to<W>(&self, fm_file_path: &Path, to_file_path: &Path, overwrite:bool, op_errf: Option<&mut W>) -> EResult<u64>
+        where W: std::io::Write
+    {
+        let file_data = match self.root_dir.find_file(fm_file_path) {
+           Some(fd) => fd,
+           None => return Err(EError::SnapshotUnknownFile(self.archive_name(), self.snapshot_name(), fm_file_path.clone().to_path_buf()))
+        };
+        let c_mgr = self.content_mgmt_key.open_content_manager(false)?;
+        if to_file_path.exists() {
+            if to_file_path.is_file() {
+                let content_is_same = c_mgr.check_content_token(to_file_path, &file_data.content_token)?;
+                if content_is_same {
+                    // nothing to do
+                    return Ok(file_data.attributes.size())
+                }
+            }
+            if !overwrite {
+                let new_path = move_aside_file_path(to_file_path);
+                fs::rename(to_file_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err))?;
+            }
+        }
+        let bytes = c_mgr.copy_contents_for_token(&file_data.content_token, to_file_path, &file_data.attributes, op_errf)?;
+        Ok(bytes)
+    }
+
+    pub fn copy_dir_to(&self, _fm_dir_path: &Path, _to_dir_path: &Path, _overwrite:bool) -> EResult<usize> {
+        Ok(0)
     }
 }
 
@@ -706,6 +719,22 @@ impl ArchiveOrDirPath {
         let snapshot_dir_path = self.get_dir_path()?;
         let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, reverse)?;
         Ok(snapshot_paths)
+    }
+
+    pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
+        let snapshot_paths = self.get_snapshot_paths(true)?;
+        if snapshot_paths.len() == 0 {
+            return Err(EError::ArchiveEmpty(self.clone()));
+        };
+        let index: usize = if n < 0 {
+            (snapshot_paths.len() as i64 + n) as usize
+        } else {
+            n as usize
+        };
+        if snapshot_paths.len() <= index {
+            return Err(EError::SnapshotIndexOutOfRange(self.clone(), n));
+        }
+        Ok(snapshot_paths[index].clone())
     }
 }
 

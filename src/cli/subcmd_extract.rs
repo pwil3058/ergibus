@@ -12,11 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap;
-use std::path::{PathBuf};
+use std::env;
+use std::io::{stderr, Write};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::time;
 
+// crates.io
+use clap;
+
+// github
+use pw_pathux;
+
+// local
 use cli;
-use snapshot::ArchiveOrDirPath;
+use eerror::{EResult};
+use snapshot::{ArchiveOrDirPath, SnapshotPersistentData};
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("extract")
@@ -70,18 +81,127 @@ configuration files provided their content repositories are also intact."
 }
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches) {
-    let _archive_or_dir_path = if let Some(archive_name) = arg_matches.value_of("archive_name") {
+    let archive_or_dir_path = if let Some(archive_name) = arg_matches.value_of("archive_name") {
         ArchiveOrDirPath::Archive(archive_name.to_string())
     } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {
         ArchiveOrDirPath::DirPath(PathBuf::from(dir_path))
     } else {
         panic!("{:?}: line {:?}", file!(), line!())
     };
-    if let Some(_file_path) = arg_matches.value_of("file_path") {
-
-    } else if let Some(_dir_path) = arg_matches.value_of("dir_path") {
-
+    let n: i64 = if let Some(back_n_as_str) = arg_matches.value_of("back_n") {
+        match i64::from_str(back_n_as_str) {
+            Ok(n) => n,
+            Err(_) => {
+                writeln!(stderr(), "Expected signed integer: found {}", back_n_as_str).unwrap();
+                std::process::exit(1);
+            }
+        }
+    } else {
+        0
+    };
+    let into_dir_path = if let Some(ref text) = arg_matches.value_of("into_dir") {
+        PathBuf::from(text)
+    } else {
+        env::current_dir().unwrap()
+    };
+    let opt_with_name = if let Some(ref text) = arg_matches.value_of("with_name") {
+        Some(PathBuf::from(text))
+    } else {
+        None
+    };
+    let overwrite = arg_matches.is_present("overwrite");
+    let show_stats = arg_matches.is_present("show_stats");
+    if let Some(text) = arg_matches.value_of("file_path") {
+        let file_path = PathBuf::from(&text);
+        match copy_file_to(&archive_or_dir_path, n, &file_path, &into_dir_path, &opt_with_name, overwrite) {
+            Ok(stats) => if show_stats {
+                println!("Transfered {} bytes in {:?}", stats.0, stats.1)
+            },
+            Err(err) => {
+                writeln!(stderr(), "Error: {:?}", err).unwrap();
+                std::process::exit(1);
+            }
+        }
+    } else if let Some(text) = arg_matches.value_of("dir_path") {
+        let dir_path = PathBuf::from(&text);
+        match copy_dir_to(&archive_or_dir_path, n, &dir_path, &into_dir_path, &opt_with_name, overwrite) {
+            Ok(stats) => if show_stats {
+                println!("Transfered {} files containing {} bytes and {} sym links in {:?}", stats.0, stats.1, stats.2, stats.3)
+            },
+            Err(err) => {
+                writeln!(stderr(), "Error: {:?}", err).unwrap();
+                std::process::exit(1);
+            }
+        }
     } else {
         panic!("{:?}: line {:?}", file!(), line!())
     }
+}
+
+fn copy_file_to(
+    archive_or_dir_path: &ArchiveOrDirPath,
+    n: i64,
+    file_path: &Path,
+    into_dir_path: &Path,
+    opt_with_name: &Option<PathBuf>,
+    overwrite: bool
+) -> EResult<(u64, time::Duration)> {
+    let started_at = time::SystemTime::now();
+
+    let snapshot_file_path = archive_or_dir_path.get_snapshot_path_back_n(n)?;
+    let target_path = if let Some(with_name) = opt_with_name {
+        into_dir_path.join(with_name)
+    } else if let Some(file_name) = file_path.file_name() {
+        into_dir_path.join(file_name)
+    } else {
+        panic!("{:?}: line {:?}", file!(), line!())
+    };
+    let abs_file_path = if file_path.starts_with("~") {
+        pw_pathux::expand_home_dir(file_path).unwrap()
+    } else {
+        pw_pathux::absolute_path_buf(file_path)
+    };
+    let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
+    let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite, Some(&mut stderr()))?;
+
+    let finished_at = time::SystemTime::now();
+    let duration = match finished_at.duration_since(started_at) {
+        Ok(duration) => duration,
+        Err(_) => time::Duration::new(0, 0)
+    };
+    Ok((bytes, duration))
+}
+
+fn copy_dir_to(
+    archive_or_dir_path: &ArchiveOrDirPath,
+    n: i64,
+    dir_path: &Path,
+    into_dir_path: &Path,
+    opt_with_name: &Option<PathBuf>,
+    overwrite: bool
+) -> EResult<(usize, usize, usize, time::Duration)> {
+    let started_at = time::SystemTime::now();
+
+    let snapshot_file_path = archive_or_dir_path.get_snapshot_path_back_n(n)?;
+    let target_path = if let Some(with_name) = opt_with_name {
+        into_dir_path.join(with_name)
+    } else if let Some(dir_name) = dir_path.file_name() {
+        into_dir_path.join(dir_name)
+    } else {
+        panic!("{:?}: line {:?}", file!(), line!())
+    };
+    let abs_dir_path = if dir_path.starts_with("~") {
+        pw_pathux::expand_home_dir(dir_path).unwrap()
+    } else {
+        pw_pathux::absolute_path_buf(dir_path)
+    };
+    let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
+    spd.copy_dir_to(&abs_dir_path, &target_path, overwrite)?;
+
+    let finished_at = time::SystemTime::now();
+    let duration = match finished_at.duration_since(started_at) {
+        Ok(duration) => duration,
+        Err(_) => time::Duration::new(0, 0)
+    };
+    Ok((0, 0, 0, duration))
 }

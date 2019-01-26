@@ -22,6 +22,7 @@ extern crate hex;
 extern crate hostname;
 #[macro_use]
 extern crate lazy_static;
+extern crate libc;
 #[macro_use]
 extern crate pw_gix;
 extern crate pw_pathux;
@@ -40,6 +41,7 @@ extern crate gdk;
 extern crate gtk;
 
 pub mod archive;
+pub mod attributes;
 pub mod config;
 pub mod content;
 mod eerror;
