@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Standard Library access
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 use std::ffi::{OsString};
 use std::fs::{self, File, DirEntry};
 use std::io::prelude::*;
@@ -243,7 +243,42 @@ impl SnapshotDir { // Creation/destruction methods
     }
 }
 
+struct SnapshotDirIter<'a> {
+    values: hash_map::Values<'a, String, SnapshotDir>,
+    subdir_iters: Vec<SnapshotDirIter<'a>>,
+    current_subdir_iter: Box<Option<SnapshotDirIter<'a>>>
+}
+
+impl<'a> Iterator for SnapshotDirIter<'a> {
+    type Item = &'a SnapshotDir;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(item) = self.values.next() {
+            return Some(item)
+        } else {
+            loop {
+                if let Some(ref mut sub_iter) = *self.current_subdir_iter {
+                    if let Some(item) = sub_iter.next() {
+                        return Some(item)
+                    }
+                } else {
+                    break;
+                };
+                self.current_subdir_iter = Box::new(self.subdir_iters.pop())
+            }
+        };
+        None
+    }
+}
+
 impl SnapshotDir { // Interrogation/extraction/restoration methods
+    fn subdir_iter(&self) -> SnapshotDirIter {
+        let values = self.subdirs.values();
+        let mut subdir_iters: Vec<SnapshotDirIter> = self.subdirs.values().map(|s| s.subdir_iter()).collect();
+        let current_subdir_iter = Box::new(subdir_iters.pop());
+        SnapshotDirIter{values, subdir_iters, current_subdir_iter}
+    }
+
     fn find_subdir(&self, abs_subdir_path: &Path) -> Option<&SnapshotDir> {
         assert!(abs_subdir_path.is_absolute());
         match abs_subdir_path.strip_prefix(&self.path) {
@@ -532,7 +567,10 @@ impl SnapshotPersistentData { // Interrogation/extraction/restoration methods
         Ok(bytes)
     }
 
-    pub fn copy_dir_to(&self, _fm_dir_path: &Path, _to_dir_path: &Path, _overwrite:bool) -> EResult<usize> {
+    pub fn copy_dir_to(&self, fm_dir_path: &Path, _to_dir_path: &Path, _overwrite:bool) -> EResult<usize> {
+        for subdir in self.root_dir.find_subdir(fm_dir_path).unwrap().subdir_iter() {
+            println!("{:?}", subdir.path);
+        };
         Ok(0)
     }
 }
