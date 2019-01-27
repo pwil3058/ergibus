@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::From;
 use std::ffi::CString;
 use std::fs::{Metadata};
 use std::io;
@@ -23,8 +24,7 @@ use std::path::Path;
 
 use libc;
 
-pub trait AttributesIfce {
-    fn new(metadata: &Metadata) -> Attributes;
+pub trait AttributesIfce: From<Metadata> {
     fn size(&self) -> u64;
     fn set_file_attributes<W>(&self, file_path: &Path, op_errf: Option<&mut W>) -> Result<(), io::Error>
         where W: std::io::Write;
@@ -92,8 +92,8 @@ impl Attributes {
 }
 
 #[cfg(target_family = "unix")]
-impl AttributesIfce for Attributes {
-    fn new(metadata: &Metadata) -> Attributes {
+impl From<Metadata> for Attributes {
+    fn from(metadata: Metadata) -> Attributes {
         Attributes{
             st_dev: metadata.dev(),
             st_ino: metadata.ino(),
@@ -110,7 +110,10 @@ impl AttributesIfce for Attributes {
             st_ctime_nsec: metadata.ctime_nsec(),
         }
     }
+}
 
+#[cfg(target_family = "unix")]
+impl AttributesIfce for Attributes {
     fn size(&self) -> u64 {
         self.st_size
     }

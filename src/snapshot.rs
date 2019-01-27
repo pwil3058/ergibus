@@ -94,7 +94,7 @@ impl SnapshotDir { // Creation/destruction methods
 
         Ok(SnapshotDir {
             path: path,
-            attributes: Attributes::new(&metadata),
+            attributes: metadata.into(),
             subdirs: subdirs,
             files: files,
             file_links: file_links,
@@ -181,8 +181,8 @@ impl SnapshotDir { // Creation/destruction methods
         if self.files.contains_key(&file_name_key) {
             return (FileStats::default(), 0)
         }
-        let attributes = match dir_entry.metadata() {
-            Ok(ref metadata) => Attributes::new(metadata),
+        let attributes: Attributes = match dir_entry.metadata() {
+            Ok(metadata) => metadata.into(),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
                 return (FileStats::default(), 0)
@@ -211,8 +211,8 @@ impl SnapshotDir { // Creation/destruction methods
         if self.file_links.contains_key(&file_name_key) || self.subdir_links.contains_key(&file_name_key) {
             return SymLinkStats::default()
         }
-        let attributes = match dir_entry.metadata() {
-            Ok(ref metadata) => Attributes::new(metadata),
+        let attributes: Attributes = match dir_entry.metadata() {
+            Ok(metadata) => metadata.into(),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
                 return SymLinkStats::default()

@@ -68,3 +68,5 @@ pub enum EError {
 }
 
 pub type EResult<T> = Result<T, EError>;
+
+// TODO: implement std::error::Error and std::fmt::Display for EError

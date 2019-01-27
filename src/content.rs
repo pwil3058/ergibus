@@ -382,7 +382,6 @@ impl ContentManager {
     pub fn copy_contents_for_token<W>(&self, content_token: &str, target_path: &Path, attributes: &Attributes, op_errf: Option<&mut W>) -> EResult<u64>
         where W: std::io::Write
     {
-        // TODO: add mechanism for setting metadata
         let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
         if !content_file_path.exists() {
             return Err(EError::UnknownContentKey(content_token.to_string()));
