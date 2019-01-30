@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: fix use of is_dir() and is_file() throughout this file
+
 // Standard Library access
 use std::collections::{HashMap, hash_map};
 use std::ffi::{OsString};
@@ -37,6 +39,7 @@ use archive::{self, Exclusions, ArchiveData, get_archive_data};
 use attributes::{Attributes, AttributesIfce};
 use content::{ContentMgmtKey, ContentManager};
 use eerror::{EError, EResult};
+use path_buf_ext::RealPathBufType;
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -271,10 +274,85 @@ impl<'a> Iterator for SnapshotDirIter<'a> {
     }
 }
 
+impl FileData { // Interrogation/extraction/restoration methods
+    fn copy_contents_to<W>(&self, to_file_path: &Path, c_mgr: &ContentManager, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
+        where W: std::io::Write
+    {
+        if to_file_path.exists() {
+            if to_file_path.is_real_file() {
+                let content_is_same = c_mgr.check_content_token(to_file_path, &self.content_token)?;
+                if content_is_same {
+                    // nothing to do
+                    return Ok(self.attributes.size())
+                }
+            }
+            if !overwrite {
+                let new_path = move_aside_file_path(to_file_path);
+                fs::rename(to_file_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err))?;
+            }
+        }
+        let bytes = c_mgr.copy_contents_for_token(&self.content_token, to_file_path, &self.attributes, op_errf)?;
+        Ok(bytes)
+    }
+}
+
+impl LinkData { // Interrogation/extraction/restoration methods
+    fn copy_link_as<W>(&self, as_path: &Path, overwrite: bool, _op_errf: &mut Option<&mut W>) -> EResult<()>
+        where W: std::io::Write
+    {
+        if as_path.exists() {
+            if as_path.is_symlink() {
+                if let Ok(link_target) = as_path.read_link() {
+                    if self.link_target == link_target {
+                        return Ok(())
+                    }
+                }
+            }
+            if !overwrite {
+                let new_path = move_aside_file_path(as_path);
+                fs::rename(as_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+            }
+        }
+        if cfg!(target_family = "unix"){
+            use std::os::unix::fs::symlink;
+            symlink(&self.link_target, as_path).map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+        } else {
+            panic!("not implemented for this os")
+        }
+        Ok(())
+    }
+}
+
+fn clear_way_for_new_dir(new_dir_path: &Path, overwrite: bool) -> EResult<()> {
+    if new_dir_path.exists() && !new_dir_path.is_dir() { // Real dir or link to dir
+        if overwrite {
+            // Remove the file system object to make way for the directory
+            fs::remove_file(new_dir_path).map_err(|err| EError::SnapshotDeleteIOError(err, new_dir_path.to_path_buf()))?;
+        } else {
+            let new_path = move_aside_file_path(new_dir_path);
+            fs::rename(new_dir_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(new_dir_path.to_path_buf(), err))?;
+        }
+    };
+    Ok(())
+}
+
+#[derive(PartialEq, Debug, Default, Copy, Clone)]
+pub struct ExtractionStats {
+    pub dir_count: u64,
+    pub file_count: u64,
+    pub bytes_count: u64,
+    pub dir_sym_link_count: u64,
+    pub file_sym_link_count: u64
+}
+
 impl SnapshotDir { // Interrogation/extraction/restoration methods
-    fn subdir_iter(&self) -> SnapshotDirIter {
+    fn subdir_iter(&self, recursive: bool) -> SnapshotDirIter {
         let values = self.subdirs.values();
-        let mut subdir_iters: Vec<SnapshotDirIter> = self.subdirs.values().map(|s| s.subdir_iter()).collect();
+        let mut subdir_iters: Vec<SnapshotDirIter> = if recursive {
+            self.subdirs.values().map(|s| s.subdir_iter(true)).collect()
+        } else {
+            Vec::new()
+        };
         let current_subdir_iter = Box::new(subdir_iters.pop());
         SnapshotDirIter{values, subdir_iters, current_subdir_iter}
     }
@@ -308,6 +386,99 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
             }
         }
         None
+    }
+
+    fn copy_files_into<W>(&self, into_dir_path: &Path, c_mgr: &ContentManager, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<(u64, u64)>
+        where W: std::io::Write
+    {
+        let mut count = 0;
+        let mut bytes = 0;
+        for file in self.files.values() {
+            let new_path = into_dir_path.join(&file.file_name);
+            bytes += file.copy_contents_to(&new_path, c_mgr, overwrite, op_errf)?;
+            count += 1;
+        }
+        Ok((count, bytes))
+    }
+
+    fn copy_dir_links_into<W>(&self, into_dir_path: &Path, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
+        where W: std::io::Write
+    {
+        let mut count = 0;
+        for subdir_link in self.subdir_links.values() {
+            let new_link_path = into_dir_path.join(&subdir_link.file_name);
+            subdir_link.copy_link_as(&new_link_path, overwrite, op_errf)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    fn copy_file_links_into<W>(&self, into_dir_path: &Path, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
+        where W: std::io::Write
+    {
+        let mut count = 0;
+        for file_link in self.file_links.values() {
+            let new_link_path = into_dir_path.join(&file_link.file_name);
+            file_link.copy_link_as(&new_link_path, overwrite, op_errf)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    pub fn copy_to<W>(&self, to_dir_path: &Path, c_mgt_key: &ContentMgmtKey, overwrite:bool, op_errf: &mut Option<&mut W>) -> EResult<ExtractionStats>
+        where W: std::io::Write
+    {
+        let mut stats = ExtractionStats::default();
+        clear_way_for_new_dir(to_dir_path, overwrite)?;
+        if !to_dir_path.is_dir() {
+            fs::create_dir_all(to_dir_path).map_err(|err| EError::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
+            if let Some(to_dir) = self.find_subdir(to_dir_path) {
+                to_dir.attributes.set_file_attributes(to_dir_path, op_errf).map_err(|err| EError::ContentCopyIOError(err))?;
+            }
+        }
+        stats.dir_count += 1;
+        // First create all of the sub directories
+        for subdir in self.subdir_iter(true) {
+            let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+            let new_dir_path = to_dir_path.join(path_tail);
+            clear_way_for_new_dir(&new_dir_path, overwrite)?;
+            if !new_dir_path.is_dir() {
+                fs::create_dir_all(&new_dir_path).map_err(|err| EError::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
+                subdir.attributes.set_file_attributes(&new_dir_path, op_errf).map_err(|err| EError::ContentCopyIOError(err))?;
+            }
+            stats.dir_count += 1;
+        };
+        // then do links to subdirs
+        stats.dir_sym_link_count += self.copy_dir_links_into(&to_dir_path, overwrite, op_errf)?;
+        for subdir in self.subdir_iter(true) {
+            let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+            let new_dir_path = to_dir_path.join(path_tail);
+            stats.dir_sym_link_count += subdir.copy_dir_links_into(&new_dir_path, overwrite, op_errf)?;
+        };
+        // then do all the files (holding lock as little as needed)
+        match c_mgt_key.open_content_manager(false) {
+            Ok(ref c_mgr) => {
+                let (count, bytes) = self.copy_files_into(&to_dir_path, c_mgr, overwrite, op_errf)?;
+                stats.file_count += count;
+                stats.bytes_count += bytes;
+                for subdir in self.subdir_iter(true) {
+                    let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+                    let new_dir_path = to_dir_path.join(path_tail);
+                    let (count, bytes) = subdir.copy_files_into(&new_dir_path, c_mgr, overwrite, op_errf)?;
+                    stats.file_count += count;
+                    stats.bytes_count += bytes;
+                };
+            },
+            Err(err) => return Err(err)
+        }
+        // then do links to file
+        stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite, op_errf)?;
+        for subdir in self.subdir_iter(true) {
+            let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+            let new_dir_path = to_dir_path.join(path_tail);
+            stats.file_sym_link_count += subdir.copy_file_links_into(&new_dir_path, overwrite, op_errf)?;
+        };
+        Ok(stats)
     }
 }
 
@@ -355,13 +526,13 @@ pub struct SnapshotPersistentData {
 }
 
 impl SnapshotPersistentData {
-    fn new(archive_name: &str, rmk: &ContentMgmtKey) -> SnapshotPersistentData {
+    fn new(archive_name: &str, cmk: &ContentMgmtKey) -> SnapshotPersistentData {
         let sd = SnapshotDir::new(None).unwrap_or_else(
             |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         );
         SnapshotPersistentData{
             root_dir: sd,
-            content_mgmt_key: rmk.clone(),
+            content_mgmt_key: cmk.clone(),
             archive_name: archive_name.to_string(),
             started_create: time::SystemTime::now(),
             finished_create: time::SystemTime::now(),
@@ -542,36 +713,28 @@ impl SnapshotPersistentData { // Interrogation/extraction/restoration methods
         format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
     }
 
-    pub fn copy_file_to<W>(&self, fm_file_path: &Path, to_file_path: &Path, overwrite:bool, op_errf: Option<&mut W>) -> EResult<u64>
+    pub fn copy_file_to<W>(&self, fm_file_path: &Path, to_file_path: &Path, overwrite:bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
         where W: std::io::Write
     {
         let file_data = match self.root_dir.find_file(fm_file_path) {
            Some(fd) => fd,
-           None => return Err(EError::SnapshotUnknownFile(self.archive_name(), self.snapshot_name(), fm_file_path.clone().to_path_buf()))
+           None => return Err(EError::SnapshotUnknownFile(self.archive_name(), self.snapshot_name(), fm_file_path.to_path_buf()))
         };
         let c_mgr = self.content_mgmt_key.open_content_manager(false)?;
-        if to_file_path.exists() {
-            if to_file_path.is_file() {
-                let content_is_same = c_mgr.check_content_token(to_file_path, &file_data.content_token)?;
-                if content_is_same {
-                    // nothing to do
-                    return Ok(file_data.attributes.size())
-                }
-            }
-            if !overwrite {
-                let new_path = move_aside_file_path(to_file_path);
-                fs::rename(to_file_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err))?;
-            }
-        }
-        let bytes = c_mgr.copy_contents_for_token(&file_data.content_token, to_file_path, &file_data.attributes, op_errf)?;
+        let bytes = file_data.copy_contents_to(to_file_path, &c_mgr, overwrite, op_errf)?;
         Ok(bytes)
     }
 
-    pub fn copy_dir_to(&self, fm_dir_path: &Path, _to_dir_path: &Path, _overwrite:bool) -> EResult<usize> {
-        for subdir in self.root_dir.find_subdir(fm_dir_path).unwrap().subdir_iter() {
-            println!("{:?}", subdir.path);
+    pub fn copy_dir_to<W>(&self, fm_dir_path: &Path, to_dir_path: &Path, overwrite:bool, op_errf: &mut Option<&mut W>) -> EResult<ExtractionStats>
+        where W: std::io::Write
+    {
+        let fm_subdir = if let Some(subdir) = self.root_dir.find_subdir(fm_dir_path) {
+            subdir
+        } else {
+            return Err(EError::SnapshotUnknownDirectory(self.archive_name(), self.snapshot_name(), fm_dir_path.to_path_buf()))
         };
-        Ok(0)
+        let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite, op_errf)?;
+        Ok(stats)
     }
 }
 
@@ -778,6 +941,7 @@ impl ArchiveOrDirPath {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::MetadataExt;
     use std::env;
     use fs2::FileExt;
     use tempdir::TempDir;
@@ -873,7 +1037,7 @@ mod tests {
             match result {
                 Ok(ref ss_file_path) => {
                     match fs::metadata(ss_file_path) {
-                        Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.st_size()),
+                        Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.size()),
                         Err(err) => panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
                     };
                     match SnapshotPersistentData::from_file(ss_file_path) {

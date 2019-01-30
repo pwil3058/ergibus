@@ -27,7 +27,7 @@ use pw_pathux;
 // local
 use cli;
 use eerror::{EResult};
-use snapshot::{ArchiveOrDirPath, SnapshotPersistentData};
+use snapshot::{ArchiveOrDirPath, SnapshotPersistentData, ExtractionStats};
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("extract")
@@ -126,7 +126,13 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
         let dir_path = PathBuf::from(&text);
         match copy_dir_to(&archive_or_dir_path, n, &dir_path, &into_dir_path, &opt_with_name, overwrite) {
             Ok(stats) => if show_stats {
-                println!("Transfered {} files containing {} bytes and {} sym links in {:?}", stats.0, stats.1, stats.2, stats.3)
+                println!("Transfered {} files containing {} bytes and {} synm links in {} dirs in {:?}",
+                    stats.0.file_count,
+                    stats.0.bytes_count,
+                    (stats.0.dir_sym_link_count + stats.0.file_sym_link_count),
+                    stats.0.dir_count,
+                    stats.1
+                )
             },
             Err(err) => {
                 writeln!(stderr(), "Error: {:?}", err).unwrap();
@@ -162,7 +168,7 @@ fn copy_file_to(
         pw_pathux::absolute_path_buf(file_path)
     };
     let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-    let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite, Some(&mut stderr()))?;
+    let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite, &mut Some(&mut stderr()))?;
 
     let finished_at = time::SystemTime::now();
     let duration = match finished_at.duration_since(started_at) {
@@ -179,7 +185,7 @@ fn copy_dir_to(
     into_dir_path: &Path,
     opt_with_name: &Option<PathBuf>,
     overwrite: bool
-) -> EResult<(usize, usize, usize, time::Duration)> {
+) -> EResult<(ExtractionStats, time::Duration)> {
     let started_at = time::SystemTime::now();
 
     let snapshot_file_path = archive_or_dir_path.get_snapshot_path_back_n(n)?;
@@ -196,12 +202,12 @@ fn copy_dir_to(
         pw_pathux::absolute_path_buf(dir_path)
     };
     let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-    spd.copy_dir_to(&abs_dir_path, &target_path, overwrite)?;
+    let stats = spd.copy_dir_to(&abs_dir_path, &target_path, overwrite, &mut Some(&mut stderr()))?;
 
     let finished_at = time::SystemTime::now();
     let duration = match finished_at.duration_since(started_at) {
         Ok(duration) => duration,
         Err(_) => time::Duration::new(0, 0)
     };
-    Ok((0, 0, 0, duration))
+    Ok((stats, duration))
 }

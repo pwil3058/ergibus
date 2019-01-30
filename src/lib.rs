@@ -46,6 +46,7 @@ pub mod config;
 pub mod content;
 mod eerror;
 //pub mod pathux;
+mod path_buf_ext;
 mod report;
 pub mod snapshot;
 

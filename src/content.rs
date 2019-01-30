@@ -379,7 +379,7 @@ impl ContentManager {
         }
     }
 
-    pub fn copy_contents_for_token<W>(&self, content_token: &str, target_path: &Path, attributes: &Attributes, op_errf: Option<&mut W>) -> EResult<u64>
+    pub fn copy_contents_for_token<W>(&self, content_token: &str, target_path: &Path, attributes: &Attributes, op_errf: &mut Option<&mut W>) -> EResult<u64>
         where W: std::io::Write
     {
         let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
