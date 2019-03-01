@@ -47,7 +47,11 @@ impl ArchiveSelector {
         archive_selector.combo.connect_changed(
             move |combo| {
                 for callback in archive_selector_c.changed_callbacks.borrow().iter() {
-                    callback(combo.get_active_text())
+                    if let Some(text) = combo.get_active_text() {
+                        callback(Some(String::from(text)))
+                    } else {
+                        callback(None)
+                    }
                 }
             }
         );
@@ -58,7 +62,10 @@ impl ArchiveSelector {
     }
 
     pub fn get_selected_archive(&self) -> Option<String> {
-        self.combo.get_active_text()
+        match self.combo.get_active_text() {
+            Some(text) => Some(String::from(text)),
+            None => None
+        }
     }
 
     pub fn set_selected_archive(&self, archive_name: &str) {

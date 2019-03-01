@@ -24,9 +24,9 @@ lazy_static = "0.2.8"
 libc = "0.2"
 # TODO: change pw_gix dependency when it goes public
 #pw_gix = { git = "https://github.com/pwil3058/rs_pw_gix.git" }
-pw_gix = { git = "file:/home/peter/SRC/GITHUB/rs_pw_gix.git" }
+pw_gix = { path = "/home/peter/SRC/GITHUB/rs_pw_gix.git" }
 #pw_pathux = { git = "https://github.com/pwil3058/rs_pw_pathux.git" }
-pw_pathux = { git = "file:/home/peter/SRC/GITHUB/rs_pw_pathux.git" }
+pw_pathux = { path = "/home/peter/SRC/GITHUB/rs_pw_pathux.git" }
 regex = "0.2"
 serde = "1.0"
 serde_derive = "1.0"
@@ -37,11 +37,11 @@ tempdir = "0.3"
 users = "0.5.0"
 walkdir = "1.0.7"
 
-gdk = "0.8.0"
-gio = "0.4.0"
-gtk = "0.4.0"
+gdk = "0.10.0"
+gio = "0.6.0"
+gtk = "0.6.0"
 
 [features]
-default = ["gtk/v3_10"]
+default = ["gtk/v3_18"]
 
 [workspace]
