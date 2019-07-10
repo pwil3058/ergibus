@@ -1,11 +1,27 @@
 use std::convert::From;
+use std::io;
 
+use serde_json;
 use serde_yaml;
 
 #[derive(Debug)]
 pub enum RepoError {
+    IOError(io::Error),
+    JsonError(serde_json::Error),
     UnknownKeyAlgorithm(String),
     YamlError(serde_yaml::Error),
+}
+
+impl From<io::Error> for RepoError {
+    fn from(error: io::Error) -> Self {
+        RepoError::IOError(error)
+    }
+}
+
+impl From<serde_json::Error> for RepoError {
+    fn from(error: serde_json::Error) -> Self {
+        RepoError::JsonError(error)
+    }
 }
 
 impl From<serde_yaml::Error> for RepoError {
