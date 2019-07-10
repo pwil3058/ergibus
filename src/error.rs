@@ -2,6 +2,7 @@ use std::convert::From;
 
 use serde_yaml;
 
+#[derive(Debug)]
 pub enum RepoError {
     UnknownKeyAlgorithm(String),
     YamlError(serde_yaml::Error),

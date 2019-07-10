@@ -3,7 +3,7 @@ extern crate serde_derive;
 
 use std::{
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -39,8 +39,13 @@ pub struct RepoSpec {
 }
 
 impl RepoSpec {
+    pub fn new<P: AsRef<Path>>(base_dir_path: P, hash_algorithm: HashAlgorithm) -> Self {
+        let base_dir_path = base_dir_path.as_ref().to_path_buf();
+        Self { base_dir_path, hash_algorithm }
+    }
+
     pub fn from_reader(reader: impl Read) -> Result<Self, RepoError> {
-        let spec: RepoSpec = serde_yaml::from_reader(reader)?;
+        let spec: Self = serde_yaml::from_reader(reader)?;
         Ok(spec)
     }
 
@@ -52,8 +57,21 @@ impl RepoSpec {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+
+    use tempdir::TempDir;
+
+    use super::*;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn repo_spec() {
+        let repo_spec = RepoSpec::new("~/whatever", HashAlgorithm::Sha256);
+        let tmp_dir = TempDir::new("TEST").unwrap();
+        let path = tmp_dir.path().join("repo_spec");
+        let file = File::create(&path).unwrap();
+        repo_spec.to_writer(file).unwrap();
+        let file = File::open(&path).unwrap();
+        let read_repo_spec = RepoSpec::from_reader(file);
+        assert_eq!(read_repo_spec.unwrap(), repo_spec);
     }
 }
