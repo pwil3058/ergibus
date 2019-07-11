@@ -515,7 +515,7 @@ mod tests {
         let repo_spec = RepoSpec::new(&repo_dir, HashAlgorithm::Sha1);
         let cm_key: ContentMgmtKey = (&repo_spec).into();
         assert!(cm_key.create_repo_dir().is_ok());
-        let cmgr = cm_key.open_content_manager(true).unwrap();
+        let cmgr = cm_key.open_content_manager(Mutability::Mutable).unwrap();
         let mut file = File::open("./LICENSE-APACHE").unwrap();
         let result = cmgr.store_contents(&mut file).unwrap();
         assert_eq!(
