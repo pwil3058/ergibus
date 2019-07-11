@@ -4,7 +4,7 @@ extern crate serde_derive;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    fs::{create_dir_all, File, OpenOptions},
+    fs::{create_dir_all, remove_file, File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     str::FromStr,
@@ -225,6 +225,14 @@ impl RefCounter {
         snappy_wtr.write_all(json_text.as_bytes())?;
         Ok(())
     }
+
+    fn expired_tokens(&self) -> Vec<(String, RefCountData)> {
+        self.0
+            .iter()
+            .filter(|(_, rcd)| rcd.ref_count == 0)
+            .map(|(t, rcd)| (t.clone(), *rcd))
+            .collect()
+    }
 }
 
 #[derive(Debug)]
@@ -306,6 +314,21 @@ impl ProtectedRefCounter {
             }
         }
     }
+
+    fn remove(&self, token: &str) {
+        match *self {
+            ProtectedRefCounter::Immutable(_) => {
+                panic!("{:?}: line {:?}: immutability breach", file!(), line!())
+            }
+            ProtectedRefCounter::Mutable(ref rc) => {
+                if let Some(rcd) = rc.borrow_mut().0.remove(token) {
+                    if rcd.ref_count > 0 {
+                        panic!("{:?}: line {:?}: attempt to remove non zero token", file!(), line!())
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl ProtectedRefCounter {
@@ -320,6 +343,13 @@ impl ProtectedRefCounter {
                 Some(ref_count_data) => Ok(*ref_count_data),
                 None => Err(RepoError::UnknownToken(token.to_string())),
             },
+        }
+    }
+
+    fn expired_tokens(&self) -> Vec<(String, RefCountData)> {
+        match *self {
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow().expired_tokens(),
+            ProtectedRefCounter::Immutable(ref rc) => rc.expired_tokens(),
         }
     }
 }
@@ -382,7 +412,20 @@ impl ContentManagerIfce for ContentManager {
     }
 
     fn prune_contents(&self) -> Result<(u64, u64, u64), RepoError> {
-        Err(RepoError::NotImplemented)
+        if !self.is_mutable() {
+            panic!("{:?}: line {:?}: immutability breach", file!(), line!());
+        }
+        let mut content_sum = 0;
+        let mut stored_sum = 0;
+        let expired_tokens = self.ref_counter.expired_tokens();
+        for (token, rcd) in expired_tokens.iter() {
+            let path = self.content_mgmt_key.token_content_file_path(token);
+            remove_file(&path)?;
+            content_sum += rcd.content_size;
+            stored_sum += rcd.stored_size;
+            self.ref_counter.remove(token);
+        }
+        Ok((expired_tokens.len() as u64, content_sum, stored_sum))
     }
 
     fn release_contents(&self, content_token: &str) -> Result<RefCountData, RepoError> {
@@ -490,6 +533,7 @@ mod tests {
         }
         assert!(cmgr.release_contents(&result.0).is_ok());
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 0);
-        assert!(cmgr.prune_contents().is_err());
+        assert!(cmgr.prune_contents().is_ok());
+        assert!(cmgr.ref_count_for_token(&result.0).is_err());
     }
 }
