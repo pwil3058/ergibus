@@ -133,6 +133,12 @@ where
     fn open_content_manager(&self, mutable: bool) -> Result<M, RepoError>;
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum Mutability {
+    Immutable,
+    Mutable
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct ContentMgmtKey {
     base_dir_path: PathBuf,
@@ -162,9 +168,9 @@ impl ContentMgmtKey {
         Ok(())
     }
 
-    pub fn open_content_manager(&self, mutable: bool) -> Result<ContentManager, RepoError> {
-        let mut hash_map_file = self.locked_ref_count_file(mutable)?;
-        let ref_counter = ProtectedRefCounter::from_file(&mut hash_map_file, mutable)?;
+    pub fn open_content_manager(&self, mutability: Mutability) -> Result<ContentManager, RepoError> {
+        let mut hash_map_file = self.locked_ref_count_file(mutability)?;
+        let ref_counter = ProtectedRefCounter::from_file(&mut hash_map_file, mutability)?;
         Ok(ContentManager {
             content_mgmt_key: self.clone(),
             ref_counter: ref_counter,
@@ -172,7 +178,8 @@ impl ContentMgmtKey {
         })
     }
 
-    fn locked_ref_count_file(&self, mutable: bool) -> Result<File, RepoError> {
+    fn locked_ref_count_file(&self, mutability: Mutability) -> Result<File, RepoError> {
+        let mutable = mutability == Mutability::Mutable;
         let file = OpenOptions::new()
             .read(true)
             .write(mutable)
@@ -250,9 +257,9 @@ impl ProtectedRefCounter {
         }
     }
 
-    fn from_file(file: &mut File, mutable: bool) -> Result<ProtectedRefCounter, RepoError> {
+    fn from_file(file: &mut File, mutability: Mutability) -> Result<ProtectedRefCounter, RepoError> {
         let ref_counter = RefCounter::from_file(file)?;
-        if mutable {
+        if mutability == Mutability::Mutable {
             Ok(ProtectedRefCounter::Mutable(RefCell::new(ref_counter)))
         } else {
             Ok(ProtectedRefCounter::Immutable(ref_counter))
