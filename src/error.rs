@@ -1,5 +1,4 @@
-use std::convert::From;
-use std::io;
+use std::{convert::From, io, path::PathBuf};
 
 use serde_json;
 use serde_yaml;
@@ -8,7 +7,10 @@ use serde_yaml;
 pub enum RepoError {
     IOError(io::Error),
     JsonError(serde_json::Error),
-    UnknownKeyAlgorithm(String),
+    NotImplemented,
+    RepoDirExists(PathBuf),
+    UnknownHashAlgorithm(String),
+    UnknownToken(String),
     YamlError(serde_yaml::Error),
 }
 
