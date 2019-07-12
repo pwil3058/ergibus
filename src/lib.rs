@@ -13,7 +13,7 @@ use std::{
 use crypto_hash;
 use fs2::FileExt;
 use hex::ToHex;
-use serde::{Deserialize, Serialize};
+//use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
 use snap;
@@ -106,33 +106,6 @@ impl RepoSpec {
     }
 }
 
-pub trait ContentManagerIfce: Drop + Sized {
-    fn is_mutable(&self) -> bool;
-    //fn key<'a, K: ContentMgmtKeyIfce<'a, Self>>(&'a self) -> &'a K;
-    /// Non mutating methods
-    fn check_content_token<R: Read>(&self, reader: &mut R, token: &str) -> Result<bool, RepoError>;
-    fn ref_count_for_token(&self, token: &str) -> Result<u64, RepoError>;
-    fn write_contents_for_token<W: Write>(
-        &self,
-        content_token: &str,
-        writer: &mut W,
-    ) -> Result<u64, RepoError>;
-
-    /// Mutating methods: will cause a panic if called on immutable manager
-    fn prune_contents(&self) -> Result<(u64, u64, u64), RepoError>;
-    fn release_contents(&self, content_token: &str) -> Result<RefCountData, RepoError>;
-    fn store_contents(&self, file: &mut File) -> Result<(String, u64, u64), RepoError>;
-}
-
-pub trait ContentMgmtKeyIfce<'a, M>
-where
-    Self: 'a + Sized + Serialize + Deserialize<'a> + PartialEq + Clone,
-    Self: From<&'static RepoSpec>,
-    M: ContentManagerIfce,
-{
-    fn open_content_manager(&self, mutable: bool) -> Result<M, RepoError>;
-}
-
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Mutability {
     Immutable,
@@ -208,6 +181,20 @@ pub struct RefCountData {
     stored_size: u64,
 }
 
+impl RefCountData {
+    fn decr_ref_count(&mut self) {
+        if self.ref_count > 0 {
+            self.ref_count -= 1;
+        } else {
+            panic!("{:?}: line {:?}: decrement zero ref count", file!(), line!())
+        }
+    }
+
+    fn incr_ref_count(&mut self) {
+        self.ref_count += 1;
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct RefCounter(HashMap<String, RefCountData>);
 
@@ -233,12 +220,54 @@ impl RefCounter {
         Ok(())
     }
 
-    fn expired_tokens(&self) -> Vec<(String, RefCountData)> {
+    fn expired_tokens(&self) -> Vec<String> {
         self.0
             .iter()
             .filter(|(_, rcd)| rcd.ref_count == 0)
-            .map(|(t, rcd)| (t.clone(), *rcd))
+            .map(|(t, _)| t.clone())
             .collect()
+    }
+
+    fn insert(&mut self, token: &str, rcd: RefCountData) {
+        self.0.insert(token.to_string(), rcd);
+    }
+
+    fn remove(&mut self, token: &str) -> Result<RefCountData, RepoError> {
+        if let Some(rcd) = self.0.remove(token) {
+            if rcd.ref_count > 0 {
+                panic!("{:?}: line {:?}: attempt to remove non zero token", file!(), line!())
+            };
+            Ok(rcd)
+        } else {
+            Err(RepoError::UnknownToken(token.to_string()))
+        }
+    }
+
+    fn decr_ref_count(&mut self, token: &str) -> Result<RefCountData, RepoError> {
+        match self.0.get_mut(token) {
+            Some(ref_count_data) => {
+                ref_count_data.decr_ref_count();
+                Ok(*ref_count_data)
+            }
+            None => Err(RepoError::UnknownToken(token.to_string())),
+        }
+    }
+
+    fn incr_ref_count(&mut self, token: &str) -> Result<RefCountData, RepoError> {
+        match self.0.get_mut(token) {
+            Some(ref_count_data) => {
+                ref_count_data.incr_ref_count();
+                Ok(*ref_count_data)
+            }
+            None => Err(RepoError::UnknownToken(token.to_string())),
+        }
+    }
+
+    fn ref_count_data_for_token(&self, token: &str) -> Result<RefCountData, RepoError> {
+        match self.0.get(token) {
+            Some(ref_count_data) => Ok(*ref_count_data),
+            None => Err(RepoError::UnknownToken(token.to_string())),
+        }
     }
 }
 
@@ -286,13 +315,9 @@ impl ProtectedRefCounter {
             ProtectedRefCounter::Immutable(_) => {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
-            ProtectedRefCounter::Mutable(ref rc) => match rc.borrow_mut().0.get_mut(token) {
-                Some(ref_count_data) => {
-                    ref_count_data.ref_count -= 1;
-                    Ok(*ref_count_data)
-                }
-                None => Err(RepoError::UnknownToken(token.to_string())),
-            },
+            ProtectedRefCounter::Mutable(ref rc) => {
+                rc.borrow_mut().decr_ref_count(token)
+            }
         }
     }
 
@@ -301,13 +326,9 @@ impl ProtectedRefCounter {
             ProtectedRefCounter::Immutable(_) => {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
-            ProtectedRefCounter::Mutable(ref rc) => match rc.borrow_mut().0.get_mut(token) {
-                Some(ref_count_data) => {
-                    ref_count_data.ref_count += 1;
-                    Ok(*ref_count_data)
-                }
-                None => Err(RepoError::UnknownToken(token.to_string())),
-            },
+            ProtectedRefCounter::Mutable(ref rc) => {
+                rc.borrow_mut().incr_ref_count(token)
+            }
         }
     }
 
@@ -317,22 +338,18 @@ impl ProtectedRefCounter {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
             ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow_mut().0.insert(token.to_string(), rcd);
+                rc.borrow_mut().insert(token, rcd);
             }
         }
     }
 
-    fn remove(&self, token: &str) {
+    fn remove(&self, token: &str) -> Result<RefCountData, RepoError> {
         match *self {
             ProtectedRefCounter::Immutable(_) => {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
             ProtectedRefCounter::Mutable(ref rc) => {
-                if let Some(rcd) = rc.borrow_mut().0.remove(token) {
-                    if rcd.ref_count > 0 {
-                        panic!("{:?}: line {:?}: attempt to remove non zero token", file!(), line!())
-                    }
-                }
+                rc.borrow_mut().remove(token)
             }
         }
     }
@@ -340,20 +357,18 @@ impl ProtectedRefCounter {
 
 impl ProtectedRefCounter {
     // IMMUTABLE
-    fn get_ref_count_data_for_token(&self, token: &str) -> Result<RefCountData, RepoError> {
+    fn ref_count_data_for_token(&self, token: &str) -> Result<RefCountData, RepoError> {
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) => match rc.borrow().0.get(token) {
-                Some(ref_count_data) => Ok(*ref_count_data),
-                None => Err(RepoError::UnknownToken(token.to_string())),
-            },
-            ProtectedRefCounter::Immutable(ref hm) => match hm.0.get(token) {
-                Some(ref_count_data) => Ok(*ref_count_data),
-                None => Err(RepoError::UnknownToken(token.to_string())),
-            },
+            ProtectedRefCounter::Mutable(ref rc) => {
+                rc.borrow().ref_count_data_for_token(token)
+            }
+            ProtectedRefCounter::Immutable(ref rc) => {
+                rc.ref_count_data_for_token(token)
+            }
         }
     }
 
-    fn expired_tokens(&self) -> Vec<(String, RefCountData)> {
+    fn expired_tokens(&self) -> Vec<String> {
         match *self {
             ProtectedRefCounter::Mutable(ref rc) => rc.borrow().expired_tokens(),
             ProtectedRefCounter::Immutable(ref rc) => rc.expired_tokens(),
@@ -381,16 +396,16 @@ impl Drop for ContentManager {
     }
 }
 
-impl ContentManagerIfce for ContentManager {
-    fn is_mutable(&self) -> bool {
+impl ContentManager {
+    pub fn is_mutable(&self) -> bool {
         self.ref_counter.is_mutable()
     }
 
-    //fn key<'a, K: ContentMgmtKeyIfce<'a, Self>>(&'a self) -> &'a K {
-    //    &self.content_mgmt_key
-    //}
+    pub fn key<'a>(&'a self) -> &'a ContentMgmtKey {
+        &self.content_mgmt_key
+    }
 
-    fn check_content_token<R: Read>(&self, reader: &mut R, token: &str) -> Result<bool, RepoError> {
+    pub fn check_content_token<R: Read>(&self, reader: &mut R, token: &str) -> Result<bool, RepoError> {
         let digest = self
             .content_mgmt_key
             .hash_algortithm
@@ -398,12 +413,12 @@ impl ContentManagerIfce for ContentManager {
         Ok(digest == token)
     }
 
-    fn ref_count_for_token(&self, token: &str) -> Result<u64, RepoError> {
-        let rcd = self.ref_counter.get_ref_count_data_for_token(token)?;
+    pub fn ref_count_for_token(&self, token: &str) -> Result<u64, RepoError> {
+        let rcd = self.ref_counter.ref_count_data_for_token(token)?;
         Ok(rcd.ref_count)
     }
 
-    fn write_contents_for_token<W: Write>(
+    pub fn write_contents_for_token<W: Write>(
         &self,
         content_token: &str,
         writer: &mut W,
@@ -418,28 +433,28 @@ impl ContentManagerIfce for ContentManager {
         Ok(n)
     }
 
-    fn prune_contents(&self) -> Result<(u64, u64, u64), RepoError> {
+    pub fn prune_contents(&self) -> Result<(u64, u64, u64), RepoError> {
         if !self.is_mutable() {
             panic!("{:?}: line {:?}: immutability breach", file!(), line!());
         }
         let mut content_sum = 0;
         let mut stored_sum = 0;
         let expired_tokens = self.ref_counter.expired_tokens();
-        for (token, rcd) in expired_tokens.iter() {
+        for token in expired_tokens.iter() {
             let path = self.content_mgmt_key.token_content_file_path(token);
             remove_file(&path)?;
+            let rcd = self.ref_counter.remove(token)?;
             content_sum += rcd.content_size;
             stored_sum += rcd.stored_size;
-            self.ref_counter.remove(token);
         }
         Ok((expired_tokens.len() as u64, content_sum, stored_sum))
     }
 
-    fn release_contents(&self, content_token: &str) -> Result<RefCountData, RepoError> {
+    pub fn release_contents(&self, content_token: &str) -> Result<RefCountData, RepoError> {
         self.ref_counter.decr_ref_count_for_token(&content_token)
     }
 
-    fn store_contents(&self, file: &mut File) -> Result<(String, u64, u64), RepoError> {
+    pub fn store_contents(&self, file: &mut File) -> Result<(String, u64, u64), RepoError> {
         let digest = self.content_mgmt_key.hash_algortithm.reader_digest(file)?;
         match self.ref_counter.incr_ref_count_for_token(&digest) {
             Ok(rcd) => Ok((digest, rcd.stored_size, 0)),
