@@ -110,7 +110,7 @@ impl RepoSpec {
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Mutability {
     Immutable,
-    Mutable
+    Mutable,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
@@ -142,7 +142,10 @@ impl ContentMgmtKey {
         Ok(())
     }
 
-    pub fn open_content_manager(&self, mutability: Mutability) -> Result<ContentManager, RepoError> {
+    pub fn open_content_manager(
+        &self,
+        mutability: Mutability,
+    ) -> Result<ContentManager, RepoError> {
         let mut hash_map_file = self.locked_ref_count_file(mutability)?;
         let ref_counter = ProtectedRefCounter::from_file(&mut hash_map_file, mutability)?;
         Ok(ContentManager {
@@ -187,7 +190,11 @@ impl RefCountData {
         if self.ref_count > 0 {
             self.ref_count -= 1;
         } else {
-            panic!("{:?}: line {:?}: decrement zero ref count", file!(), line!())
+            panic!(
+                "{:?}: line {:?}: decrement zero ref count",
+                file!(),
+                line!()
+            )
         }
     }
 
@@ -236,7 +243,11 @@ impl RefCounter {
     fn remove(&mut self, token: &str) -> Result<RefCountData, RepoError> {
         if let Some(rcd) = self.0.remove(token) {
             if rcd.ref_count > 0 {
-                panic!("{:?}: line {:?}: attempt to remove non zero token", file!(), line!())
+                panic!(
+                    "{:?}: line {:?}: attempt to remove non zero token",
+                    file!(),
+                    line!()
+                )
             };
             Ok(rcd)
         } else {
@@ -271,7 +282,7 @@ impl RefCounter {
         }
     }
 
-    fn ref_count_data<'a>(&'a self) -> impl Iterator<Item=&'a RefCountData> {
+    fn ref_count_data<'a>(&'a self) -> impl Iterator<Item = &'a RefCountData> {
         self.0.values()
     }
 }
@@ -291,7 +302,10 @@ impl ProtectedRefCounter {
         }
     }
 
-    fn from_file(file: &mut File, mutability: Mutability) -> Result<ProtectedRefCounter, RepoError> {
+    fn from_file(
+        file: &mut File,
+        mutability: Mutability,
+    ) -> Result<ProtectedRefCounter, RepoError> {
         let ref_counter = RefCounter::from_file(file)?;
         if mutability == Mutability::Mutable {
             Ok(ProtectedRefCounter::Mutable(RefCell::new(ref_counter)))
@@ -320,9 +334,7 @@ impl ProtectedRefCounter {
             ProtectedRefCounter::Immutable(_) => {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow_mut().decr_ref_count(token)
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow_mut().decr_ref_count(token),
         }
     }
 
@@ -331,9 +343,7 @@ impl ProtectedRefCounter {
             ProtectedRefCounter::Immutable(_) => {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow_mut().incr_ref_count(token)
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow_mut().incr_ref_count(token),
         }
     }
 
@@ -353,9 +363,7 @@ impl ProtectedRefCounter {
             ProtectedRefCounter::Immutable(_) => {
                 panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow_mut().remove(token)
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow_mut().remove(token),
         }
     }
 }
@@ -392,8 +400,8 @@ impl AddAssign<&RefCountData> for ReferencedContentData {
             self.num_items += 1;
             self.num_references += ref_count_data.ref_count as u128;
             self.sum_content += ref_count_data.content_size as u128;
-            self.sum_notional_content += ref_count_data.content_size as u128 *
-                ref_count_data.ref_count as u128;
+            self.sum_notional_content +=
+                ref_count_data.content_size as u128 * ref_count_data.ref_count as u128;
             self.sum_storage += ref_count_data.stored_size as u128;
         }
     }
@@ -404,7 +412,6 @@ pub struct ContentData {
     referenced_content_data: ReferencedContentData,
     unreferenced_content_data: UnreferencedContentData,
 }
-
 
 impl AddAssign<&RefCountData> for ContentData {
     fn add_assign(&mut self, ref_count_data: &RefCountData) {
@@ -420,12 +427,8 @@ impl ProtectedRefCounter {
     // IMMUTABLE
     fn ref_count_data_for_token(&self, token: &str) -> Result<RefCountData, RepoError> {
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow().ref_count_data_for_token(token)
-            }
-            ProtectedRefCounter::Immutable(ref rc) => {
-                rc.ref_count_data_for_token(token)
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow().ref_count_data_for_token(token),
+            ProtectedRefCounter::Immutable(ref rc) => rc.ref_count_data_for_token(token),
         }
     }
 
@@ -439,14 +442,16 @@ impl ProtectedRefCounter {
     fn unreferenced_content_data(&self) -> UnreferencedContentData {
         let mut data = UnreferencedContentData::default();
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) =>
+            ProtectedRefCounter::Mutable(ref rc) => {
                 for ref_count_data in rc.borrow().ref_count_data() {
                     data += ref_count_data
-                },
-            ProtectedRefCounter::Immutable(ref rc) =>
+                }
+            }
+            ProtectedRefCounter::Immutable(ref rc) => {
                 for ref_count_data in rc.ref_count_data() {
                     data += ref_count_data
-                },
+                }
+            }
         };
         data
     }
@@ -454,14 +459,16 @@ impl ProtectedRefCounter {
     fn referenced_content_data(&self) -> ReferencedContentData {
         let mut data = ReferencedContentData::default();
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) =>
+            ProtectedRefCounter::Mutable(ref rc) => {
                 for ref_count_data in rc.borrow().ref_count_data() {
                     data += ref_count_data
-                },
-            ProtectedRefCounter::Immutable(ref rc) =>
+                }
+            }
+            ProtectedRefCounter::Immutable(ref rc) => {
                 for ref_count_data in rc.ref_count_data() {
                     data += ref_count_data
-                },
+                }
+            }
         };
         data
     }
@@ -469,14 +476,16 @@ impl ProtectedRefCounter {
     fn content_data(&self) -> ContentData {
         let mut data = ContentData::default();
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) =>
+            ProtectedRefCounter::Mutable(ref rc) => {
                 for ref_count_data in rc.borrow().ref_count_data() {
                     data += ref_count_data
-                },
-            ProtectedRefCounter::Immutable(ref rc) =>
+                }
+            }
+            ProtectedRefCounter::Immutable(ref rc) => {
                 for ref_count_data in rc.ref_count_data() {
                     data += ref_count_data
-                },
+                }
+            }
         };
         data
     }
@@ -511,7 +520,11 @@ impl ContentManager {
         &self.content_mgmt_key
     }
 
-    pub fn check_content_token<R: Read>(&self, reader: &mut R, token: &str) -> Result<bool, RepoError> {
+    pub fn check_content_token<R: Read>(
+        &self,
+        reader: &mut R,
+        token: &str,
+    ) -> Result<bool, RepoError> {
         let digest = self
             .content_mgmt_key
             .hash_algortithm
@@ -648,8 +661,14 @@ mod tests {
         let cm_key: ContentMgmtKey = (&repo_spec).into();
         assert!(cm_key.create_repo_dir().is_ok());
         let cmgr = cm_key.open_content_manager(Mutability::Mutable).unwrap();
-        assert_eq!(cmgr.unreferenced_content_data(), UnreferencedContentData::default());
-        assert_eq!(cmgr.referenced_content_data(), ReferencedContentData::default());
+        assert_eq!(
+            cmgr.unreferenced_content_data(),
+            UnreferencedContentData::default()
+        );
+        assert_eq!(
+            cmgr.referenced_content_data(),
+            ReferencedContentData::default()
+        );
         let mut file = File::open("./LICENSE-APACHE").unwrap();
         let result = cmgr.store_contents(&mut file).unwrap();
         assert_eq!(
@@ -657,8 +676,11 @@ mod tests {
             "7DF059597099BB7DCF25D2A9AEDFAF4465F72D8D".to_string(),
         );
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 1);
-        assert_eq!(cmgr.unreferenced_content_data(), UnreferencedContentData::default());
-        let expected = ReferencedContentData{
+        assert_eq!(
+            cmgr.unreferenced_content_data(),
+            UnreferencedContentData::default()
+        );
+        let expected = ReferencedContentData {
             num_items: 1,
             num_references: 1,
             sum_content: 11357,
@@ -669,8 +691,11 @@ mod tests {
         let mut file = File::open("./LICENSE-APACHE").unwrap();
         let result = cmgr.store_contents(&mut file).unwrap();
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 2);
-        assert_eq!(cmgr.unreferenced_content_data(), UnreferencedContentData::default());
-        let expected = ReferencedContentData{
+        assert_eq!(
+            cmgr.unreferenced_content_data(),
+            UnreferencedContentData::default()
+        );
+        let expected = ReferencedContentData {
             num_items: 1,
             num_references: 2,
             sum_content: 11357,
@@ -680,7 +705,10 @@ mod tests {
         assert_eq!(cmgr.referenced_content_data(), expected);
         assert!(cmgr.release_contents(&result.0).is_ok());
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 1);
-        assert_eq!(cmgr.unreferenced_content_data(), UnreferencedContentData::default());
+        assert_eq!(
+            cmgr.unreferenced_content_data(),
+            UnreferencedContentData::default()
+        );
         let target_path = tmp_dir.path().join("target");
         let mut target_file = File::create(&target_path).unwrap();
         assert!(cmgr
@@ -693,13 +721,16 @@ mod tests {
         }
         assert!(cmgr.release_contents(&result.0).is_ok());
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 0);
-        let expected = UnreferencedContentData{
+        let expected = UnreferencedContentData {
             num_items: 1,
             sum_content: 11357,
             sum_storage: 5816,
         };
         assert_eq!(cmgr.unreferenced_content_data(), expected);
-        assert_eq!(cmgr.referenced_content_data(), ReferencedContentData::default());
+        assert_eq!(
+            cmgr.referenced_content_data(),
+            ReferencedContentData::default()
+        );
         assert_eq!(cmgr.prune_contents().unwrap(), expected);
         assert!(cmgr.ref_count_for_token(&result.0).is_err());
     }
