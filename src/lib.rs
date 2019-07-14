@@ -197,6 +197,61 @@ impl RefCountData {
     }
 }
 
+#[derive(PartialEq, Clone, Copy, Default, Debug)]
+pub struct UnreferencedContentData {
+    num_items: u64,
+    sum_content: u128,
+    sum_storage: u128,
+}
+
+impl AddAssign<&RefCountData> for UnreferencedContentData {
+    fn add_assign(&mut self, ref_count_data: &RefCountData) {
+        if ref_count_data.ref_count == 0 {
+            self.num_items += 1;
+            self.sum_content += ref_count_data.content_size as u128;
+            self.sum_storage += ref_count_data.stored_size as u128;
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy, Default, Debug)]
+pub struct ReferencedContentData {
+    num_items: u64,
+    num_references: u128,
+    sum_content: u128,
+    sum_notional_content: u128,
+    sum_storage: u128,
+}
+
+impl AddAssign<&RefCountData> for ReferencedContentData {
+    fn add_assign(&mut self, ref_count_data: &RefCountData) {
+        if ref_count_data.ref_count > 0 {
+            self.num_items += 1;
+            self.num_references += ref_count_data.ref_count as u128;
+            self.sum_content += ref_count_data.content_size as u128;
+            self.sum_notional_content +=
+                ref_count_data.content_size as u128 * ref_count_data.ref_count as u128;
+            self.sum_storage += ref_count_data.stored_size as u128;
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy, Default, Debug)]
+pub struct ContentData {
+    referenced_content_data: ReferencedContentData,
+    unreferenced_content_data: UnreferencedContentData,
+}
+
+impl AddAssign<&RefCountData> for ContentData {
+    fn add_assign(&mut self, ref_count_data: &RefCountData) {
+        if ref_count_data.ref_count > 0 {
+            self.referenced_content_data += ref_count_data;
+        } else {
+            self.unreferenced_content_data += ref_count_data;
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct RefCounter(HashMap<String, RefCountData>);
 
@@ -276,8 +331,28 @@ impl RefCounter {
         }
     }
 
-    fn ref_count_data<'a>(&'a self) -> impl Iterator<Item = &'a RefCountData> {
-        self.0.values()
+    fn unreferenced_content_data(&self) -> UnreferencedContentData {
+        let mut data = UnreferencedContentData::default();
+        for ref_count_data in self.0.values() {
+            data += ref_count_data
+        }
+        data
+    }
+
+    fn referenced_content_data(&self) -> ReferencedContentData {
+        let mut data = ReferencedContentData::default();
+        for ref_count_data in self.0.values() {
+            data += ref_count_data
+        }
+        data
+    }
+
+    fn content_data(&self) -> ContentData {
+        let mut data = ContentData::default();
+        for ref_count_data in self.0.values() {
+            data += ref_count_data
+        }
+        data
     }
 }
 
@@ -362,61 +437,6 @@ impl ProtectedRefCounter {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Default, Debug)]
-pub struct UnreferencedContentData {
-    num_items: u64,
-    sum_content: u128,
-    sum_storage: u128,
-}
-
-impl AddAssign<&RefCountData> for UnreferencedContentData {
-    fn add_assign(&mut self, ref_count_data: &RefCountData) {
-        if ref_count_data.ref_count == 0 {
-            self.num_items += 1;
-            self.sum_content += ref_count_data.content_size as u128;
-            self.sum_storage += ref_count_data.stored_size as u128;
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Default, Debug)]
-pub struct ReferencedContentData {
-    num_items: u64,
-    num_references: u128,
-    sum_content: u128,
-    sum_notional_content: u128,
-    sum_storage: u128,
-}
-
-impl AddAssign<&RefCountData> for ReferencedContentData {
-    fn add_assign(&mut self, ref_count_data: &RefCountData) {
-        if ref_count_data.ref_count > 0 {
-            self.num_items += 1;
-            self.num_references += ref_count_data.ref_count as u128;
-            self.sum_content += ref_count_data.content_size as u128;
-            self.sum_notional_content +=
-                ref_count_data.content_size as u128 * ref_count_data.ref_count as u128;
-            self.sum_storage += ref_count_data.stored_size as u128;
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Default, Debug)]
-pub struct ContentData {
-    referenced_content_data: ReferencedContentData,
-    unreferenced_content_data: UnreferencedContentData,
-}
-
-impl AddAssign<&RefCountData> for ContentData {
-    fn add_assign(&mut self, ref_count_data: &RefCountData) {
-        if ref_count_data.ref_count > 0 {
-            self.referenced_content_data += ref_count_data;
-        } else {
-            self.unreferenced_content_data += ref_count_data;
-        }
-    }
-}
-
 impl ProtectedRefCounter {
     // IMMUTABLE
     fn ref_count_data_for_token(&self, token: &str) -> Result<RefCountData, RepoError> {
@@ -434,54 +454,36 @@ impl ProtectedRefCounter {
     }
 
     fn unreferenced_content_data(&self) -> UnreferencedContentData {
-        let mut data = UnreferencedContentData::default();
         match *self {
             ProtectedRefCounter::Mutable(ref rc) => {
-                for ref_count_data in rc.borrow().ref_count_data() {
-                    data += ref_count_data
-                }
+                rc.borrow().unreferenced_content_data()
             }
             ProtectedRefCounter::Immutable(ref rc) => {
-                for ref_count_data in rc.ref_count_data() {
-                    data += ref_count_data
-                }
+                rc.unreferenced_content_data()
             }
-        };
-        data
+        }
     }
 
     fn referenced_content_data(&self) -> ReferencedContentData {
-        let mut data = ReferencedContentData::default();
         match *self {
             ProtectedRefCounter::Mutable(ref rc) => {
-                for ref_count_data in rc.borrow().ref_count_data() {
-                    data += ref_count_data
-                }
+                rc.borrow().referenced_content_data()
             }
             ProtectedRefCounter::Immutable(ref rc) => {
-                for ref_count_data in rc.ref_count_data() {
-                    data += ref_count_data
-                }
+                rc.referenced_content_data()
             }
-        };
-        data
+        }
     }
 
     fn content_data(&self) -> ContentData {
-        let mut data = ContentData::default();
         match *self {
             ProtectedRefCounter::Mutable(ref rc) => {
-                for ref_count_data in rc.borrow().ref_count_data() {
-                    data += ref_count_data
-                }
+                rc.borrow().content_data()
             }
             ProtectedRefCounter::Immutable(ref rc) => {
-                for ref_count_data in rc.ref_count_data() {
-                    data += ref_count_data
-                }
+                rc.content_data()
             }
-        };
-        data
+        }
     }
 }
 
