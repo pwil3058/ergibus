@@ -148,10 +148,12 @@ impl ContentMgmtKey {
     ) -> Result<ContentManager, RepoError> {
         let mut hash_map_file = self.locked_ref_count_file(mutability)?;
         let ref_counter = ProtectedRefCounter::from_file(&mut hash_map_file, mutability)?;
+        let storage = Storage { base_dir_path: self.base_dir_path.clone() };
         Ok(ContentManager {
             content_mgmt_key: self.clone(),
-            ref_counter: ref_counter,
-            hash_map_file: hash_map_file,
+            ref_counter,
+            storage,
+            hash_map_file,
         })
     }
 
@@ -167,14 +169,6 @@ impl ContentMgmtKey {
             file.lock_shared()?;
         }
         Ok(file)
-    }
-
-    fn token_content_file_path(&self, token: &str) -> PathBuf {
-        let mut path_buf = self.base_dir_path.clone();
-        path_buf.push(PathBuf::from(&token[0..3]));
-        path_buf.push(PathBuf::from(&token[3..]));
-
-        path_buf
     }
 }
 
@@ -492,9 +486,62 @@ impl ProtectedRefCounter {
 }
 
 #[derive(Debug)]
+pub struct Storage {
+    base_dir_path: PathBuf
+}
+
+impl Storage {
+    fn token_content_file_path(&self, token: &str) -> PathBuf {
+        let mut path_buf = self.base_dir_path.clone();
+        path_buf.push(PathBuf::from(&token[0..3]));
+        path_buf.push(PathBuf::from(&token[3..]));
+
+        path_buf
+    }
+
+    fn store(&self, token: &str, file: &mut File) -> Result<u64, RepoError> {
+        let content_file_path = self.token_content_file_path(token);
+        let content_dir_path = content_file_path
+            .parent()
+            .expect("Failed to extract content directory path");
+        if !content_dir_path.exists() {
+            create_dir_all(content_dir_path)?;
+        }
+        let content_file = File::create(&content_file_path)?;
+        let mut compressed_content_file = snap::Writer::new(content_file);
+        io::copy(file, &mut compressed_content_file)?;
+        compressed_content_file.flush()?;
+        let metadata = content_file_path.metadata()?;
+        Ok(metadata.len())
+    }
+
+    fn remove(&self, token: &str) -> Result<(), RepoError> {
+        let path = self.token_content_file_path(token);
+        remove_file(&path)?;
+        Ok(())
+    }
+
+    fn write<W: Write>(
+        &self,
+        content_token: &str,
+        writer: &mut W,
+    ) -> Result<u64, RepoError> {
+        let content_file_path = self.token_content_file_path(content_token);
+        if !content_file_path.exists() {
+            return Err(RepoError::UnknownToken(content_token.to_string()));
+        }
+        let content_file = File::open(content_file_path)?;
+        let mut compressed_content_file = snap::Reader::new(content_file);
+        let n = io::copy(&mut compressed_content_file, writer)?;
+        Ok(n)
+    }
+}
+
+#[derive(Debug)]
 pub struct ContentManager {
     content_mgmt_key: ContentMgmtKey,
     ref_counter: ProtectedRefCounter,
+    storage: Storage,
     hash_map_file: File,
 }
 
@@ -554,13 +601,7 @@ impl ContentManager {
         content_token: &str,
         writer: &mut W,
     ) -> Result<u64, RepoError> {
-        let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
-        if !content_file_path.exists() {
-            return Err(RepoError::UnknownToken(content_token.to_string()));
-        }
-        let content_file = File::open(content_file_path)?;
-        let mut compressed_content_file = snap::Reader::new(content_file);
-        let n = io::copy(&mut compressed_content_file, writer)?;
+        let n = self.storage.write(content_token, writer)?;
         Ok(n)
     }
 
@@ -571,8 +612,7 @@ impl ContentManager {
         let mut unreferenced_content_data = UnreferencedContentData::default();
         let unreferenced_tokens = self.ref_counter.unreferenced_tokens();
         for token in unreferenced_tokens.iter() {
-            let path = self.content_mgmt_key.token_content_file_path(token);
-            remove_file(&path)?;
+            self.storage.remove(token)?;
             unreferenced_content_data += &self.ref_counter.remove(token)?;
         }
         Ok(unreferenced_content_data)
@@ -587,25 +627,13 @@ impl ContentManager {
         match self.ref_counter.incr_ref_count_for_token(&digest) {
             Ok(rcd) => Ok((digest, rcd.stored_size, 0)),
             Err(_) => {
+                // NB: reader_digest will have moved the pointer
+                file.seek(io::SeekFrom::Start(0))?;
                 let content_size = match file.metadata() {
                     Ok(metadata) => metadata.len(),
                     Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err),
                 };
-                let content_file_path = self.content_mgmt_key.token_content_file_path(&digest);
-                let content_dir_path = content_file_path
-                    .parent()
-                    .expect("Failed to extract content directory path");
-                if !content_dir_path.exists() {
-                    create_dir_all(content_dir_path)?;
-                }
-                // NB: reader_digest will have moved the pointer
-                file.seek(io::SeekFrom::Start(0))?;
-                let content_file = File::create(&content_file_path)?;
-                let mut compressed_content_file = snap::Writer::new(content_file);
-                io::copy(file, &mut compressed_content_file)?;
-                compressed_content_file.flush()?;
-                let metadata = content_file_path.metadata()?;
-                let stored_size = metadata.len();
+                let stored_size = self.storage.store(&digest, file)?;
                 let rcd = RefCountData {
                     content_size: content_size,
                     stored_size: stored_size,
