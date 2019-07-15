@@ -148,7 +148,9 @@ impl ContentMgmtKey {
     ) -> Result<ContentManager, RepoError> {
         let mut hash_map_file = self.locked_ref_count_file(mutability)?;
         let ref_counter = ProtectedRefCounter::from_file(&mut hash_map_file, mutability)?;
-        let storage = Storage { base_dir_path: self.base_dir_path.clone() };
+        let storage = Storage {
+            base_dir_path: self.base_dir_path.clone(),
+        };
         Ok(ContentManager {
             content_mgmt_key: self.clone(),
             ref_counter,
@@ -250,6 +252,12 @@ impl AddAssign<&RefCountData> for ContentData {
             self.unreferenced_content_data += ref_count_data;
         }
     }
+}
+
+#[derive(Debug)]
+pub enum TokenProblem {
+    ContentMissing(String),
+    ContentInconsistent(String),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -354,6 +362,20 @@ impl RefCounter {
         }
         data
     }
+
+    fn token_problems(&self, storage: &Storage) -> Vec<TokenProblem> {
+        let mut problems = vec![];
+        for (token, ref_count_data) in self.0.iter() {
+            if let Ok(len) = storage.stored_size(token) {
+                if ref_count_data.stored_size != len {
+                    problems.push(TokenProblem::ContentInconsistent(token.clone()));
+                }
+            } else {
+                problems.push(TokenProblem::ContentMissing(token.clone()));
+            }
+        }
+        problems
+    }
 }
 
 #[derive(Debug)]
@@ -455,41 +477,41 @@ impl ProtectedRefCounter {
 
     fn unreferenced_content_data(&self) -> UnreferencedContentData {
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow().unreferenced_content_data()
-            }
-            ProtectedRefCounter::Immutable(ref rc) => {
-                rc.unreferenced_content_data()
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow().unreferenced_content_data(),
+            ProtectedRefCounter::Immutable(ref rc) => rc.unreferenced_content_data(),
         }
     }
 
     fn referenced_content_data(&self) -> ReferencedContentData {
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow().referenced_content_data()
-            }
-            ProtectedRefCounter::Immutable(ref rc) => {
-                rc.referenced_content_data()
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow().referenced_content_data(),
+            ProtectedRefCounter::Immutable(ref rc) => rc.referenced_content_data(),
         }
     }
 
     fn content_data(&self) -> ContentData {
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) => {
-                rc.borrow().content_data()
-            }
-            ProtectedRefCounter::Immutable(ref rc) => {
-                rc.content_data()
-            }
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow().content_data(),
+            ProtectedRefCounter::Immutable(ref rc) => rc.content_data(),
+        }
+    }
+
+    fn token_problems(&self, storage: &Storage) -> Vec<TokenProblem> {
+        match *self {
+            ProtectedRefCounter::Mutable(ref rc) => rc.borrow().token_problems(storage),
+            ProtectedRefCounter::Immutable(ref rc) => rc.token_problems(storage),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Storage {
-    base_dir_path: PathBuf
+    base_dir_path: PathBuf,
+}
+
+pub enum ContentProblem {
+    Orphaned(String),
+    Inconsistent(String),
 }
 
 impl Storage {
@@ -523,11 +545,7 @@ impl Storage {
         Ok(())
     }
 
-    fn write<W: Write>(
-        &self,
-        content_token: &str,
-        writer: &mut W,
-    ) -> Result<u64, RepoError> {
+    fn write<W: Write>(&self, content_token: &str, writer: &mut W) -> Result<u64, RepoError> {
         let content_file_path = self.token_content_file_path(content_token);
         if !content_file_path.exists() {
             return Err(RepoError::UnknownToken(content_token.to_string()));
@@ -536,6 +554,40 @@ impl Storage {
         let mut compressed_content_file = snap::Reader::new(content_file);
         let n = io::copy(&mut compressed_content_file, writer)?;
         Ok(n)
+    }
+
+    fn stored_size(&self, token: &str) -> Result<u64, RepoError> {
+        let content_file_path = self.token_content_file_path(token);
+        let metadata = content_file_path.metadata()?;
+        Ok(metadata.len())
+    }
+
+    fn content_problems(
+        &self,
+        ref_counter: &ProtectedRefCounter,
+    ) -> Result<Vec<ContentProblem>, RepoError> {
+        let mut problems = vec![];
+        for r_tl_entry in self.base_dir_path.read_dir()? {
+            let tl_entry = r_tl_entry?;
+            if tl_entry.file_type()?.is_dir() {
+                let dir_name = tl_entry.file_name().into_string()?;
+                for r_sl_entry in self.base_dir_path.join(&dir_name).read_dir()? {
+                    let sl_entry = r_sl_entry?;
+                    if sl_entry.file_type()?.is_file() {
+                        let mut token = dir_name.clone();
+                        token.push_str(&sl_entry.file_name().into_string()?);
+                        if let Ok(ref_count_data) = ref_counter.ref_count_data_for_token(&token) {
+                            if ref_count_data.stored_size != sl_entry.metadata()?.len() {
+                                problems.push(ContentProblem::Inconsistent(token));
+                            }
+                        } else {
+                            problems.push(ContentProblem::Orphaned(token));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(problems)
     }
 }
 
@@ -558,6 +610,11 @@ impl Drop for ContentManager {
             panic!("{:?}: line {:?}: {:?}", file!(), line!(), err);
         };
     }
+}
+
+pub struct Problems {
+    pub token_problems: Vec<TokenProblem>,
+    pub content_problems: Vec<ContentProblem>,
 }
 
 impl ContentManager {
@@ -645,6 +702,15 @@ impl ContentManager {
                 Ok((digest, stored_size, stored_size))
             }
         }
+    }
+
+    pub fn problems(&self) -> Result<Problems, RepoError> {
+        let token_problems = self.ref_counter.token_problems(&self.storage);
+        let content_problems = self.storage.content_problems(&self.ref_counter)?;
+        Ok(Problems {
+            token_problems,
+            content_problems,
+        })
     }
 }
 

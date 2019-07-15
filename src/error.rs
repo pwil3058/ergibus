@@ -1,4 +1,4 @@
-use std::{convert::From, io, path::PathBuf};
+use std::{convert::From, ffi::OsString, io, path::PathBuf};
 
 use serde_json;
 use serde_yaml;
@@ -12,6 +12,7 @@ pub enum RepoError {
     UnknownHashAlgorithm(String),
     UnknownToken(String),
     YamlError(serde_yaml::Error),
+    BadOsString(OsString),
 }
 
 impl From<io::Error> for RepoError {
@@ -29,6 +30,12 @@ impl From<serde_json::Error> for RepoError {
 impl From<serde_yaml::Error> for RepoError {
     fn from(error: serde_yaml::Error) -> Self {
         RepoError::YamlError(error)
+    }
+}
+
+impl From<OsString> for RepoError {
+    fn from(os_string: OsString) -> Self {
+        RepoError::BadOsString(os_string)
     }
 }
 
