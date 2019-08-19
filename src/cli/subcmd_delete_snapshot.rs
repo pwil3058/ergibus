@@ -1,51 +1,56 @@
+use clap;
 use std;
 use std::io::{stderr, Write};
-use std::str::FromStr;
 use std::path::PathBuf;
-use clap;
+use std::str::FromStr;
 
 use cli;
 use eerror::{EError, EResult};
 use snapshot;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
-    clap::SubCommand::with_name("delete_snapshot").visible_alias("del_ss")
+    clap::SubCommand::with_name("delete_snapshot")
+        .visible_alias("del_ss")
         .about("Delete the specified snapshot(s)")
-        .arg(clap::Arg::with_name("all_but_newest_n")
-            .long("all_but_newest_n").value_name("N").takes_value(true)
-            .help("delete all but the newest N snapshots")
-            .required(true)
+        .arg(
+            clap::Arg::with_name("all_but_newest_n")
+                .long("all_but_newest_n")
+                .value_name("N")
+                .takes_value(true)
+                .help("delete all but the newest N snapshots")
+                .required(true),
         )
-        .arg(cli::arg_back_n()
-            .required(true)
+        .arg(cli::arg_back_n().required(true))
+        .group(
+            clap::ArgGroup::with_name("which_ss")
+                .args(&["all_but_newest_n", "back_n"])
+                .required(true),
         )
-        .group(clap::ArgGroup::with_name("which_ss")
-            .args(&["all_but_newest_n", "back_n"]).required(true)
+        .arg(
+            clap::Arg::with_name("remove_last_ok")
+                .long("remove_last_ok")
+                .takes_value(false)
+                .help("authorise deletion of the last snapshot in the archive."),
         )
-        .arg(clap::Arg::with_name("remove_last_ok")
-            .long("remove_last_ok").takes_value(false)
-            .help("authorise deletion of the last snapshot in the archive.")
+        .arg(
+            cli::arg_archive_name()
+                .required(true)
+                .help("the name of the archive whose snapshot(s) are to be deleted"),
         )
-        .arg(cli::arg_archive_name()
-            .required(true)
-            .help("the name of the archive whose snapshot(s) are to be deleted")
-        )
-        .arg(cli::arg_exigency_dir_path()
-            .help(
-"the name of the directory containing the snapshots to be deleted.
+        .arg(cli::arg_exigency_dir_path().help(
+            "the name of the directory containing the snapshots to be deleted.
 This option is intended for use in those cases where the configuration
 data has been lost (possibly due to file system failure).  Individual
 snapshot files contain sufficient data for orderly deletion without
 the need for the configuration files provided their content repositories
-are also intact."
-            )
+are also intact.",
+        ))
+        .group(
+            clap::ArgGroup::with_name("which")
+                .args(&["archive_name", "exigency_dir_path"])
+                .required(true),
         )
-        .group(clap::ArgGroup::with_name("which")
-            .args(&["archive_name", "exigency_dir_path"]).required(true)
-        )
-        .arg(cli::arg_verbose()
-            .help("report the number of snapshots deleted")
-        )
+        .arg(cli::arg_verbose().help("report the number of snapshots deleted"))
 }
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches) {
@@ -66,8 +71,10 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
             }
         };
         match delete_all_but_newest(&archive_or_dir_path, n, remove_last_ok) {
-            Ok(n) => if arg_matches.is_present("verbose") {
-                println!("{} snapshots deleted", n)
+            Ok(n) => {
+                if arg_matches.is_present("verbose") {
+                    println!("{} snapshots deleted", n)
+                }
             }
             Err(err) => {
                 writeln!(stderr(), "{:?}", err).unwrap();
@@ -83,8 +90,10 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
             }
         };
         match delete_ss_back_n(&archive_or_dir_path, n, remove_last_ok) {
-            Ok(n) => if arg_matches.is_present("verbose") {
-                println!("{} snapshots deleted", n)
+            Ok(n) => {
+                if arg_matches.is_present("verbose") {
+                    println!("{} snapshots deleted", n)
+                }
             }
             Err(err) => {
                 writeln!(stderr(), "{:?}", err).unwrap();
@@ -96,7 +105,11 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
     }
 }
 
-fn delete_all_but_newest(archive_or_dir_path: &snapshot::ArchiveOrDirPath, newest_count: usize, clear_fell: bool) -> EResult<(usize)> {
+fn delete_all_but_newest(
+    archive_or_dir_path: &snapshot::ArchiveOrDirPath,
+    newest_count: usize,
+    clear_fell: bool,
+) -> EResult<(usize)> {
     let mut deleted_count: usize = 0;
     if !clear_fell && newest_count == 0 {
         return Err(EError::LastSnapshot(archive_or_dir_path.clone()));
@@ -116,7 +129,11 @@ fn delete_all_but_newest(archive_or_dir_path: &snapshot::ArchiveOrDirPath, newes
     Ok(deleted_count)
 }
 
-fn delete_ss_back_n(archive_or_dir_path: &snapshot::ArchiveOrDirPath, n: i64, clear_fell: bool) -> EResult<(usize)> {
+fn delete_ss_back_n(
+    archive_or_dir_path: &snapshot::ArchiveOrDirPath,
+    n: i64,
+    clear_fell: bool,
+) -> EResult<(usize)> {
     let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
     if snapshot_paths.len() == 0 {
         return Err(EError::ArchiveEmpty(archive_or_dir_path.clone()));

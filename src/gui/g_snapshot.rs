@@ -5,11 +5,10 @@ use std::rc::Rc;
 use gtk;
 use gtk::prelude::*;
 
-use crypto_hash::{Hasher, Algorithm};
+use crypto_hash::{Algorithm, Hasher};
 
 use pw_gix::gtkx::list_store::{
-    Row, RowBuffer, RowBufferCore, Digest, invalid_digest,
-    BufferedUpdate
+    invalid_digest, BufferedUpdate, Digest, Row, RowBuffer, RowBufferCore,
 };
 use pw_gix::wrapper::*;
 
@@ -19,16 +18,16 @@ use gui::g_archive;
 
 struct SnapshotRowBuffer {
     archive_name: Option<String>,
-    row_buffer_core: Rc<RefCell<RowBufferCore<Vec<String>>>>
+    row_buffer_core: Rc<RefCell<RowBufferCore<Vec<String>>>>,
 }
 
 fn generate_digest(list: &Vec<String>) -> Digest {
     let mut hasher = Hasher::new(Algorithm::SHA256);
     for ref item in list {
-        if let Err(err) = hasher.write_all(item.as_bytes()){
+        if let Err(err) = hasher.write_all(item.as_bytes()) {
             panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         };
-    };
+    }
     hasher.finish()
 }
 
@@ -45,20 +44,20 @@ impl RowBuffer<Vec<String>> for SnapshotRowBuffer {
                     Ok(snapshot_names) => {
                         let hash = generate_digest(&snapshot_names);
                         core.set_raw_data(snapshot_names, hash);
-                    },
-                    Err(_) => core.set_raw_data(Vec::new(), invalid_digest())
+                    }
+                    Err(_) => core.set_raw_data(Vec::new(), invalid_digest()),
                 }
-            },
-            None => core.set_raw_data(Vec::new(), invalid_digest())
+            }
+            None => core.set_raw_data(Vec::new(), invalid_digest()),
         }
     }
 
-    fn finalise(&self){
+    fn finalise(&self) {
         let mut core = self.row_buffer_core.borrow_mut();
         let mut rows: Vec<Row> = Vec::new();
         for item in core.raw_data.iter() {
             rows.push(vec![item.to_value()]);
-        };
+        }
         core.rows = Rc::new(rows);
         core.set_is_finalised_true();
     }
@@ -78,7 +77,7 @@ impl SnapshotRowBuffer {
 
 struct SnapshotNameListStore {
     list_store: gtk::ListStore,
-    snapshot_row_buffer: Rc<RefCell<SnapshotRowBuffer>>
+    snapshot_row_buffer: Rc<RefCell<SnapshotRowBuffer>>,
 }
 
 impl BufferedUpdate<Vec<String>, gtk::ListStore> for SnapshotNameListStore {
@@ -95,7 +94,7 @@ impl SnapshotNameListStore {
     pub fn new(archive_name: Option<String>) -> SnapshotNameListStore {
         let mut list_store = SnapshotNameListStore {
             list_store: gtk::ListStore::new(&[gtk::Type::String]),
-            snapshot_row_buffer: Rc::new(RefCell::new(SnapshotRowBuffer::new(None)))
+            snapshot_row_buffer: Rc::new(RefCell::new(SnapshotRowBuffer::new(None))),
         };
         list_store.set_archive_name(archive_name);
         list_store
@@ -113,7 +112,7 @@ impl SnapshotNameListStore {
 
 pub struct SnapshotNameTable {
     pub view: gtk::TreeView,
-    list_store: RefCell<SnapshotNameListStore>
+    list_store: RefCell<SnapshotNameListStore>,
 }
 
 impl_widget_wrapper!(view: gtk::TreeView, SnapshotNameTable);
@@ -144,7 +143,7 @@ impl SnapshotNameTable {
         view.append_column(&col);
         view.show_all();
 
-        Rc::new(SnapshotNameTable{view, list_store})
+        Rc::new(SnapshotNameTable { view, list_store })
     }
 
     pub fn set_archive(&self, archive_name: Option<String>) {
@@ -155,7 +154,7 @@ impl SnapshotNameTable {
 pub struct SnapshotSelector {
     vbox: gtk::Box,
     archive_selector: Rc<g_archive::ArchiveSelector>,
-    snapshot_name_table: Rc<SnapshotNameTable>
+    snapshot_name_table: Rc<SnapshotNameTable>,
 }
 
 impl_widget_wrapper!(vbox: gtk::Box, SnapshotSelector);
@@ -165,15 +164,20 @@ impl SnapshotSelector {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let archive_selector = g_archive::ArchiveSelector::new_rc();
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
-        let snapshot_name_table = SnapshotNameTable::new_rc(archive_selector.get_selected_archive());
+        let snapshot_name_table =
+            SnapshotNameTable::new_rc(archive_selector.get_selected_archive());
         vbox.pack_start(&snapshot_name_table.pwo(), false, false, 0);
         vbox.show_all();
-        let snapshot_selector = Rc::new(SnapshotSelector{vbox, archive_selector, snapshot_name_table});
+        let snapshot_selector = Rc::new(SnapshotSelector {
+            vbox,
+            archive_selector,
+            snapshot_name_table,
+        });
 
         let snt = snapshot_selector.snapshot_name_table.clone();
-        snapshot_selector.archive_selector.connect_changed(
-            move |new_archive_name| snt.set_archive(new_archive_name)
-        );
+        snapshot_selector
+            .archive_selector
+            .connect_changed(move |new_archive_name| snt.set_archive(new_archive_name));
 
         snapshot_selector
     }

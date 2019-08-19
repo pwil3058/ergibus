@@ -12,57 +12,64 @@ use pw_pathux;
 
 // local
 use cli;
-use eerror::{EResult};
-use snapshot::{ArchiveOrDirPath, SnapshotPersistentData, ExtractionStats};
+use eerror::EResult;
+use snapshot::{ArchiveOrDirPath, ExtractionStats, SnapshotPersistentData};
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("extract")
-        .about("Extract a copy of the nominated file/directory in the
+        .about(
+            "Extract a copy of the nominated file/directory in the
 nominated archive's most recent (or specified) snapshot
-and place it in the current (or specified) directory.")
-        .arg(cli::arg_back_n()
-            .required(false)
+and place it in the current (or specified) directory.",
         )
-        .arg(cli::arg_archive_name()
-            .required(true)
-            .help("the name of the archive whose file or directory is to be extracted")
+        .arg(cli::arg_back_n().required(false))
+        .arg(
+            cli::arg_archive_name()
+                .required(true)
+                .help("the name of the archive whose file or directory is to be extracted"),
         )
-        .arg(cli::arg_exigency_dir_path()
-            .help(
-"the name of the directory containing the snapshots whose file or
+        .arg(cli::arg_exigency_dir_path().help(
+            "the name of the directory containing the snapshots whose file or
 directory is to be extracted. This option is intended for use in those
 cases where the configuration data has been lost (possibly due to file
 system failure).  Individual snapshot files contain sufficient data for
 extraction of files or directories without the need for the
-configuration files provided their content repositories are also intact."
-            )
+configuration files provided their content repositories are also intact.",
+        ))
+        .group(
+            clap::ArgGroup::with_name("which")
+                .args(&["archive_name", "exigency_dir_path"])
+                .required(true),
         )
-        .group(clap::ArgGroup::with_name("which")
-            .args(&["archive_name", "exigency_dir_path"]).required(true)
+        .arg(cli::arg_file_path().help("the path of the file to be copied."))
+        .arg(cli::arg_dir_path().help("the path of the directory to be copied."))
+        .group(
+            clap::ArgGroup::with_name("what")
+                .args(&["file_path", "dir_path"])
+                .required(false),
         )
-        .arg(cli::arg_file_path()
-            .help("the path of the file to be copied.")
+        .arg(
+            cli::arg_show_stats()
+                .required(false)
+                .multiple(false)
+                .help("show statistics for the extraction process"),
         )
-        .arg(cli::arg_dir_path()
-            .help("the path of the directory to be copied.")
+        .arg(cli::arg_overwrite().required(false))
+        .arg(
+            clap::Arg::with_name("with_name")
+                .long("with_name")
+                .takes_value(true)
+                .value_name("name")
+                .required(false)
+                .help("the name to be given to the copy of the file/directory."),
         )
-        .group(clap::ArgGroup::with_name("what")
-            .args(&["file_path", "dir_path"]).required(false)
-        )
-        .arg(cli::arg_show_stats()
-            .required(false).multiple(false)
-            .help("show statistics for the extraction process")
-        )
-        .arg(cli::arg_overwrite()
-            .required(false)
-        )
-        .arg(clap::Arg::with_name("with_name")
-            .long("with_name").takes_value(true).value_name("name").required(false)
-            .help("the name to be given to the copy of the file/directory.")
-        )
-        .arg(clap::Arg::with_name("into_dir")
-            .long("into_dir").takes_value(true).value_name("path").required(false)
-            .help("the path of the directory into which the file/directory is to be copied.")
+        .arg(
+            clap::Arg::with_name("into_dir")
+                .long("into_dir")
+                .takes_value(true)
+                .value_name("path")
+                .required(false)
+                .help("the path of the directory into which the file/directory is to be copied."),
         )
 }
 
@@ -99,10 +106,19 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
     let show_stats = arg_matches.is_present("show_stats");
     if let Some(text) = arg_matches.value_of("file_path") {
         let file_path = PathBuf::from(&text);
-        match copy_file_to(&archive_or_dir_path, n, &file_path, &into_dir_path, &opt_with_name, overwrite) {
-            Ok(stats) => if show_stats {
-                println!("Transfered {} bytes in {:?}", stats.0, stats.1)
-            },
+        match copy_file_to(
+            &archive_or_dir_path,
+            n,
+            &file_path,
+            &into_dir_path,
+            &opt_with_name,
+            overwrite,
+        ) {
+            Ok(stats) => {
+                if show_stats {
+                    println!("Transfered {} bytes in {:?}", stats.0, stats.1)
+                }
+            }
             Err(err) => {
                 writeln!(stderr(), "Error: {:?}", err).unwrap();
                 std::process::exit(1);
@@ -110,16 +126,25 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches) {
         }
     } else if let Some(text) = arg_matches.value_of("dir_path") {
         let dir_path = PathBuf::from(&text);
-        match copy_dir_to(&archive_or_dir_path, n, &dir_path, &into_dir_path, &opt_with_name, overwrite) {
-            Ok(stats) => if show_stats {
-                println!("Transfered {} files containing {} bytes and {} synm links in {} dirs in {:?}",
+        match copy_dir_to(
+            &archive_or_dir_path,
+            n,
+            &dir_path,
+            &into_dir_path,
+            &opt_with_name,
+            overwrite,
+        ) {
+            Ok(stats) => {
+                if show_stats {
+                    println!("Transfered {} files containing {} bytes and {} synm links in {} dirs in {:?}",
                     stats.0.file_count,
                     stats.0.bytes_count,
                     (stats.0.dir_sym_link_count + stats.0.file_sym_link_count),
                     stats.0.dir_count,
                     stats.1
                 )
-            },
+                }
+            }
             Err(err) => {
                 writeln!(stderr(), "Error: {:?}", err).unwrap();
                 std::process::exit(1);
@@ -136,7 +161,7 @@ fn copy_file_to(
     file_path: &Path,
     into_dir_path: &Path,
     opt_with_name: &Option<PathBuf>,
-    overwrite: bool
+    overwrite: bool,
 ) -> EResult<(u64, time::Duration)> {
     let started_at = time::SystemTime::now();
 
@@ -154,12 +179,17 @@ fn copy_file_to(
         pw_pathux::absolute_path_buf(file_path)
     };
     let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-    let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite, &mut Some(&mut stderr()))?;
+    let bytes = spd.copy_file_to(
+        &abs_file_path,
+        &target_path,
+        overwrite,
+        &mut Some(&mut stderr()),
+    )?;
 
     let finished_at = time::SystemTime::now();
     let duration = match finished_at.duration_since(started_at) {
         Ok(duration) => duration,
-        Err(_) => time::Duration::new(0, 0)
+        Err(_) => time::Duration::new(0, 0),
     };
     Ok((bytes, duration))
 }
@@ -170,7 +200,7 @@ fn copy_dir_to(
     dir_path: &Path,
     into_dir_path: &Path,
     opt_with_name: &Option<PathBuf>,
-    overwrite: bool
+    overwrite: bool,
 ) -> EResult<(ExtractionStats, time::Duration)> {
     let started_at = time::SystemTime::now();
 
@@ -188,12 +218,17 @@ fn copy_dir_to(
         pw_pathux::absolute_path_buf(dir_path)
     };
     let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-    let stats = spd.copy_dir_to(&abs_dir_path, &target_path, overwrite, &mut Some(&mut stderr()))?;
+    let stats = spd.copy_dir_to(
+        &abs_dir_path,
+        &target_path,
+        overwrite,
+        &mut Some(&mut stderr()),
+    )?;
 
     let finished_at = time::SystemTime::now();
     let duration = match finished_at.duration_since(started_at) {
         Ok(duration) => duration,
-        Err(_) => time::Duration::new(0, 0)
+        Err(_) => time::Duration::new(0, 0),
     };
     Ok((stats, duration))
 }

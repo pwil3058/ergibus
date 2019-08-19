@@ -1,8 +1,8 @@
-use std;
 use clap;
+use std;
 
-use cli;
 use archive;
+use cli;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("new_archive").visible_alias("newa")
@@ -39,37 +39,53 @@ pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
 }
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches) {
-    let archive_name = arg_matches.value_of("archive_name").ok_or(0).unwrap_or_else(
-        |_| panic!("{:?}: line {:?}", file!(), line!())
-    );
-    let repo_name = arg_matches.value_of("repo_name").ok_or(0).unwrap_or_else(
-        |_| panic!("{:?}: line {:?}", file!(), line!())
-    );
-    let location = arg_matches.value_of("location").ok_or(0).unwrap_or_else(
-        |_| panic!("{:?}: line {:?}", file!(), line!())
-    );
+    let archive_name = arg_matches
+        .value_of("archive_name")
+        .ok_or(0)
+        .unwrap_or_else(|_| panic!("{:?}: line {:?}", file!(), line!()));
+    let repo_name = arg_matches
+        .value_of("repo_name")
+        .ok_or(0)
+        .unwrap_or_else(|_| panic!("{:?}: line {:?}", file!(), line!()));
+    let location = arg_matches
+        .value_of("location")
+        .ok_or(0)
+        .unwrap_or_else(|_| panic!("{:?}: line {:?}", file!(), line!()));
     let mut inclusions: Vec<String> = Vec::new();
     match arg_matches.values_of("inclusions") {
-        Some(inclusion_values) => for inclusion in inclusion_values {
-            inclusions.push(inclusion.to_string());
-        },
-        None => ()
+        Some(inclusion_values) => {
+            for inclusion in inclusion_values {
+                inclusions.push(inclusion.to_string());
+            }
+        }
+        None => (),
     }
     let mut file_exclusions: Vec<String> = Vec::new();
     match arg_matches.values_of("file_exclusions") {
-        Some(exclusion_values) => for exclusion in exclusion_values {
-            file_exclusions.push(exclusion.to_string());
-        },
-        None => ()
+        Some(exclusion_values) => {
+            for exclusion in exclusion_values {
+                file_exclusions.push(exclusion.to_string());
+            }
+        }
+        None => (),
     }
     let mut dir_exclusions: Vec<String> = Vec::new();
     match arg_matches.values_of("dir_exclusions") {
-        Some(exclusion_values) => for exclusion in exclusion_values {
-            dir_exclusions.push(exclusion.to_string());
-        },
-        None => ()
+        Some(exclusion_values) => {
+            for exclusion in exclusion_values {
+                dir_exclusions.push(exclusion.to_string());
+            }
+        }
+        None => (),
     }
-    if let Err(err) = archive::create_new_archive(archive_name, repo_name, location, inclusions, dir_exclusions, file_exclusions) {
+    if let Err(err) = archive::create_new_archive(
+        archive_name,
+        repo_name,
+        location,
+        inclusions,
+        dir_exclusions,
+        file_exclusions,
+    ) {
         println!("{:?}", err);
         std::process::exit(1);
     };

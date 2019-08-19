@@ -20,27 +20,27 @@ impl_widget_wrapper!(hbox: gtk::Box, ArchiveSelector);
 
 impl ArchiveSelector {
     pub fn new_rc() -> Rc<ArchiveSelector> {
-        let archive_selector = Rc::new(ArchiveSelector{
+        let archive_selector = Rc::new(ArchiveSelector {
             hbox: gtk::Box::new(gtk::Orientation::Horizontal, 0),
             combo: gtk::ComboBoxText::new(),
             changed_callbacks: RefCell::new(Vec::new()),
         });
-        let label = gtk::Label::new("Archive:"); // I18N needed here
+        let label = gtk::Label::new(Some("Archive:")); // I18N needed here
         archive_selector.hbox.pack_start(&label, false, false, 0);
-        archive_selector.hbox.pack_start(&archive_selector.combo, true, true, 5);
+        archive_selector
+            .hbox
+            .pack_start(&archive_selector.combo, true, true, 5);
 
         let archive_selector_c = archive_selector.clone();
-        archive_selector.combo.connect_changed(
-            move |combo| {
-                for callback in archive_selector_c.changed_callbacks.borrow().iter() {
-                    if let Some(text) = combo.get_active_text() {
-                        callback(Some(String::from(text)))
-                    } else {
-                        callback(None)
-                    }
+        archive_selector.combo.connect_changed(move |combo| {
+            for callback in archive_selector_c.changed_callbacks.borrow().iter() {
+                if let Some(text) = combo.get_active_text() {
+                    callback(Some(String::from(text)))
+                } else {
+                    callback(None)
                 }
             }
-        );
+        });
 
         archive_selector.update_available_archives();
 
@@ -50,7 +50,7 @@ impl ArchiveSelector {
     pub fn get_selected_archive(&self) -> Option<String> {
         match self.combo.get_active_text() {
             Some(text) => Some(String::from(text)),
-            None => None
+            None => None,
         }
     }
 

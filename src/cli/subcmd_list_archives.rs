@@ -6,7 +6,8 @@ use clap;
 use archive;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
-    clap::SubCommand::with_name("list_archives").visible_alias("la")
+    clap::SubCommand::with_name("list_archives")
+        .visible_alias("la")
         .about("List all defined snapshot archives")
 }
 

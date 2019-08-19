@@ -1,5 +1,5 @@
-extern crate gtk;
 extern crate gio;
+extern crate gtk;
 
 extern crate pw_gix;
 
@@ -27,16 +27,14 @@ fn activate(app: &gtk::Application) {
     } else {
         window.set_default_size(200, 200);
     };
-    window.connect_configure_event(
-        |_, event| {
-            recollections::remember("main_window:geometry", &format_geometry(event));
-            false
-        }
-    );
+    window.connect_configure_event(|_, event| {
+        recollections::remember("main_window:geometry", &format_geometry(event));
+        false
+    });
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let snapshot_selector = g_snapshot::SnapshotSelector::new_rc();
     vbox.pack_start(&snapshot_selector.pwo(), false, false, 0);
-    let label = gtk::Label::new("GUI is under construction");
+    let label = gtk::Label::new(Some("GUI is under construction"));
     vbox.pack_start(&label, true, true, 0);
     window.add(&vbox);
     window.show_all();
@@ -45,9 +43,8 @@ fn activate(app: &gtk::Application) {
 fn main() {
     recollections::init(&config::get_gui_config_dir_path().join("recollections"));
     let flags = gio::ApplicationFlags::empty();
-    let app = gtk::Application::new("gergibus.pw.nest", flags).unwrap_or_else(
-        |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-    );
+    let app = gtk::Application::new(None, flags)
+        .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
     app.connect_activate(activate);
     app.run(&[]);
 }

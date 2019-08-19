@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions, create_dir_all};
-use std::io::prelude::*;
+use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io;
+use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -34,7 +34,7 @@ pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
 
 pub fn create_new_repo(name: &str, location: &str, hash_algortithm_str: &str) -> EResult<()> {
     if content_repo_exists(name) {
-        return Err(EError::RepoExists(name.to_string()))
+        return Err(EError::RepoExists(name.to_string()));
     }
 
     let hash_algorithm = HashAlgorithm::from_str(hash_algortithm_str)?;
@@ -43,15 +43,17 @@ pub fn create_new_repo(name: &str, location: &str, hash_algortithm_str: &str) ->
     repo_dir_path.push("ergibus");
     repo_dir_path.push("repos");
     repo_dir_path.push(name);
-    fs::create_dir_all(&repo_dir_path).map_err(|err| EError::RepoCreateError(err, repo_dir_path.clone()))?;
+    fs::create_dir_all(&repo_dir_path)
+        .map_err(|err| EError::RepoCreateError(err, repo_dir_path.clone()))?;
 
     let spec = RepoSpec {
         base_dir_path: repo_dir_path,
-        hash_algorithm: hash_algorithm
+        hash_algorithm: hash_algorithm,
     };
 
     let key = ContentMgmtKey::from(&spec);
-    let mut file = File::create(&key.ref_counter_path).map_err(|err| EError::RefCounterWriteIOError(err))?;
+    let mut file =
+        File::create(&key.ref_counter_path).map_err(|err| EError::RefCounterWriteIOError(err))?;
     write_ref_count_hash_map(&mut file, &RefCountHashMap::new())?;
 
     write_repo_spec(name, &spec)?;
@@ -80,7 +82,7 @@ impl FromStr for HashAlgorithm {
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct RepoSpec {
     base_dir_path: PathBuf,
-    hash_algorithm: HashAlgorithm
+    hash_algorithm: HashAlgorithm,
 }
 
 fn get_repo_spec_file_path(repo_name: &str) -> PathBuf {
@@ -89,24 +91,31 @@ fn get_repo_spec_file_path(repo_name: &str) -> PathBuf {
 
 fn read_repo_spec(repo_name: &str) -> EResult<RepoSpec> {
     let spec_file_path = get_repo_spec_file_path(repo_name);
-    let spec_file = File::open(&spec_file_path).map_err(|err| EError::RepoReadError(err, spec_file_path.clone()))?;
-    let spec: RepoSpec = serde_yaml::from_reader(&spec_file).map_err(|err| EError::RepoYamlReadError(err, repo_name.to_string()))?;
+    let spec_file = File::open(&spec_file_path)
+        .map_err(|err| EError::RepoReadError(err, spec_file_path.clone()))?;
+    let spec: RepoSpec = serde_yaml::from_reader(&spec_file)
+        .map_err(|err| EError::RepoYamlReadError(err, repo_name.to_string()))?;
     Ok(spec)
 }
 
 fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> EResult<()> {
     let spec_file_path = get_repo_spec_file_path(repo_name);
     if spec_file_path.exists() {
-        return Err(EError::RepoExists(repo_name.to_string()))
+        return Err(EError::RepoExists(repo_name.to_string()));
     }
     match spec_file_path.parent() {
-        Some(config_dir_path) => if !config_dir_path.exists() {
-            fs::create_dir_all(&config_dir_path).map_err(|err| EError::RepoWriteError(err, config_dir_path.to_path_buf()))?;
-        },
+        Some(config_dir_path) => {
+            if !config_dir_path.exists() {
+                fs::create_dir_all(&config_dir_path)
+                    .map_err(|err| EError::RepoWriteError(err, config_dir_path.to_path_buf()))?;
+            }
+        }
         None => (),
     }
-    let spec_file = File::create(&spec_file_path).map_err(|err| EError::RepoWriteError(err, spec_file_path.clone()))?;
-    serde_yaml::to_writer(&spec_file, repo_spec).map_err(|err| EError::RepoYamlWriteError(err, repo_name.to_string()))?;
+    let spec_file = File::create(&spec_file_path)
+        .map_err(|err| EError::RepoWriteError(err, spec_file_path.clone()))?;
+    serde_yaml::to_writer(&spec_file, repo_spec)
+        .map_err(|err| EError::RepoYamlWriteError(err, repo_name.to_string()))?;
     Ok(())
 }
 
@@ -139,13 +148,16 @@ impl ContentMgmtKey {
 
     fn locked_ref_count_file(&self, mutable: bool) -> EResult<File> {
         let file = OpenOptions::new()
-                    .read(true)
-                    .write(mutable)
-                    .open(&self.ref_counter_path).map_err(|err| EError::RefCounterReadIOError(err))?;
+            .read(true)
+            .write(mutable)
+            .open(&self.ref_counter_path)
+            .map_err(|err| EError::RefCounterReadIOError(err))?;
         if mutable {
-            file.lock_exclusive().map_err(|err| EError::RefCounterReadIOError(err))?;
+            file.lock_exclusive()
+                .map_err(|err| EError::RefCounterReadIOError(err))?;
         } else {
-            file.lock_shared().map_err(|err| EError::RefCounterReadIOError(err))?;
+            file.lock_shared()
+                .map_err(|err| EError::RefCounterReadIOError(err))?;
         }
         Ok(file)
     }
@@ -153,10 +165,10 @@ impl ContentMgmtKey {
     pub fn open_content_manager(&self, mutable: bool) -> EResult<ContentManager> {
         let mut hash_map_file = self.locked_ref_count_file(mutable)?;
         let ref_counter = ProtectedRefCounter::from_file(&mut hash_map_file, mutable)?;
-        Ok(ContentManager{
+        Ok(ContentManager {
             content_mgmt_key: self.clone(),
             ref_counter: ref_counter,
-            hash_map_file: hash_map_file
+            hash_map_file: hash_map_file,
         })
     }
 
@@ -190,7 +202,7 @@ fn file_digest(hash_algorithm: HashAlgorithm, file: &mut File) -> Result<String,
 pub struct RefCountData {
     ref_count: u64,
     content_size: u64,
-    stored_size: u64
+    stored_size: u64,
 }
 
 type RefCountHashMap = HashMap<String, RefCountData>;
@@ -198,31 +210,40 @@ type RefCountHashMap = HashMap<String, RefCountData>;
 fn read_ref_count_hash_map(file: &mut File) -> EResult<RefCountHashMap> {
     let mut rchp_str = String::new();
     let mut snappy_rdr = snap::Reader::new(file);
-    snappy_rdr.read_to_string(&mut rchp_str).map_err(|err| EError::RefCounterReadIOError(err))?;
-    let rchp = serde_json::from_str::<RefCountHashMap>(&rchp_str).map_err(|err| EError::RefCounterReadJsonError(err))?;
+    snappy_rdr
+        .read_to_string(&mut rchp_str)
+        .map_err(|err| EError::RefCounterReadIOError(err))?;
+    let rchp = serde_json::from_str::<RefCountHashMap>(&rchp_str)
+        .map_err(|err| EError::RefCounterReadJsonError(err))?;
     Ok(rchp)
 }
 
 fn write_ref_count_hash_map(file: &mut File, hash_map: &RefCountHashMap) -> EResult<()> {
-    let json_text = serde_json::to_string(hash_map).map_err(|err| EError::RefCounterSerializeError(err))?;
-    file.seek(io::SeekFrom::Start(0)).map_err(|err| EError::RefCounterWriteIOError(err))?;
-    file.set_len(0).map_err(|err| EError::RefCounterWriteIOError(err))?;
+    let json_text =
+        serde_json::to_string(hash_map).map_err(|err| EError::RefCounterSerializeError(err))?;
+    file.seek(io::SeekFrom::Start(0))
+        .map_err(|err| EError::RefCounterWriteIOError(err))?;
+    file.set_len(0)
+        .map_err(|err| EError::RefCounterWriteIOError(err))?;
     let mut snappy_wtr = snap::Writer::new(file);
-    snappy_wtr.write_all(json_text.as_bytes()).map_err(|err| EError::RefCounterWriteIOError(err))?;
+    snappy_wtr
+        .write_all(json_text.as_bytes())
+        .map_err(|err| EError::RefCounterWriteIOError(err))?;
     Ok(())
 }
 
 #[derive(Debug)]
 enum ProtectedRefCounter {
     Immutable(RefCountHashMap),
-    Mutable(RefCell<RefCountHashMap>)
+    Mutable(RefCell<RefCountHashMap>),
 }
 
-impl ProtectedRefCounter { // GENERAL
+impl ProtectedRefCounter {
+    // GENERAL
     fn is_mutable(&self) -> bool {
         match *self {
             ProtectedRefCounter::Immutable(_) => false,
-            ProtectedRefCounter::Mutable(_) => true
+            ProtectedRefCounter::Mutable(_) => true,
         }
     }
 
@@ -236,10 +257,13 @@ impl ProtectedRefCounter { // GENERAL
     }
 }
 
-impl ProtectedRefCounter { // MUTABLE
+impl ProtectedRefCounter {
+    // MUTABLE
     fn write_to_file(&self, file: &mut File) -> EResult<()> {
         match *self {
-            ProtectedRefCounter::Immutable(_) => panic!("{:?}: line {:?}: immutability breach", file!(), line!()),
+            ProtectedRefCounter::Immutable(_) => {
+                panic!("{:?}: line {:?}: immutability breach", file!(), line!())
+            }
             ProtectedRefCounter::Mutable(ref rc) => {
                 write_ref_count_hash_map(file, &rc.borrow())?;
             }
@@ -247,41 +271,41 @@ impl ProtectedRefCounter { // MUTABLE
         Ok(())
     }
 
-
     fn incr_ref_count_for_token(&self, token: &str) -> EResult<RefCountData> {
         match *self {
-            ProtectedRefCounter::Immutable(_) => panic!("{:?}: line {:?}: immutability breach", file!(), line!()),
-            ProtectedRefCounter::Mutable(ref rc) => {
-                match rc.borrow_mut().get_mut(token) {
-                    Some(ref_count_data) => {
-                        ref_count_data.ref_count += 1;
-                        Ok(*ref_count_data)
-                    },
-                    None => Err(EError::UnknownContentKey(token.to_string()))
-                }
-
+            ProtectedRefCounter::Immutable(_) => {
+                panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
+            ProtectedRefCounter::Mutable(ref rc) => match rc.borrow_mut().get_mut(token) {
+                Some(ref_count_data) => {
+                    ref_count_data.ref_count += 1;
+                    Ok(*ref_count_data)
+                }
+                None => Err(EError::UnknownContentKey(token.to_string())),
+            },
         }
     }
 
     fn decr_ref_count_for_token(&self, token: &str) -> EResult<RefCountData> {
         match *self {
-            ProtectedRefCounter::Immutable(_) => panic!("{:?}: line {:?}: immutability breach", file!(), line!()),
-            ProtectedRefCounter::Mutable(ref rc) => {
-                match rc.borrow_mut().get_mut(token) {
-                    Some(ref_count_data) => {
-                        ref_count_data.ref_count -= 1;
-                        Ok(*ref_count_data)
-                    },
-                    None => Err(EError::UnknownContentKey(token.to_string()))
-                }
+            ProtectedRefCounter::Immutable(_) => {
+                panic!("{:?}: line {:?}: immutability breach", file!(), line!())
             }
+            ProtectedRefCounter::Mutable(ref rc) => match rc.borrow_mut().get_mut(token) {
+                Some(ref_count_data) => {
+                    ref_count_data.ref_count -= 1;
+                    Ok(*ref_count_data)
+                }
+                None => Err(EError::UnknownContentKey(token.to_string())),
+            },
         }
     }
 
     fn insert(&self, token: &str, rcd: RefCountData) {
         match *self {
-            ProtectedRefCounter::Immutable(_) => panic!("{:?}: line {:?}: immutability breach", file!(), line!()),
+            ProtectedRefCounter::Immutable(_) => {
+                panic!("{:?}: line {:?}: immutability breach", file!(), line!())
+            }
             ProtectedRefCounter::Mutable(ref rc) => {
                 rc.borrow_mut().insert(token.to_string(), rcd);
             }
@@ -289,24 +313,17 @@ impl ProtectedRefCounter { // MUTABLE
     }
 }
 
-impl ProtectedRefCounter { // IMMUTABLE
+impl ProtectedRefCounter {
+    // IMMUTABLE
     fn get_ref_count_data_for_token(&self, token: &str) -> EResult<RefCountData> {
         match *self {
-            ProtectedRefCounter::Mutable(ref rc) => {
-                match rc.borrow().get(token) {
-                    Some(ref_count_data) => {
-                        Ok(*ref_count_data)
-                    },
-                    None => Err(EError::UnknownContentKey(token.to_string()))
-                }
+            ProtectedRefCounter::Mutable(ref rc) => match rc.borrow().get(token) {
+                Some(ref_count_data) => Ok(*ref_count_data),
+                None => Err(EError::UnknownContentKey(token.to_string())),
             },
-            ProtectedRefCounter::Immutable(ref hm) => {
-                match hm.get(token) {
-                    Some(ref_count_data) => {
-                        Ok(*ref_count_data)
-                    },
-                    None => Err(EError::UnknownContentKey(token.to_string()))
-                }
+            ProtectedRefCounter::Immutable(ref hm) => match hm.get(token) {
+                Some(ref_count_data) => Ok(*ref_count_data),
+                None => Err(EError::UnknownContentKey(token.to_string())),
             },
         }
     }
@@ -316,7 +333,7 @@ impl ProtectedRefCounter { // IMMUTABLE
 pub struct ContentManager {
     content_mgmt_key: ContentMgmtKey,
     ref_counter: ProtectedRefCounter,
-    hash_map_file: File
+    hash_map_file: File,
 }
 
 impl Drop for ContentManager {
@@ -335,29 +352,38 @@ impl Drop for ContentManager {
 impl ContentManager {
     pub fn store_file_contents(&self, abs_file_path: &Path) -> EResult<(String, u64, u64)> {
         let mut file = File::open(abs_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
-        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
+        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file)
+            .map_err(|err| EError::ContentStoreIOError(err))?;
         match self.ref_counter.incr_ref_count_for_token(&digest) {
             Ok(rcd) => Ok((digest, rcd.stored_size, 0)),
             Err(_) => {
                 let content_size = match file.metadata() {
                     Ok(metadata) => metadata.len(),
-                    Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
+                    Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err),
                 };
                 let content_file_path = self.content_mgmt_key.token_content_file_path(&digest);
-                let content_dir_path = content_file_path.parent().expect("Failed to extract content directory path");
+                let content_dir_path = content_file_path
+                    .parent()
+                    .expect("Failed to extract content directory path");
                 if !content_dir_path.exists() {
-                    create_dir_all(content_dir_path).map_err(|err| EError::ContentStoreIOError(err))?;
+                    create_dir_all(content_dir_path)
+                        .map_err(|err| EError::ContentStoreIOError(err))?;
                 }
-                file.seek(io::SeekFrom::Start(0)).map_err(|err| EError::ContentStoreIOError(err))?;
-                let content_file = File::create(&content_file_path).map_err(|err| EError::ContentStoreIOError(err))?;
+                file.seek(io::SeekFrom::Start(0))
+                    .map_err(|err| EError::ContentStoreIOError(err))?;
+                let content_file = File::create(&content_file_path)
+                    .map_err(|err| EError::ContentStoreIOError(err))?;
                 let mut compressed_content_file = snap::Writer::new(content_file);
-                io::copy(&mut file, &mut compressed_content_file).map_err(|err| EError::ContentStoreIOError(err))?;
-                let metadata = content_file_path.metadata().map_err(|err| EError::ContentStoreIOError(err))?;
+                io::copy(&mut file, &mut compressed_content_file)
+                    .map_err(|err| EError::ContentStoreIOError(err))?;
+                let metadata = content_file_path
+                    .metadata()
+                    .map_err(|err| EError::ContentStoreIOError(err))?;
                 let stored_size = metadata.len();
-                let rcd = RefCountData{
+                let rcd = RefCountData {
                     content_size: content_size,
                     stored_size: stored_size,
-                    ref_count: 1
+                    ref_count: 1,
                 };
                 self.ref_counter.insert(&digest, rcd);
                 Ok((digest, stored_size, stored_size))
@@ -365,18 +391,30 @@ impl ContentManager {
         }
     }
 
-    pub fn copy_contents_for_token<W>(&self, content_token: &str, target_path: &Path, attributes: &Attributes, op_errf: &mut Option<&mut W>) -> EResult<u64>
-        where W: std::io::Write
+    pub fn copy_contents_for_token<W>(
+        &self,
+        content_token: &str,
+        target_path: &Path,
+        attributes: &Attributes,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
     {
         let content_file_path = self.content_mgmt_key.token_content_file_path(content_token);
         if !content_file_path.exists() {
             return Err(EError::UnknownContentKey(content_token.to_string()));
         }
-        let mut target_file = File::create(target_path).map_err(|err| EError::ContentCopyIOError(err))?;
-        let content_file = File::open(content_file_path).map_err(|err| EError::ContentCopyIOError(err))?;
+        let mut target_file =
+            File::create(target_path).map_err(|err| EError::ContentCopyIOError(err))?;
+        let content_file =
+            File::open(content_file_path).map_err(|err| EError::ContentCopyIOError(err))?;
         let mut compressed_content_file = snap::Reader::new(content_file);
-        let n = io::copy(&mut compressed_content_file, &mut target_file).map_err(|err| EError::ContentStoreIOError(err))?;
-        attributes.set_file_attributes(target_path, op_errf).map_err(|err| EError::ContentCopyIOError(err))?;
+        let n = io::copy(&mut compressed_content_file, &mut target_file)
+            .map_err(|err| EError::ContentStoreIOError(err))?;
+        attributes
+            .set_file_attributes(target_path, op_errf)
+            .map_err(|err| EError::ContentCopyIOError(err))?;
         Ok(n)
     }
 
@@ -386,9 +424,12 @@ impl ContentManager {
             return Err(EError::UnknownContentKey(content_token.to_string()));
         }
         let mut contents = Vec::<u8>::new();
-        let content_file = File::open(content_file_path).map_err(|err| EError::ContentReadIOError(err))?;
+        let content_file =
+            File::open(content_file_path).map_err(|err| EError::ContentReadIOError(err))?;
         let mut compressed_content_file = snap::Reader::new(content_file);
-        compressed_content_file.read_to_end(&mut contents).map_err(|err| EError::ContentReadIOError(err))?;
+        compressed_content_file
+            .read_to_end(&mut contents)
+            .map_err(|err| EError::ContentReadIOError(err))?;
         Ok(contents)
     }
 
@@ -403,39 +444,52 @@ impl ContentManager {
 
     pub fn check_content_token(&self, file_path: &Path, token: &str) -> EResult<bool> {
         let mut file = File::open(file_path).map_err(|err| EError::ContentStoreIOError(err))?;
-        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file).map_err(|err| EError::ContentStoreIOError(err))?;
+        let digest = file_digest(self.content_mgmt_key.hash_algortithm, &mut file)
+            .map_err(|err| EError::ContentStoreIOError(err))?;
         Ok(digest == token)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::env;
     use tempdir::TempDir;
-    use super::*;
 
     #[test]
     fn repo_works() {
-        let file = OpenOptions::new().write(true).open("./test_lock_file").unwrap_or_else (
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
+        let file = OpenOptions::new()
+            .write(true)
+            .open("./test_lock_file")
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         if let Err(err) = file.lock_exclusive() {
             panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
         };
-        let temp_dir = TempDir::new("REPO_TEST").unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
+        let temp_dir = TempDir::new("REPO_TEST")
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         env::set_var("ERGIBUS_CONFIG_DIR", temp_dir.path().join("config"));
         let data_dir = temp_dir.path().join("data");
         let data_dir_str = match data_dir.to_str() {
             Some(data_dir_str) => data_dir_str,
-            None => panic!("{:?}: line {:?}", file!(), line!())
+            None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         if let Err(err) = create_new_repo("test_repo", data_dir_str, "Sha1") {
             panic!("new repo: {:?}", err);
         }
-        assert!(temp_dir.path().join("config").join("repos").join("test_repo").exists());
-        assert!(temp_dir.path().join("data").join("ergibus").join("repos").join("test_repo").join("ref_count").exists());
+        assert!(temp_dir
+            .path()
+            .join("config")
+            .join("repos")
+            .join("test_repo")
+            .exists());
+        assert!(temp_dir
+            .path()
+            .join("data")
+            .join("ergibus")
+            .join("repos")
+            .join("test_repo")
+            .join("ref_count")
+            .exists());
         let key = match get_content_mgmt_key("test_repo") {
             Ok(cmk) => cmk,
             Err(err) => panic!("get key: {:?}", err),
@@ -443,7 +497,14 @@ mod tests {
         {
             // check token file path works as expected
             let token_file_path = key.token_content_file_path("AAGH");
-            let expected_tfp = temp_dir.path().join("data").join("ergibus").join("repos").join("test_repo").join("AAG").join("H");
+            let expected_tfp = temp_dir
+                .path()
+                .join("data")
+                .join("ergibus")
+                .join("repos")
+                .join("test_repo")
+                .join("AAG")
+                .join("H");
             assert!(token_file_path == expected_tfp);
         }
         {
@@ -458,9 +519,9 @@ mod tests {
                 };
                 match cm.get_ref_count_for_token(&token) {
                     Ok(count) => assert!(count == i),
-                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err)
+                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err),
                 };
-            };
+            }
             for i in 1..5 {
                 let token = match cm.store_file_contents(&PathBuf::from("./src/snapshot.rs")) {
                     Ok((tkn, _, _)) => tkn,
@@ -468,9 +529,9 @@ mod tests {
                 };
                 match cm.get_ref_count_for_token(&token) {
                     Ok(count) => assert!(count == i),
-                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err)
+                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err),
                 };
-            };
+            }
         }
         {
             if let Err(err) = key.open_content_manager(true) {

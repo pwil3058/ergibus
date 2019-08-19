@@ -37,9 +37,9 @@ tempdir = "0.3"
 users = "0.5.0"
 walkdir = "1.0.7"
 
-gdk = "0.10.0"
-gio = "0.6.0"
-gtk = "0.6.0"
+gdk = "0.11.0"
+gio = "0.7.0"
+gtk = "0.7.0"
 
 [features]
 default = ["gtk/v3_18"]

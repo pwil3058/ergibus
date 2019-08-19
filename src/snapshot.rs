@@ -1,12 +1,12 @@
 // TODO: fix use of is_dir() and is_file() throughout this file
 
 // Standard Library access
-use std::collections::{HashMap, hash_map};
-use std::ffi::{OsString};
-use std::fs::{self, File, DirEntry};
-use std::io::prelude::*;
+use std::collections::{hash_map, HashMap};
+use std::ffi::OsString;
+use std::fs::{self, DirEntry, File};
 use std::io;
-use std::ops::{AddAssign};
+use std::io::prelude::*;
+use std::ops::AddAssign;
 use std::path::{Path, PathBuf};
 use std::time;
 
@@ -18,12 +18,12 @@ use snap;
 use walkdir::{WalkDir, WalkDirIterator};
 
 // PW crate access
-use pw_pathux::{first_subpath_as_os_string};
+use pw_pathux::first_subpath_as_os_string;
 
 // local modules access
-use archive::{self, Exclusions, ArchiveData, get_archive_data};
+use archive::{self, get_archive_data, ArchiveData, Exclusions};
 use attributes::{Attributes, AttributesIfce};
-use content::{ContentMgmtKey, ContentManager};
+use content::{ContentManager, ContentMgmtKey};
 use eerror::{EError, EResult};
 use path_buf_ext::RealPathBufType;
 use report::{ignore_report_or_crash, report_broken_link_or_crash};
@@ -53,9 +53,9 @@ struct SnapshotDir {
 }
 
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
-    let parent_dir_path = path.parent().unwrap_or_else(
-        || panic!("{:?}: line {:?}: can't find parent directory")
-    );
+    let parent_dir_path = path
+        .parent()
+        .unwrap_or_else(|| panic!("{:?}: line {:?}: can't find parent directory"));
     let entries = fs::read_dir(&parent_dir_path)?;
     for entry_or_err in entries {
         if let Ok(entry) = entry_or_err {
@@ -63,11 +63,15 @@ fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
                 return Ok(entry);
             }
         }
-    };
-    Err(io::Error::new(io::ErrorKind::NotFound, format!("{:?}: not found", path)))
+    }
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("{:?}: not found", path),
+    ))
 }
 
-impl SnapshotDir { // Creation/destruction methods
+impl SnapshotDir {
+    // Creation/destruction methods
     fn new(opt_rootdir: Option<&Path>) -> io::Result<SnapshotDir> {
         let rootdir = match opt_rootdir {
             Some(p) => p,
@@ -108,7 +112,7 @@ impl SnapshotDir { // Creation/destruction methods
             Ok(rel_path) => {
                 let first_name = match first_subpath_as_os_string(rel_path) {
                     Some(fname) => fname,
-                    None => return Ok(self)
+                    None => return Ok(self),
                 };
                 let first_name_key = String::from(first_name.to_string_lossy());
                 if !self.subdirs.contains_key(&first_name_key) {
@@ -120,14 +124,18 @@ impl SnapshotDir { // Creation/destruction methods
                 }
                 match self.subdirs.get_mut(&first_name_key) {
                     Some(subdir) => subdir.find_or_add_subdir(abs_subdir_path),
-                    None => panic!("{:?}: line {:?}", file!(), line!())
+                    None => panic!("{:?}: line {:?}", file!(), line!()),
                 }
-            },
+            }
             Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err),
         }
     }
 
-    fn populate(&mut self, exclusions: &Exclusions, content_mgr: &ContentManager) -> (FileStats, SymLinkStats, u64) {
+    fn populate(
+        &mut self,
+        exclusions: &Exclusions,
+        content_mgr: &ContentManager,
+    ) -> (FileStats, SymLinkStats, u64) {
         let mut file_stats = FileStats::default();
         let mut sym_link_stats = SymLinkStats::default();
         let mut delta_repo_size: u64 = 0;
@@ -135,98 +143,137 @@ impl SnapshotDir { // Creation/destruction methods
             Ok(entries) => {
                 for entry_or_err in entries {
                     match entry_or_err {
-                        Ok(entry) => {
-                            match entry.file_type() {
-                                Ok(e_type) => {
-                                    if e_type.is_file() {
-                                        if exclusions.is_excluded_file(&entry.path()) {
-                                            continue
-                                        }
-                                        let data = self.add_file(&entry, &content_mgr);
-                                        file_stats += data.0;
-                                        delta_repo_size += data.1;
-                                    } else if e_type.is_symlink() {
-                                        if exclusions.is_excluded_file(&entry.path()) {
-                                            continue
-                                        }
-                                        sym_link_stats += self.add_symlink(&entry);
+                        Ok(entry) => match entry.file_type() {
+                            Ok(e_type) => {
+                                if e_type.is_file() {
+                                    if exclusions.is_excluded_file(&entry.path()) {
+                                        continue;
                                     }
-                                },
-                                Err(err) => ignore_report_or_crash(&err, &self.path)
+                                    let data = self.add_file(&entry, &content_mgr);
+                                    file_stats += data.0;
+                                    delta_repo_size += data.1;
+                                } else if e_type.is_symlink() {
+                                    if exclusions.is_excluded_file(&entry.path()) {
+                                        continue;
+                                    }
+                                    sym_link_stats += self.add_symlink(&entry);
+                                }
                             }
+                            Err(err) => ignore_report_or_crash(&err, &self.path),
                         },
-                        Err(err) => ignore_report_or_crash(&err, &self.path)
+                        Err(err) => ignore_report_or_crash(&err, &self.path),
                     }
                 }
-            },
-            Err(err) => ignore_report_or_crash(&err, &self.path)
+            }
+            Err(err) => ignore_report_or_crash(&err, &self.path),
         };
         (file_stats, sym_link_stats, delta_repo_size)
     }
 
-    fn add_file(&mut self, dir_entry: &fs::DirEntry, content_mgr: &ContentManager) -> (FileStats, u64) {
+    fn add_file(
+        &mut self,
+        dir_entry: &fs::DirEntry,
+        content_mgr: &ContentManager,
+    ) -> (FileStats, u64) {
         let file_name = dir_entry.file_name().as_os_str().to_os_string();
         let file_name_key = String::from(file_name.to_string_lossy());
         if self.files.contains_key(&file_name_key) {
-            return (FileStats::default(), 0)
+            return (FileStats::default(), 0);
         }
         let attributes: Attributes = match dir_entry.metadata() {
             Ok(metadata) => metadata.into(),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return (FileStats::default(), 0)
+                return (FileStats::default(), 0);
             }
         };
-        let (content_token, stored_size, delta_repo_size) = match content_mgr.store_file_contents(&dir_entry.path()) {
-            Ok((ct, ssz, drsz)) => (ct, ssz, drsz),
-            Err(err) => {
-                match err {
+        let (content_token, stored_size, delta_repo_size) =
+            match content_mgr.store_file_contents(&dir_entry.path()) {
+                Ok((ct, ssz, drsz)) => (ct, ssz, drsz),
+                Err(err) => match err {
                     EError::ContentStoreIOError(io_err) => {
                         ignore_report_or_crash(&io_err, &dir_entry.path());
-                        return (FileStats::default(), 0)
-                    },
-                    _ => panic!("{:?}: line {:?}: should not happen: {:?}", file!(), line!(), err)
-                }
-            }
+                        return (FileStats::default(), 0);
+                    }
+                    _ => panic!(
+                        "{:?}: line {:?}: should not happen: {:?}",
+                        file!(),
+                        line!(),
+                        err
+                    ),
+                },
+            };
+        let file_stats = FileStats {
+            file_count: 1,
+            byte_count: attributes.size(),
+            stored_byte_count: stored_size,
         };
-        let file_stats = FileStats{file_count: 1, byte_count: attributes.size(), stored_byte_count: stored_size};
-        self.files.insert(file_name_key, FileData{file_name, attributes, content_token});
+        self.files.insert(
+            file_name_key,
+            FileData {
+                file_name,
+                attributes,
+                content_token,
+            },
+        );
         (file_stats, delta_repo_size)
     }
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
         let file_name = dir_entry.file_name().as_os_str().to_os_string();
         let file_name_key = String::from(file_name.to_string_lossy());
-        if self.file_links.contains_key(&file_name_key) || self.subdir_links.contains_key(&file_name_key) {
-            return SymLinkStats::default()
+        if self.file_links.contains_key(&file_name_key)
+            || self.subdir_links.contains_key(&file_name_key)
+        {
+            return SymLinkStats::default();
         }
         let attributes: Attributes = match dir_entry.metadata() {
             Ok(metadata) => metadata.into(),
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return SymLinkStats::default()
+                return SymLinkStats::default();
             }
         };
         let link_target = match dir_entry.path().read_link() {
             Ok(lt) => lt,
             Err(err) => {
                 ignore_report_or_crash(&err, &dir_entry.path());
-                return SymLinkStats::default()
+                return SymLinkStats::default();
             }
         };
         let abs_target_path = match self.path.join(link_target.clone()).canonicalize() {
             Ok(atp) => atp,
             Err(ref err) => {
                 report_broken_link_or_crash(err, &dir_entry.path(), &link_target);
-                return SymLinkStats::default()
+                return SymLinkStats::default();
             }
         };
         if abs_target_path.is_file() {
-            self.file_links.insert(file_name_key, LinkData{file_name, attributes, link_target});
-            return SymLinkStats{dir_sym_link_count: 0, file_sym_link_count: 1};
+            self.file_links.insert(
+                file_name_key,
+                LinkData {
+                    file_name,
+                    attributes,
+                    link_target,
+                },
+            );
+            return SymLinkStats {
+                dir_sym_link_count: 0,
+                file_sym_link_count: 1,
+            };
         } else if abs_target_path.is_dir() {
-            self.subdir_links.insert(file_name_key, LinkData{file_name, attributes, link_target});
-            return SymLinkStats{dir_sym_link_count: 1, file_sym_link_count: 0};
+            self.subdir_links.insert(
+                file_name_key,
+                LinkData {
+                    file_name,
+                    attributes,
+                    link_target,
+                },
+            );
+            return SymLinkStats {
+                dir_sym_link_count: 1,
+                file_sym_link_count: 0,
+            };
         }
         SymLinkStats::default()
     }
@@ -235,7 +282,7 @@ impl SnapshotDir { // Creation/destruction methods
 struct SnapshotDirIter<'a> {
     values: hash_map::Values<'a, String, SnapshotDir>,
     subdir_iters: Vec<SnapshotDirIter<'a>>,
-    current_subdir_iter: Box<Option<SnapshotDirIter<'a>>>
+    current_subdir_iter: Box<Option<SnapshotDirIter<'a>>>,
 }
 
 impl<'a> Iterator for SnapshotDirIter<'a> {
@@ -243,12 +290,12 @@ impl<'a> Iterator for SnapshotDirIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(item) = self.values.next() {
-            return Some(item)
+            return Some(item);
         } else {
             loop {
                 if let Some(ref mut sub_iter) = *self.current_subdir_iter {
                     if let Some(item) = sub_iter.next() {
-                        return Some(item)
+                        return Some(item);
                     }
                 } else {
                     break;
@@ -260,48 +307,73 @@ impl<'a> Iterator for SnapshotDirIter<'a> {
     }
 }
 
-impl FileData { // Interrogation/extraction/restoration methods
-    fn copy_contents_to<W>(&self, to_file_path: &Path, c_mgr: &ContentManager, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
-        where W: std::io::Write
+impl FileData {
+    // Interrogation/extraction/restoration methods
+    fn copy_contents_to<W>(
+        &self,
+        to_file_path: &Path,
+        c_mgr: &ContentManager,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
     {
         if to_file_path.exists() {
             if to_file_path.is_real_file() {
-                let content_is_same = c_mgr.check_content_token(to_file_path, &self.content_token)?;
+                let content_is_same =
+                    c_mgr.check_content_token(to_file_path, &self.content_token)?;
                 if content_is_same {
                     // nothing to do
-                    return Ok(self.attributes.size())
+                    return Ok(self.attributes.size());
                 }
             }
             if !overwrite {
                 let new_path = move_aside_file_path(to_file_path);
-                fs::rename(to_file_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err))?;
+                fs::rename(to_file_path, &new_path).map_err(|err| {
+                    EError::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err)
+                })?;
             }
         }
-        let bytes = c_mgr.copy_contents_for_token(&self.content_token, to_file_path, &self.attributes, op_errf)?;
+        let bytes = c_mgr.copy_contents_for_token(
+            &self.content_token,
+            to_file_path,
+            &self.attributes,
+            op_errf,
+        )?;
         Ok(bytes)
     }
 }
 
-impl LinkData { // Interrogation/extraction/restoration methods
-    fn copy_link_as<W>(&self, as_path: &Path, overwrite: bool, _op_errf: &mut Option<&mut W>) -> EResult<()>
-        where W: std::io::Write
+impl LinkData {
+    // Interrogation/extraction/restoration methods
+    fn copy_link_as<W>(
+        &self,
+        as_path: &Path,
+        overwrite: bool,
+        _op_errf: &mut Option<&mut W>,
+    ) -> EResult<()>
+    where
+        W: std::io::Write,
     {
         if as_path.exists() {
             if as_path.is_symlink() {
                 if let Ok(link_target) = as_path.read_link() {
                     if self.link_target == link_target {
-                        return Ok(())
+                        return Ok(());
                     }
                 }
             }
             if !overwrite {
                 let new_path = move_aside_file_path(as_path);
-                fs::rename(as_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+                fs::rename(as_path, &new_path)
+                    .map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
             }
         }
-        if cfg!(target_family = "unix"){
+        if cfg!(target_family = "unix") {
             use std::os::unix::fs::symlink;
-            symlink(&self.link_target, as_path).map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+            symlink(&self.link_target, as_path)
+                .map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
         } else {
             panic!("not implemented for this os")
         }
@@ -310,13 +382,16 @@ impl LinkData { // Interrogation/extraction/restoration methods
 }
 
 fn clear_way_for_new_dir(new_dir_path: &Path, overwrite: bool) -> EResult<()> {
-    if new_dir_path.exists() && !new_dir_path.is_dir() { // Real dir or link to dir
+    if new_dir_path.exists() && !new_dir_path.is_dir() {
+        // Real dir or link to dir
         if overwrite {
             // Remove the file system object to make way for the directory
-            fs::remove_file(new_dir_path).map_err(|err| EError::SnapshotDeleteIOError(err, new_dir_path.to_path_buf()))?;
+            fs::remove_file(new_dir_path)
+                .map_err(|err| EError::SnapshotDeleteIOError(err, new_dir_path.to_path_buf()))?;
         } else {
             let new_path = move_aside_file_path(new_dir_path);
-            fs::rename(new_dir_path, &new_path).map_err(|err| EError::SnapshotMoveAsideFailed(new_dir_path.to_path_buf(), err))?;
+            fs::rename(new_dir_path, &new_path)
+                .map_err(|err| EError::SnapshotMoveAsideFailed(new_dir_path.to_path_buf(), err))?;
         }
     };
     Ok(())
@@ -328,10 +403,11 @@ pub struct ExtractionStats {
     pub file_count: u64,
     pub bytes_count: u64,
     pub dir_sym_link_count: u64,
-    pub file_sym_link_count: u64
+    pub file_sym_link_count: u64,
 }
 
-impl SnapshotDir { // Interrogation/extraction/restoration methods
+impl SnapshotDir {
+    // Interrogation/extraction/restoration methods
     fn subdir_iter(&self, recursive: bool) -> SnapshotDirIter {
         let values = self.subdirs.values();
         let mut subdir_iters: Vec<SnapshotDirIter> = if recursive {
@@ -340,7 +416,11 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
             Vec::new()
         };
         let current_subdir_iter = Box::new(subdir_iters.pop());
-        SnapshotDirIter{values, subdir_iters, current_subdir_iter}
+        SnapshotDirIter {
+            values,
+            subdir_iters,
+            current_subdir_iter,
+        }
     }
 
     fn find_subdir(&self, abs_subdir_path: &Path) -> Option<&SnapshotDir> {
@@ -349,15 +429,15 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
             Ok(rel_path) => {
                 let first_name = match first_subpath_as_os_string(rel_path) {
                     Some(fname) => fname,
-                    None => return Some(self)
+                    None => return Some(self),
                 };
                 let first_name_key = String::from(first_name.to_string_lossy());
                 match self.subdirs.get(&first_name_key) {
                     Some(sd) => sd.find_subdir(abs_subdir_path),
                     None => None,
                 }
-            },
-            Err(_) => None
+            }
+            Err(_) => None,
         }
     }
 
@@ -367,15 +447,22 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
             if let Some(subdir) = self.find_subdir(abs_dir_path) {
                 if let Some(file_name) = abs_file_path.file_name() {
                     let file_name_key = String::from(file_name.to_string_lossy());
-                    return subdir.files.get(&file_name_key)
+                    return subdir.files.get(&file_name_key);
                 }
             }
         }
         None
     }
 
-    fn copy_files_into<W>(&self, into_dir_path: &Path, c_mgr: &ContentManager, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<(u64, u64)>
-        where W: std::io::Write
+    fn copy_files_into<W>(
+        &self,
+        into_dir_path: &Path,
+        c_mgr: &ContentManager,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<(u64, u64)>
+    where
+        W: std::io::Write,
     {
         let mut count = 0;
         let mut bytes = 0;
@@ -387,8 +474,14 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
         Ok((count, bytes))
     }
 
-    fn copy_dir_links_into<W>(&self, into_dir_path: &Path, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
-        where W: std::io::Write
+    fn copy_dir_links_into<W>(
+        &self,
+        into_dir_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
     {
         let mut count = 0;
         for subdir_link in self.subdir_links.values() {
@@ -399,8 +492,14 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
         Ok(count)
     }
 
-    fn copy_file_links_into<W>(&self, into_dir_path: &Path, overwrite: bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
-        where W: std::io::Write
+    fn copy_file_links_into<W>(
+        &self,
+        into_dir_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
     {
         let mut count = 0;
         for file_link in self.file_links.values() {
@@ -411,15 +510,26 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
         Ok(count)
     }
 
-    pub fn copy_to<W>(&self, to_dir_path: &Path, c_mgt_key: &ContentMgmtKey, overwrite:bool, op_errf: &mut Option<&mut W>) -> EResult<ExtractionStats>
-        where W: std::io::Write
+    pub fn copy_to<W>(
+        &self,
+        to_dir_path: &Path,
+        c_mgt_key: &ContentMgmtKey,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<ExtractionStats>
+    where
+        W: std::io::Write,
     {
         let mut stats = ExtractionStats::default();
         clear_way_for_new_dir(to_dir_path, overwrite)?;
         if !to_dir_path.is_dir() {
-            fs::create_dir_all(to_dir_path).map_err(|err| EError::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
+            fs::create_dir_all(to_dir_path)
+                .map_err(|err| EError::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
             if let Some(to_dir) = self.find_subdir(to_dir_path) {
-                to_dir.attributes.set_file_attributes(to_dir_path, op_errf).map_err(|err| EError::ContentCopyIOError(err))?;
+                to_dir
+                    .attributes
+                    .set_file_attributes(to_dir_path, op_errf)
+                    .map_err(|err| EError::ContentCopyIOError(err))?;
             }
         }
         stats.dir_count += 1;
@@ -429,41 +539,49 @@ impl SnapshotDir { // Interrogation/extraction/restoration methods
             let new_dir_path = to_dir_path.join(path_tail);
             clear_way_for_new_dir(&new_dir_path, overwrite)?;
             if !new_dir_path.is_dir() {
-                fs::create_dir_all(&new_dir_path).map_err(|err| EError::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
-                subdir.attributes.set_file_attributes(&new_dir_path, op_errf).map_err(|err| EError::ContentCopyIOError(err))?;
+                fs::create_dir_all(&new_dir_path)
+                    .map_err(|err| EError::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
+                subdir
+                    .attributes
+                    .set_file_attributes(&new_dir_path, op_errf)
+                    .map_err(|err| EError::ContentCopyIOError(err))?;
             }
             stats.dir_count += 1;
-        };
+        }
         // then do links to subdirs
         stats.dir_sym_link_count += self.copy_dir_links_into(&to_dir_path, overwrite, op_errf)?;
         for subdir in self.subdir_iter(true) {
             let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
             let new_dir_path = to_dir_path.join(path_tail);
-            stats.dir_sym_link_count += subdir.copy_dir_links_into(&new_dir_path, overwrite, op_errf)?;
-        };
+            stats.dir_sym_link_count +=
+                subdir.copy_dir_links_into(&new_dir_path, overwrite, op_errf)?;
+        }
         // then do all the files (holding lock as little as needed)
         match c_mgt_key.open_content_manager(false) {
             Ok(ref c_mgr) => {
-                let (count, bytes) = self.copy_files_into(&to_dir_path, c_mgr, overwrite, op_errf)?;
+                let (count, bytes) =
+                    self.copy_files_into(&to_dir_path, c_mgr, overwrite, op_errf)?;
                 stats.file_count += count;
                 stats.bytes_count += bytes;
                 for subdir in self.subdir_iter(true) {
                     let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
                     let new_dir_path = to_dir_path.join(path_tail);
-                    let (count, bytes) = subdir.copy_files_into(&new_dir_path, c_mgr, overwrite, op_errf)?;
+                    let (count, bytes) =
+                        subdir.copy_files_into(&new_dir_path, c_mgr, overwrite, op_errf)?;
                     stats.file_count += count;
                     stats.bytes_count += bytes;
-                };
-            },
-            Err(err) => return Err(err)
+                }
+            }
+            Err(err) => return Err(err),
         }
         // then do links to file
         stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite, op_errf)?;
         for subdir in self.subdir_iter(true) {
             let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
             let new_dir_path = to_dir_path.join(path_tail);
-            stats.file_sym_link_count += subdir.copy_file_links_into(&new_dir_path, overwrite, op_errf)?;
-        };
+            stats.file_sym_link_count +=
+                subdir.copy_file_links_into(&new_dir_path, overwrite, op_errf)?;
+        }
         Ok(stats)
     }
 }
@@ -513,10 +631,9 @@ pub struct SnapshotPersistentData {
 
 impl SnapshotPersistentData {
     fn new(archive_name: &str, cmk: &ContentMgmtKey) -> SnapshotPersistentData {
-        let sd = SnapshotDir::new(None).unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
-        SnapshotPersistentData{
+        let sd = SnapshotDir::new(None)
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        SnapshotPersistentData {
             root_dir: sd,
             content_mgmt_key: cmk.clone(),
             archive_name: archive_name.to_string(),
@@ -535,46 +652,66 @@ impl SnapshotPersistentData {
     }
 
     fn release_contents(&self) {
-        let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
-        );
+        let content_mgr = self
+            .content_mgmt_key
+            .open_content_manager(true)
+            .unwrap_or_else(|err| {
+                panic!(
+                    "{:?}: line {:?}: open content manager: {:?}",
+                    file!(),
+                    line!(),
+                    err
+                )
+            });
         self.root_dir.release_contents(&content_mgr);
     }
 
     fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> io::Result<u64> {
         let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
-        let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
-        );
+        let content_mgr = self
+            .content_mgmt_key
+            .open_content_manager(true)
+            .unwrap_or_else(|err| {
+                panic!(
+                    "{:?}: line {:?}: open content manager: {:?}",
+                    file!(),
+                    line!(),
+                    err
+                )
+            });
         let (file_stats, sym_link_stats, drsz) = dir.populate(exclusions, &content_mgr);
         self.file_stats += file_stats;
         self.sym_link_stats += sym_link_stats;
         let mut delta_repo_size = drsz;
-        for entry in WalkDir::new(abs_dir_path).into_iter().filter_entry(|e| e.file_type().is_dir()) {
+        for entry in WalkDir::new(abs_dir_path)
+            .into_iter()
+            .filter_entry(|e| e.file_type().is_dir())
+        {
             match entry {
                 Ok(e_data) => {
                     let e_path = e_data.path();
                     if exclusions.is_excluded_dir(e_path) {
-                        continue
+                        continue;
                     }
                     match dir.find_or_add_subdir(e_path) {
                         Ok(sub_dir) => {
-                            let (file_stats, sym_link_stats, drsz) = sub_dir.populate(exclusions, &content_mgr);
+                            let (file_stats, sym_link_stats, drsz) =
+                                sub_dir.populate(exclusions, &content_mgr);
                             self.file_stats += file_stats;
                             self.sym_link_stats += sym_link_stats;
                             delta_repo_size += drsz;
-                        },
-                        Err(err) => ignore_report_or_crash(&err, &e_path)
+                        }
+                        Err(err) => ignore_report_or_crash(&err, &e_path),
                     }
-                },
+                }
                 Err(err) => {
                     let path_buf = match err.path() {
                         Some(path) => path.to_path_buf(),
-                        None => panic!("{:?}: line {:?}", file!(), line!())
+                        None => panic!("{:?}: line {:?}", file!(), line!()),
                     };
                     let io_error = io::Error::from(err);
                     ignore_report_or_crash(&io_error, &path_buf);
-                },
+                }
             }
         }
         Ok(delta_repo_size)
@@ -582,25 +719,33 @@ impl SnapshotPersistentData {
 
     fn add_other(&mut self, abs_file_path: &Path) -> io::Result<u64> {
         let entry = get_entry_for_path(abs_file_path)?;
-        let dir_path = abs_file_path.parent().unwrap_or_else(
-            || panic!("{:?}: line {:?}", file!(), line!())
-        );
+        let dir_path = abs_file_path
+            .parent()
+            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
         let dir = self.root_dir.find_or_add_subdir(&dir_path)?;
         let mut delta_repo_size: u64 = 0;
         match entry.file_type() {
             Ok(e_type) => {
                 if e_type.is_file() {
-                    let content_mgr = self.content_mgmt_key.open_content_manager(true).unwrap_or_else(
-                        |err| panic!("{:?}: line {:?}: open content manager: {:?}", file!(), line!(), err)
-                    );
+                    let content_mgr = self
+                        .content_mgmt_key
+                        .open_content_manager(true)
+                        .unwrap_or_else(|err| {
+                            panic!(
+                                "{:?}: line {:?}: open content manager: {:?}",
+                                file!(),
+                                line!(),
+                                err
+                            )
+                        });
                     let data = dir.add_file(&entry, &content_mgr);
                     self.file_stats += data.0;
                     delta_repo_size += data.1;
                 } else if e_type.is_symlink() {
                     self.sym_link_stats += dir.add_symlink(&entry);
                 }
-            },
-            Err(err) => ignore_report_or_crash(&err, abs_file_path)
+            }
+            Err(err) => ignore_report_or_crash(&err, abs_file_path),
         };
         Ok(delta_repo_size)
     }
@@ -608,7 +753,7 @@ impl SnapshotPersistentData {
     fn creation_duration(&self) -> time::Duration {
         match self.finished_create.duration_since(self.started_create) {
             Ok(duration) => duration,
-            Err(_) => time::Duration::new(0, 0)
+            Err(_) => time::Duration::new(0, 0),
         }
     }
 
@@ -619,17 +764,21 @@ impl SnapshotPersistentData {
     fn write_to_dir(&self, dir_path: &Path) -> EResult<PathBuf> {
         let file_name = self.file_name();
         let path = dir_path.join(file_name);
-        let file = File::create(&path).map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
+        let file = File::create(&path)
+            .map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
         let json_text = self.serialize()?;
         let mut snappy_wtr = snap::Writer::new(file);
-        snappy_wtr.write_all(json_text.as_bytes()).map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
+        snappy_wtr
+            .write_all(json_text.as_bytes())
+            .map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
         Ok(path)
     }
 }
 
 // Doing this near where the file names are constructed for programming convenience
-lazy_static!{
-    static ref SS_FILE_NAME_RE: regex::Regex = regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
+lazy_static! {
+    static ref SS_FILE_NAME_RE: regex::Regex =
+        regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
 }
 
 fn entry_is_ss_file(entry: &DirEntry) -> bool {
@@ -645,14 +794,17 @@ fn entry_is_ss_file(entry: &DirEntry) -> bool {
 }
 
 fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
-    let dir_entries = fs::read_dir(dir_path).map_err(|err| EError::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+    let dir_entries = fs::read_dir(dir_path)
+        .map_err(|err| EError::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
     let mut ss_entries = Vec::new();
     for entry_or_err in dir_entries {
         match entry_or_err {
-            Ok(entry) => if entry_is_ss_file(&entry) {
-                ss_entries.push(entry);
-            },
-            Err(_) => ()
+            Ok(entry) => {
+                if entry_is_ss_file(&entry) {
+                    ss_entries.push(entry);
+                }
+            }
+            Err(_) => (),
         }
     }
     ss_entries.sort_by_key(|e| e.path());
@@ -670,23 +822,26 @@ fn move_aside_file_path(path: &Path) -> PathBuf {
     path.with_extension(&new_suffix)
 }
 
-impl SnapshotPersistentData { // Interrogation/extraction/restoration methods
+impl SnapshotPersistentData {
+    // Interrogation/extraction/restoration methods
     pub fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
         match File::open(file_path) {
             Ok(file) => {
                 let mut spd_str = String::new();
                 let mut snappy_rdr = snap::Reader::new(file);
                 match snappy_rdr.read_to_string(&mut spd_str) {
-                    Err(err) => return Err(EError::SnapshotReadIOError(err, file_path.to_path_buf())),
-                    _ => ()
+                    Err(err) => {
+                        return Err(EError::SnapshotReadIOError(err, file_path.to_path_buf()))
+                    }
+                    _ => (),
                 };
                 let spde = serde_json::from_str::<SnapshotPersistentData>(&spd_str);
                 match spde {
                     Ok(snapshot_persistent_data) => Ok(snapshot_persistent_data),
-                    Err(err) => Err(EError::SnapshotReadJsonError(err, file_path.to_path_buf()))
+                    Err(err) => Err(EError::SnapshotReadJsonError(err, file_path.to_path_buf())),
                 }
-            },
-            Err(err) => Err(EError::SnapshotReadIOError(err, file_path.to_path_buf()))
+            }
+            Err(err) => Err(EError::SnapshotReadIOError(err, file_path.to_path_buf())),
         }
     }
 
@@ -699,25 +854,49 @@ impl SnapshotPersistentData { // Interrogation/extraction/restoration methods
         format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
     }
 
-    pub fn copy_file_to<W>(&self, fm_file_path: &Path, to_file_path: &Path, overwrite:bool, op_errf: &mut Option<&mut W>) -> EResult<u64>
-        where W: std::io::Write
+    pub fn copy_file_to<W>(
+        &self,
+        fm_file_path: &Path,
+        to_file_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
     {
         let file_data = match self.root_dir.find_file(fm_file_path) {
-           Some(fd) => fd,
-           None => return Err(EError::SnapshotUnknownFile(self.archive_name(), self.snapshot_name(), fm_file_path.to_path_buf()))
+            Some(fd) => fd,
+            None => {
+                return Err(EError::SnapshotUnknownFile(
+                    self.archive_name(),
+                    self.snapshot_name(),
+                    fm_file_path.to_path_buf(),
+                ))
+            }
         };
         let c_mgr = self.content_mgmt_key.open_content_manager(false)?;
         let bytes = file_data.copy_contents_to(to_file_path, &c_mgr, overwrite, op_errf)?;
         Ok(bytes)
     }
 
-    pub fn copy_dir_to<W>(&self, fm_dir_path: &Path, to_dir_path: &Path, overwrite:bool, op_errf: &mut Option<&mut W>) -> EResult<ExtractionStats>
-        where W: std::io::Write
+    pub fn copy_dir_to<W>(
+        &self,
+        fm_dir_path: &Path,
+        to_dir_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<ExtractionStats>
+    where
+        W: std::io::Write,
     {
         let fm_subdir = if let Some(subdir) = self.root_dir.find_subdir(fm_dir_path) {
             subdir
         } else {
-            return Err(EError::SnapshotUnknownDirectory(self.archive_name(), self.snapshot_name(), fm_dir_path.to_path_buf()))
+            return Err(EError::SnapshotUnknownDirectory(
+                self.archive_name(),
+                self.snapshot_name(),
+                fm_dir_path.to_path_buf(),
+            ));
         };
         let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite, op_errf)?;
         Ok(stats)
@@ -742,7 +921,10 @@ impl SnapshotGenerator {
     pub fn new(archive_name: &str) -> EResult<SnapshotGenerator> {
         let archive_data = get_archive_data(archive_name)?;
         let snapshot: Option<SnapshotPersistentData> = None;
-        Ok(SnapshotGenerator{ snapshot, archive_data })
+        Ok(SnapshotGenerator {
+            snapshot,
+            archive_data,
+        })
     }
 
     #[cfg(test)]
@@ -756,17 +938,20 @@ impl SnapshotGenerator {
             self.release_snapshot();
         }
         let mut delta_repo_size: u64 = 0;
-        let mut snapshot = SnapshotPersistentData::new(&self.archive_data.name, &self.archive_data.content_mgmt_key);
+        let mut snapshot = SnapshotPersistentData::new(
+            &self.archive_data.name,
+            &self.archive_data.content_mgmt_key,
+        );
         for abs_path in self.archive_data.includes.iter() {
             if abs_path.is_dir() {
                 match snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
                     Ok(drsz) => delta_repo_size += drsz,
-                    Err(err) => ignore_report_or_crash(&err, &abs_path)
+                    Err(err) => ignore_report_or_crash(&err, &abs_path),
                 };
             } else {
                 match snapshot.add_other(&abs_path) {
                     Ok(drsz) => delta_repo_size += drsz,
-                    Err(err) => ignore_report_or_crash(&err, &abs_path)
+                    Err(err) => ignore_report_or_crash(&err, &abs_path),
                 };
             }
         }
@@ -782,24 +967,22 @@ impl SnapshotGenerator {
     pub fn generation_duration(&self) -> EResult<time::Duration> {
         match self.snapshot {
             Some(ref snapshot) => Ok(snapshot.creation_duration()),
-            None => Err(EError::NoSnapshotAvailable)
+            None => Err(EError::NoSnapshotAvailable),
         }
     }
 
     fn release_snapshot(&mut self) {
         match self.snapshot {
             Some(ref snapshot) => snapshot.release_contents(),
-            None => ()
+            None => (),
         }
         self.snapshot = None;
     }
 
     fn write_snapshot(&mut self) -> EResult<PathBuf> {
         let file_path = match self.snapshot {
-            Some(ref snapshot) => {
-                snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?
-            },
-            None => return Err(EError::NoSnapshotAvailable)
+            Some(ref snapshot) => snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?,
+            None => return Err(EError::NoSnapshotAvailable),
         };
         // check that the snapshot can be rebuilt from the file
         match SnapshotPersistentData::from_file(&file_path) {
@@ -812,22 +995,26 @@ impl SnapshotGenerator {
                     // The file is mangled so remove it
                     match fs::remove_file(&file_path) {
                         Ok(_) => Err(EError::SnapshotMismatch(file_path.to_path_buf())),
-                        Err(err) => Err(EError::SnapshotMismatchDirty(err, file_path.to_path_buf()))
+                        Err(err) => {
+                            Err(EError::SnapshotMismatchDirty(err, file_path.to_path_buf()))
+                        }
                     }
                 }
-            },
+            }
             Err(err) => {
                 // The file is mangled so remove it
                 match fs::remove_file(&file_path) {
                     Ok(_) => Err(err),
-                    Err(_) => Err(err)
+                    Err(_) => Err(err),
                 }
             }
         }
     }
 }
 
-pub fn generate_snapshot(archive_name: &str) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
+pub fn generate_snapshot(
+    archive_name: &str,
+) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
     let mut sg = SnapshotGenerator::new(archive_name)?;
     let stats = sg.generate_snapshot();
     sg.write_snapshot()?;
@@ -836,7 +1023,8 @@ pub fn generate_snapshot(archive_name: &str) -> EResult<(time::Duration, FileSta
 
 pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     let snapshot = SnapshotPersistentData::from_file(ss_file_path)?;
-    fs::remove_file(ss_file_path).map_err(|err| EError::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
+    fs::remove_file(ss_file_path)
+        .map_err(|err| EError::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
     snapshot.release_contents();
     Ok(())
 }
@@ -847,7 +1035,7 @@ pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<
     for entry in entries {
         let e_path = dir_path.join(entry.path());
         snapshot_paths.push(e_path);
-    };
+    }
     if reverse {
         snapshot_paths.reverse();
     };
@@ -865,7 +1053,7 @@ pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<
     let mut snapshot_names = Vec::new();
     for entry in entries {
         snapshot_names.push(String::from(entry.path().to_string_lossy().to_owned()));
-    };
+    }
     if reverse {
         snapshot_names.reverse();
     };
@@ -881,7 +1069,7 @@ pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> ERes
 #[derive(Debug, Clone)]
 pub enum ArchiveOrDirPath {
     Archive(String),
-    DirPath(PathBuf)
+    DirPath(PathBuf),
 }
 
 impl ArchiveOrDirPath {
@@ -891,7 +1079,7 @@ impl ArchiveOrDirPath {
                 let path = archive::get_archive_snapshot_dir_path(&archive_name)?;
                 path
             }
-            ArchiveOrDirPath::DirPath(path) => path.clone()
+            ArchiveOrDirPath::DirPath(path) => path.clone(),
         };
         Ok(dir_path)
     }
@@ -927,13 +1115,13 @@ impl ArchiveOrDirPath {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::MetadataExt;
-    use std::env;
-    use fs2::FileExt;
-    use tempdir::TempDir;
     use super::*;
-    use content;
     use archive;
+    use content;
+    use fs2::FileExt;
+    use std::env;
+    use std::os::unix::fs::MetadataExt;
+    use tempdir::TempDir;
 
     #[test]
     fn test_ssf_regex() {
@@ -943,27 +1131,25 @@ mod tests {
 
     #[test]
     fn find_or_add_subdir_works() {
-        let mut sd = SnapshotDir::new(None).unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
+        let mut sd = SnapshotDir::new(None)
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         let p = PathBuf::from("/mnt/TEST");
         {
             let ssd = sd.find_or_add_subdir(&p);
             assert!(ssd.is_ok());
-            let ssd = ssd.unwrap_or_else(
-                |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-            );
+            let ssd =
+                ssd.unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
             assert!(ssd.path == p.as_path());
         }
         let ssd = match sd.find_subdir(&p) {
             Some(ssd) => ssd,
-            None => panic!("{:?}: line {:?}", file!(), line!())
+            None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         assert!(ssd.path == p.as_path());
         let sdp = PathBuf::from("/mnt");
         let ssd = match sd.find_subdir(&sdp) {
             Some(ssd) => ssd,
-            None => panic!("{:?}: line {:?}", file!(), line!())
+            None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         assert_eq!(ssd.path, sdp.as_path());
         let sdp1 = PathBuf::from("/mnt/TEST/patch_diff/gui");
@@ -972,50 +1158,66 @@ mod tests {
 
     #[test]
     fn test_write_snapshot() {
-        let file = fs::OpenOptions::new().write(true).open("./test_lock_file").unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open("./test_lock_file")
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         if let Err(err) = file.lock_exclusive() {
             panic!("lock failed: {:?}", err);
         };
-        let dir = TempDir::new("SS_TEST").unwrap_or_else(
-            |err| panic!("open temp dir failed: {:?}", err)
-        );
+        let dir =
+            TempDir::new("SS_TEST").unwrap_or_else(|err| panic!("open temp dir failed: {:?}", err));
         env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
         let data_dir = dir.path().join("data");
         let data_dir_str = match data_dir.to_str() {
             Some(data_dir_str) => data_dir_str,
-            None => panic!("{:?}: line {:?}", file!(), line!())
+            None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
             panic!("new repo: {:?}", err);
         }
-        let my_file = Path::new("./src/snapshot.rs").canonicalize().unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
-        let my_file = my_file.to_str().unwrap_or_else(
-            || panic!("{:?}: line {:?}", file!(), line!())
-        );
-        let cli_dir = Path::new("./src/cli").canonicalize().unwrap_or_else(
-            |err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        );
-        let cli_dir = cli_dir.to_str().unwrap_or_else(
-            || panic!("{:?}: line {:?}", file!(), line!())
-        );
-        let inclusions = vec!["~/Documents".to_string(), cli_dir.to_string(), my_file.to_string()];
+        let my_file = Path::new("./src/snapshot.rs")
+            .canonicalize()
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        let my_file = my_file
+            .to_str()
+            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
+        let cli_dir = Path::new("./src/cli")
+            .canonicalize()
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        let cli_dir = cli_dir
+            .to_str()
+            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
+        let inclusions = vec![
+            "~/Documents".to_string(),
+            cli_dir.to_string(),
+            my_file.to_string(),
+        ];
         let dir_exclusions = vec!["lost+found".to_string()];
         let file_exclusions = vec!["*.iso".to_string()];
-        if let Err(err) = archive::create_new_archive("test_ss", "test_repo", data_dir_str, inclusions, dir_exclusions, file_exclusions) {
+        if let Err(err) = archive::create_new_archive(
+            "test_ss",
+            "test_repo",
+            data_dir_str,
+            inclusions,
+            dir_exclusions,
+            file_exclusions,
+        ) {
             panic!("new archive: {:?}", err);
         }
-        { // need this to let sg finish before the temporary directory is destroyed
+        {
+            // need this to let sg finish before the temporary directory is destroyed
             let mut sg = match SnapshotGenerator::new("test_ss") {
                 Ok(snapshot_generator) => snapshot_generator,
-                Err(err) => panic!("new SG: {:?}", err)
+                Err(err) => panic!("new SG: {:?}", err),
             };
             println!("Generating for {:?}", "test_ss");
             sg.generate_snapshot();
-            println!("Generating for {:?} took {:?}", "test_ss", sg.generation_duration());
+            println!(
+                "Generating for {:?} took {:?}",
+                "test_ss",
+                sg.generation_duration()
+            );
             assert!(sg.snapshot_available());
             let result = sg.write_snapshot();
             assert!(result.is_ok());
@@ -1024,15 +1226,19 @@ mod tests {
                 Ok(ref ss_file_path) => {
                     match fs::metadata(ss_file_path) {
                         Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.size()),
-                        Err(err) => panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
+                        Err(err) => {
+                            panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
+                        }
                     };
                     match SnapshotPersistentData::from_file(ss_file_path) {
-                        Ok(ss) => println!("{:?}: {:?} {:?}", ss.archive_name, ss.file_stats, ss.sym_link_stats),
-                        Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err)
+                        Ok(ss) => println!(
+                            "{:?}: {:?} {:?}",
+                            ss.archive_name, ss.file_stats, ss.sym_link_stats
+                        ),
+                        Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err),
                     };
-
-                },
-                Err(err) => panic!("{:?}", err)
+                }
+                Err(err) => panic!("{:?}", err),
             }
         }
         if let Err(err) = dir.close() {

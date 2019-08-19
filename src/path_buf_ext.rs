@@ -9,7 +9,7 @@ pub trait RealPathBufType {
 }
 
 macro_rules! impl_real_path_buf_type {
-    ( $ptype:ident ) => (
+    ( $ptype:ident ) => {
         impl RealPathBufType for $ptype {
             fn is_real_dir(&self) -> bool {
                 if let Ok(md) = self.symlink_metadata() {
@@ -22,7 +22,7 @@ macro_rules! impl_real_path_buf_type {
             fn is_symlink_to_dir(&self) -> bool {
                 if let Ok(md) = self.symlink_metadata() {
                     if md.file_type().is_symlink() {
-                        return self.is_dir()
+                        return self.is_dir();
                     }
                 };
                 false
@@ -38,7 +38,7 @@ macro_rules! impl_real_path_buf_type {
             fn is_symlink_to_file(&self) -> bool {
                 if let Ok(md) = self.symlink_metadata() {
                     if md.file_type().is_symlink() {
-                        return self.is_file()
+                        return self.is_file();
                     }
                 };
                 false
@@ -46,12 +46,12 @@ macro_rules! impl_real_path_buf_type {
 
             fn is_symlink(&self) -> bool {
                 if let Ok(md) = self.symlink_metadata() {
-                    return md.file_type().is_symlink()
+                    return md.file_type().is_symlink();
                 };
                 false
             }
         }
-    );
+    };
 }
 
 impl_real_path_buf_type!(PathBuf);
@@ -59,8 +59,8 @@ impl_real_path_buf_type!(Path);
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use super::*;
+    use std::fs;
 
     #[test]
     fn path_buf_is_real_dir_works() {
