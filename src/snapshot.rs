@@ -1133,7 +1133,7 @@ mod tests {
     fn find_or_add_subdir_works() {
         let mut sd = SnapshotDir::new(None)
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
-        let p = PathBuf::from("/mnt/TEST");
+        let p = PathBuf::from("./TEST").canonicalize().unwrap();
         {
             let ssd = sd.find_or_add_subdir(&p);
             assert!(ssd.is_ok());
@@ -1146,13 +1146,13 @@ mod tests {
             None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         assert!(ssd.path == p.as_path());
-        let sdp = PathBuf::from("/mnt");
+        let sdp = PathBuf::from("./").canonicalize().unwrap();
         let ssd = match sd.find_subdir(&sdp) {
             Some(ssd) => ssd,
             None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         assert_eq!(ssd.path, sdp.as_path());
-        let sdp1 = PathBuf::from("/mnt/TEST/patch_diff/gui");
+        let sdp1 = PathBuf::from("./TEST/config").canonicalize().unwrap();
         assert_eq!(sd.find_subdir(&sdp1), None);
     }
 
