@@ -14,7 +14,6 @@ use std::{
 use crypto_hash;
 use fs2::FileExt;
 use hex::ToHex;
-//use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
 use snap;
@@ -23,6 +22,7 @@ mod error;
 
 pub use crate::error::*;
 
+/// A type to provide hash digest calculation methods.
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
 pub enum HashAlgorithm {
     Sha1,
@@ -43,6 +43,7 @@ impl FromStr for HashAlgorithm {
 }
 
 impl HashAlgorithm {
+    /// Returns the hash digest for `data` as a hexadecimal string.
     pub fn data_digest(&self, data: &[u8]) -> Result<String, io::Error> {
         let mut hasher = match self {
             HashAlgorithm::Sha1 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA1),
@@ -58,6 +59,7 @@ impl HashAlgorithm {
         Ok(s)
     }
 
+    /// Returns the hash digest for `reader`'s as a hexadecimal string.crypto_hash.
     pub fn reader_digest<R: Read>(&self, reader: &mut R) -> Result<String, io::Error> {
         let mut buffer = [0; 512000];
         let mut hasher = match self {
@@ -81,9 +83,12 @@ impl HashAlgorithm {
     }
 }
 
+/// Specifies the essential data for a repository.
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct RepoSpec {
+    /// The file system path of the directory where the repository will reside.
     base_dir_path: PathBuf,
+    /// The hash algorithm to be used when calculating content digests.
     hash_algorithm: HashAlgorithm,
 }
 
@@ -617,6 +622,12 @@ pub struct Problems {
     pub content_problems: Vec<ContentProblem>,
 }
 
+impl Problems {
+    pub fn total(&self) -> usize {
+        self.token_problems.len() + self.content_problems.len()
+    }
+}
+
 impl ContentManager {
     pub fn is_mutable(&self) -> bool {
         self.ref_counter.is_mutable()
@@ -765,6 +776,7 @@ mod tests {
             cmgr.referenced_content_data(),
             ReferencedContentData::default()
         );
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
         let mut file = File::open("./LICENSE-APACHE").unwrap();
         let result = cmgr.store_contents(&mut file).unwrap();
         assert_eq!(
@@ -772,6 +784,7 @@ mod tests {
             "7DF059597099BB7DCF25D2A9AEDFAF4465F72D8D".to_string(),
         );
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 1);
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
         assert_eq!(
             cmgr.unreferenced_content_data(),
             UnreferencedContentData::default()
@@ -799,7 +812,9 @@ mod tests {
             sum_storage: 5816,
         };
         assert_eq!(cmgr.referenced_content_data(), expected);
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
         assert!(cmgr.release_contents(&result.0).is_ok());
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 1);
         assert_eq!(
             cmgr.unreferenced_content_data(),
@@ -810,12 +825,14 @@ mod tests {
         assert!(cmgr
             .write_contents_for_token(&result.0, &mut target_file)
             .is_ok());
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
         let f1 = File::open(&target_path).unwrap();
         let f2 = File::open("./LICENSE-APACHE").unwrap();
         for (b1, b2) in f1.bytes().zip(f2.bytes()) {
             assert_eq!(b1.unwrap(), b2.unwrap());
         }
         assert!(cmgr.release_contents(&result.0).is_ok());
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
         assert_eq!(cmgr.ref_count_for_token(&result.0).unwrap(), 0);
         let expected = UnreferencedContentData {
             num_items: 1,
@@ -829,5 +846,6 @@ mod tests {
         );
         assert_eq!(cmgr.prune_contents().unwrap(), expected);
         assert!(cmgr.ref_count_for_token(&result.0).is_err());
+        assert_eq!(cmgr.problems().unwrap().total(), 0);
     }
 }
