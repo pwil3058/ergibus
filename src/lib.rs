@@ -2,6 +2,7 @@ extern crate chrono;
 //#[macro_use]
 extern crate clap;
 extern crate crypto_hash;
+extern crate dychatat;
 extern crate fs2;
 extern crate globset;
 extern crate hex;

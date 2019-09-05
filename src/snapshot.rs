@@ -187,21 +187,22 @@ impl SnapshotDir {
                 return (FileStats::default(), 0);
             }
         };
+        let mut file = match File::open(&dir_entry.path()) {
+            Ok(file) => file,
+            Err(err) => {
+                ignore_report_or_crash(&err, &dir_entry.path());
+                return (FileStats::default(), 0);
+            }
+        };
         let (content_token, stored_size, delta_repo_size) =
-            match content_mgr.store_file_contents(&dir_entry.path()) {
+            match content_mgr.store_contents(&mut file) {
                 Ok((ct, ssz, drsz)) => (ct, ssz, drsz),
-                Err(err) => match err {
-                    EError::ContentStoreIOError(io_err) => {
-                        ignore_report_or_crash(&io_err, &dir_entry.path());
-                        return (FileStats::default(), 0);
-                    }
-                    _ => panic!(
-                        "{:?}: line {:?}: should not happen: {:?}",
-                        file!(),
-                        line!(),
-                        err
-                    ),
-                },
+                Err(err) => panic!(
+                    "{:?}: line {:?}: should not happen: {:?}",
+                    file!(),
+                    line!(),
+                    err
+                ),
             };
         let file_stats = FileStats {
             file_count: 1,
@@ -321,8 +322,8 @@ impl FileData {
     {
         if to_file_path.exists() {
             if to_file_path.is_real_file() {
-                let content_is_same =
-                    c_mgr.check_content_token(to_file_path, &self.content_token)?;
+                let mut file = File::open(to_file_path).unwrap();
+                let content_is_same = c_mgr.check_content_token(&mut file, &self.content_token)?;
                 if content_is_same {
                     // nothing to do
                     return Ok(self.attributes.size());
@@ -335,12 +336,8 @@ impl FileData {
                 })?;
             }
         }
-        let bytes = c_mgr.copy_contents_for_token(
-            &self.content_token,
-            to_file_path,
-            &self.attributes,
-            op_errf,
-        )?;
+        let mut file = File::create(to_file_path).unwrap();
+        let bytes = c_mgr.write_contents_for_token(&self.content_token, &mut file)?;
         Ok(bytes)
     }
 }
@@ -557,7 +554,7 @@ impl SnapshotDir {
                 subdir.copy_dir_links_into(&new_dir_path, overwrite, op_errf)?;
         }
         // then do all the files (holding lock as little as needed)
-        match c_mgt_key.open_content_manager(false) {
+        match c_mgt_key.open_content_manager(dychatat::Mutability::Immutable) {
             Ok(ref c_mgr) => {
                 let (count, bytes) =
                     self.copy_files_into(&to_dir_path, c_mgr, overwrite, op_errf)?;
@@ -572,7 +569,7 @@ impl SnapshotDir {
                     stats.bytes_count += bytes;
                 }
             }
-            Err(err) => return Err(err),
+            Err(err) => return Err(err.into()),
         }
         // then do links to file
         stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite, op_errf)?;
@@ -654,7 +651,7 @@ impl SnapshotPersistentData {
     fn release_contents(&self) {
         let content_mgr = self
             .content_mgmt_key
-            .open_content_manager(true)
+            .open_content_manager(dychatat::Mutability::Mutable)
             .unwrap_or_else(|err| {
                 panic!(
                     "{:?}: line {:?}: open content manager: {:?}",
@@ -670,7 +667,7 @@ impl SnapshotPersistentData {
         let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
         let content_mgr = self
             .content_mgmt_key
-            .open_content_manager(true)
+            .open_content_manager(dychatat::Mutability::Mutable)
             .unwrap_or_else(|err| {
                 panic!(
                     "{:?}: line {:?}: open content manager: {:?}",
@@ -729,7 +726,7 @@ impl SnapshotPersistentData {
                 if e_type.is_file() {
                     let content_mgr = self
                         .content_mgmt_key
-                        .open_content_manager(true)
+                        .open_content_manager(dychatat::Mutability::Mutable)
                         .unwrap_or_else(|err| {
                             panic!(
                                 "{:?}: line {:?}: open content manager: {:?}",
@@ -874,7 +871,9 @@ impl SnapshotPersistentData {
                 ))
             }
         };
-        let c_mgr = self.content_mgmt_key.open_content_manager(false)?;
+        let c_mgr = self
+            .content_mgmt_key
+            .open_content_manager(dychatat::Mutability::Immutable)?;
         let bytes = file_data.copy_contents_to(to_file_path, &c_mgr, overwrite, op_errf)?;
         Ok(bytes)
     }

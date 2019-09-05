@@ -20,6 +20,8 @@ pub enum EError {
     ArchiveYamlReadError(serde_yaml::Error, String),
     ArchiveYamlWriteError(serde_yaml::Error, String),
 
+    RepoError(dychatat::RepoError),
+
     RepoExists(String),
     UnknownRepo(String),
     UnknownContentKey(String),
@@ -51,6 +53,12 @@ pub enum EError {
     SnapshotMismatch(PathBuf),
     SnapshotMismatchDirty(io::Error, PathBuf),
     SnapshotSerializeError(serde_json::Error),
+}
+
+impl From<dychatat::RepoError> for EError {
+    fn from(error: dychatat::RepoError) -> Self {
+        EError::RepoError(error)
+    }
 }
 
 pub type EResult<T> = Result<T, EError>;

@@ -27,6 +27,8 @@ libc = "0.2"
 pw_gix = { path = "../../CRATES/rs_pw_gix.git" }
 #pw_pathux = { git = "https://github.com/pwil3058/rs_pw_pathux.git" }
 pw_pathux = { path = "../../CRATES/rs_pw_pathux.git" }
+#dychatat = { git = "https://github.com/pwil3058/dychatat.git" }
+dychatat = { path = "../../CRATES/dychatat.git" }
 regex = "0.2"
 serde = "1.0"
 serde_derive = "1.0"
