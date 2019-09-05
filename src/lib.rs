@@ -761,6 +761,13 @@ mod tests {
     }
 
     #[test]
+    fn storage_file_name() {
+        let storage = Storage { base_dir_path: PathBuf::from("data") };
+        let token_file_path = storage.token_content_file_path("AAGH");
+        assert_eq!(token_file_path, PathBuf::from("data/AAG/H"));
+    }
+
+    #[test]
     fn repo_use() {
         let tmp_dir = TempDir::new("TEST").unwrap();
         let repo_dir = tmp_dir.path().join("repo");
