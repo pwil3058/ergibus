@@ -310,19 +310,16 @@ impl<'a> Iterator for SnapshotDirIter<'a> {
 
 impl FileData {
     // Interrogation/extraction/restoration methods
-    fn copy_contents_to<W>(
+    fn copy_contents_to(
         &self,
         to_file_path: &Path,
         c_mgr: &ContentManager,
         overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<u64>
-    where
-        W: std::io::Write,
-    {
+    ) -> EResult<u64> {
         if to_file_path.exists() {
             if to_file_path.is_real_file() {
-                let mut file = File::open(to_file_path).unwrap();
+                let mut file = File::open(to_file_path)
+                    .map_err(|err| EError::SnapshotReadIOError(err, to_file_path.to_path_buf()))?;
                 let content_is_same = c_mgr.check_content_token(&mut file, &self.content_token)?;
                 if content_is_same {
                     // nothing to do
@@ -451,21 +448,17 @@ impl SnapshotDir {
         None
     }
 
-    fn copy_files_into<W>(
+    fn copy_files_into(
         &self,
         into_dir_path: &Path,
         c_mgr: &ContentManager,
         overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<(u64, u64)>
-    where
-        W: std::io::Write,
-    {
+    ) -> EResult<(u64, u64)> {
         let mut count = 0;
         let mut bytes = 0;
         for file in self.files.values() {
             let new_path = into_dir_path.join(&file.file_name);
-            bytes += file.copy_contents_to(&new_path, c_mgr, overwrite, op_errf)?;
+            bytes += file.copy_contents_to(&new_path, c_mgr, overwrite)?;
             count += 1;
         }
         Ok((count, bytes))
@@ -556,15 +549,13 @@ impl SnapshotDir {
         // then do all the files (holding lock as little as needed)
         match c_mgt_key.open_content_manager(dychatat::Mutability::Immutable) {
             Ok(ref c_mgr) => {
-                let (count, bytes) =
-                    self.copy_files_into(&to_dir_path, c_mgr, overwrite, op_errf)?;
+                let (count, bytes) = self.copy_files_into(&to_dir_path, c_mgr, overwrite)?;
                 stats.file_count += count;
                 stats.bytes_count += bytes;
                 for subdir in self.subdir_iter(true) {
                     let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
                     let new_dir_path = to_dir_path.join(path_tail);
-                    let (count, bytes) =
-                        subdir.copy_files_into(&new_dir_path, c_mgr, overwrite, op_errf)?;
+                    let (count, bytes) = subdir.copy_files_into(&new_dir_path, c_mgr, overwrite)?;
                     stats.file_count += count;
                     stats.bytes_count += bytes;
                 }
@@ -851,16 +842,12 @@ impl SnapshotPersistentData {
         format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
     }
 
-    pub fn copy_file_to<W>(
+    pub fn copy_file_to(
         &self,
         fm_file_path: &Path,
         to_file_path: &Path,
         overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<u64>
-    where
-        W: std::io::Write,
-    {
+    ) -> EResult<u64> {
         let file_data = match self.root_dir.find_file(fm_file_path) {
             Some(fd) => fd,
             None => {
@@ -874,7 +861,7 @@ impl SnapshotPersistentData {
         let c_mgr = self
             .content_mgmt_key
             .open_content_manager(dychatat::Mutability::Immutable)?;
-        let bytes = file_data.copy_contents_to(to_file_path, &c_mgr, overwrite, op_errf)?;
+        let bytes = file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?;
         Ok(bytes)
     }
 

@@ -1,11 +1,11 @@
 ---
 content_repo_name: dummy
-snapshot_dir_path: ./TEST/store/ergibus/archives/dummy
-inclusions: 
+snapshot_dir_path: "./TEST/store/ergibus/archives/dummy"
+inclusions:
   - ~/SRC/GITHUB/ergibus.git/src
   - ~/SRC/GITHUB/ergibus.git/target
-dir_exclusions: 
+dir_exclusions:
   - lost+found
-file_exclusions: 
+file_exclusions:
   - "*.[oa]"
   - "*.py[co]"

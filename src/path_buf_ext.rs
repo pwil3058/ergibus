@@ -62,6 +62,26 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[cfg(unix)]
+    fn soft_link_dir(target: &str, link: &str) -> std::result::Result<(), std::io::Error> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(unix)]
+    fn soft_link_file(target: &str, link: &str) -> std::result::Result<(), std::io::Error> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn soft_link_dir(target: &str, link: &str) -> std::result::Result<(), std::io::Error> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(windows)]
+    fn soft_link_file(target: &str, link: &str) -> std::result::Result<(), std::io::Error> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
     #[test]
     fn path_buf_is_real_dir_works() {
         assert!(PathBuf::from("src").is_real_dir());
@@ -74,7 +94,7 @@ mod tests {
         assert!(!PathBuf::from("src").is_symlink());
         assert!(!PathBuf::from("nonexistent").is_symlink_to_dir());
         assert!(!PathBuf::from("nonexistent").is_symlink());
-        fs::soft_link("target", "link_to_target")?;
+        soft_link_dir("target", "link_to_target")?;
         assert!(PathBuf::from("link_to_target").is_symlink_to_dir());
         assert!(PathBuf::from("link_to_target").is_symlink());
         assert!(!PathBuf::from("link_to_target").is_symlink_to_file());
@@ -91,7 +111,7 @@ mod tests {
     fn path_buf_is_symlink_to_file_works() -> std::result::Result<(), std::io::Error> {
         assert!(!PathBuf::from("COPYRIGHT").is_symlink_to_file());
         assert!(!PathBuf::from("nonexistent").is_symlink_to_file());
-        fs::soft_link("COPYRIGHT", "link_to_COPYRIGHT_2")?;
+        soft_link_file("COPYRIGHT", "link_to_COPYRIGHT_2")?;
         assert!(PathBuf::from("link_to_COPYRIGHT_2").is_symlink_to_file());
         assert!(PathBuf::from("link_to_COPYRIGHT_2").is_symlink());
         assert!(!PathBuf::from("link_to_COPYRIGHT_2").is_symlink_to_dir());
@@ -108,7 +128,7 @@ mod tests {
     fn path_is_symlink_to_dir_works() -> std::result::Result<(), std::io::Error> {
         assert!(!Path::new("src").is_symlink_to_dir());
         assert!(!Path::new("nonexistent").is_symlink_to_dir());
-        fs::soft_link("target", "link_to_target_2")?;
+        soft_link_dir("target", "link_to_target_2")?;
         assert!(Path::new("link_to_target_2").is_symlink_to_dir());
         fs::remove_file(Path::new("link_to_target_2"))
     }
@@ -123,7 +143,7 @@ mod tests {
     fn path_is_symlink_to_file_works() -> std::result::Result<(), std::io::Error> {
         assert!(!Path::new("COPYRIGHT").is_symlink_to_file());
         assert!(!Path::new("nonexistent").is_symlink_to_file());
-        fs::soft_link("COPYRIGHT", "link_to_COPYRIGHT")?;
+        soft_link_file("COPYRIGHT", "link_to_COPYRIGHT")?;
         assert!(Path::new("link_to_COPYRIGHT").is_symlink_to_file());
         fs::remove_file(Path::new("link_to_COPYRIGHT"))
     }

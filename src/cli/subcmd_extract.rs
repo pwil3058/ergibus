@@ -179,12 +179,7 @@ fn copy_file_to(
         pw_pathux::absolute_path_buf(file_path)
     };
     let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-    let bytes = spd.copy_file_to(
-        &abs_file_path,
-        &target_path,
-        overwrite,
-        &mut Some(&mut stderr()),
-    )?;
+    let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite)?;
 
     let finished_at = time::SystemTime::now();
     let duration = match finished_at.duration_since(started_at) {

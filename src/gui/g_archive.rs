@@ -13,7 +13,7 @@ use pw_gix::wrapper::*;
 pub struct ArchiveSelector {
     hbox: gtk::Box,
     combo: gtk::ComboBoxText,
-    changed_callbacks: RefCell<Vec<Box<Fn(Option<String>)>>>,
+    changed_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
 }
 
 impl_widget_wrapper!(hbox: gtk::Box, ArchiveSelector);

@@ -85,7 +85,7 @@ impl BufferedUpdate<Vec<String>, gtk::ListStore> for SnapshotNameListStore {
         self.list_store.clone()
     }
 
-    fn get_row_buffer(&self) -> Rc<RefCell<RowBuffer<Vec<String>>>> {
+    fn get_row_buffer(&self) -> Rc<RefCell<dyn RowBuffer<Vec<String>>>> {
         self.snapshot_row_buffer.clone()
     }
 }
