@@ -402,9 +402,9 @@ pub struct ExtractionStats {
 
 impl SnapshotDir {
     // Interrogation/extraction/restoration methods
-    fn subdir_iter(&self, recursive: bool) -> SnapshotDirIter {
+    fn subdir_iter(&self, recursive: bool) -> SnapshotDirIter<'_> {
         let values = self.subdirs.values();
-        let mut subdir_iters: Vec<SnapshotDirIter> = if recursive {
+        let mut subdir_iters: Vec<SnapshotDirIter<'_>> = if recursive {
             self.subdirs.values().map(|s| s.subdir_iter(true)).collect()
         } else {
             Vec::new()

@@ -250,6 +250,7 @@ pub fn get_archive_names() -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    // TODO: fix tests to use temporary directories.
     use super::*;
     use std::env;
 

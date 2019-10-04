@@ -30,7 +30,7 @@ pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
         )
 }
 
-pub fn run_cmd(arg_matches: &clap::ArgMatches) {
+pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
     let repo_name = arg_matches
         .value_of("repo_name")
         .ok_or(0)

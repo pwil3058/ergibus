@@ -1,9 +1,5 @@
-extern crate gio;
-extern crate gtk;
-
-extern crate pw_gix;
-
-extern crate ergibus;
+use gio;
+use gtk;
 
 use gio::ApplicationExt;
 use gio::ApplicationExtManual;

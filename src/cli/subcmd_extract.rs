@@ -73,7 +73,7 @@ configuration files provided their content repositories are also intact.",
         )
 }
 
-pub fn run_cmd(arg_matches: &clap::ArgMatches) {
+pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
     let archive_or_dir_path = if let Some(archive_name) = arg_matches.value_of("archive_name") {
         ArchiveOrDirPath::Archive(archive_name.to_string())
     } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {

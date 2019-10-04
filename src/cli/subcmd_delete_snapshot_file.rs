@@ -17,7 +17,7 @@ pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
         )
 }
 
-pub fn run_cmd(arg_matches: &clap::ArgMatches) {
+pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
     let mut had_errors = false;
     let files = arg_matches
         .values_of("file")

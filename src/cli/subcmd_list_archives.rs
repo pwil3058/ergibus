@@ -11,7 +11,7 @@ pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
         .about("List all defined snapshot archives")
 }
 
-pub fn run_cmd(_arg_matches: &clap::ArgMatches) {
+pub fn run_cmd(_arg_matches: &clap::ArgMatches<'_>) {
     for archive_name in archive::get_archive_names() {
         println!("{}", archive_name);
     }

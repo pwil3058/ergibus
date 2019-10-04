@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate clap;
 
-extern crate ergibus;
-
 use ergibus::cli;
 
 fn main() {
