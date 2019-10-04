@@ -6,9 +6,9 @@ use hostname;
 use serde_yaml;
 use users;
 
-use config;
-use content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey};
-use eerror::{EError, EResult};
+use crate::config;
+use crate::content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey};
+use crate::eerror::{EError, EResult};
 use pw_pathux::expand_home_dir;
 
 #[derive(Debug)]

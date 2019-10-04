@@ -4,7 +4,7 @@ use std::rc::Rc;
 use gtk;
 use gtk::prelude::*;
 
-use archive;
+use crate::archive;
 
 //use pw_gix::gtkx::combo_box_text;
 use pw_gix::gtkx::combo_box_text::SortedUnique;

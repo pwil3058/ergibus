@@ -12,9 +12,9 @@ use pw_gix::gtkx::list_store::{
 };
 use pw_gix::wrapper::*;
 
-use snapshot;
+use crate::snapshot;
 
-use gui::g_archive;
+use crate::gui::g_archive;
 
 struct SnapshotRowBuffer {
     archive_name: Option<String>,

@@ -4,8 +4,8 @@ use std::str::FromStr;
 
 pub use dychatat::{ContentManager, ContentMgmtKey, HashAlgorithm, RepoSpec};
 
-use config;
-use eerror::{EError, EResult};
+use crate::config;
+use crate::eerror::{EError, EResult};
 
 pub fn content_repo_exists(repo_name: &str) -> bool {
     get_repo_spec_file_path(repo_name).exists()

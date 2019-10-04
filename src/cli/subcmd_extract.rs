@@ -11,9 +11,9 @@ use clap;
 use pw_pathux;
 
 // local
-use cli;
-use eerror::EResult;
-use snapshot::{ArchiveOrDirPath, ExtractionStats, SnapshotPersistentData};
+use crate::cli;
+use crate::eerror::EResult;
+use crate::snapshot::{ArchiveOrDirPath, ExtractionStats, SnapshotPersistentData};
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("extract")

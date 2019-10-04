@@ -1,8 +1,8 @@
 use clap;
 use std;
 
-use archive;
-use cli;
+use crate::archive;
+use crate::cli;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("new_archive").visible_alias("newa")

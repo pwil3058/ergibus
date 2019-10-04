@@ -5,7 +5,7 @@ use globset;
 use serde_json;
 use serde_yaml;
 
-use snapshot::ArchiveOrDirPath;
+use crate::snapshot::ArchiveOrDirPath;
 
 #[derive(Debug)]
 pub enum EError {

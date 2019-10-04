@@ -21,12 +21,12 @@ use walkdir::{WalkDir, WalkDirIterator};
 use pw_pathux::first_subpath_as_os_string;
 
 // local modules access
-use archive::{self, get_archive_data, ArchiveData, Exclusions};
-use attributes::{Attributes, AttributesIfce};
-use content::{ContentManager, ContentMgmtKey};
-use eerror::{EError, EResult};
-use path_buf_ext::RealPathBufType;
-use report::{ignore_report_or_crash, report_broken_link_or_crash};
+use crate::archive::{self, get_archive_data, ArchiveData, Exclusions};
+use crate::attributes::{Attributes, AttributesIfce};
+use crate::content::{ContentManager, ContentMgmtKey};
+use crate::eerror::{EError, EResult};
+use crate::path_buf_ext::RealPathBufType;
+use crate::report::{ignore_report_or_crash, report_broken_link_or_crash};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct FileData {
@@ -1102,8 +1102,8 @@ impl ArchiveOrDirPath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use archive;
-    use content;
+    use crate::archive;
+    use crate::content;
     use fs2::FileExt;
     use std::env;
     use std::os::unix::fs::MetadataExt;

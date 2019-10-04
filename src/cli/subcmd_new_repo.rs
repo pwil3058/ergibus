@@ -2,8 +2,8 @@ use std;
 //use std::path::Path;
 use clap;
 
-use cli;
-use content;
+use crate::cli;
+use crate::content;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("new_repo")
