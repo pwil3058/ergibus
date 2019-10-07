@@ -1,7 +1,45 @@
 #[macro_use]
 extern crate clap;
 
+use structopt::StructOpt;
+
 use ergibus::cli;
+
+use crate::cli::subcmd_archive::Archive;
+use crate::cli::subcmd_back_up::BackUp;
+use crate::cli::subcmd_extract::Extract;
+use crate::cli::subcmd_repo::Repository;
+use crate::cli::subcmd_snapshot::Snapshot;
+
+#[derive(StructOpt)]
+#[structopt(about = "Experimental Rust Git Inspired Back Up System", author = crate_authors!())]
+enum Ergibus {
+    /// Generate a backup snapshot for the specified archive(s).
+    #[structopt(alias = "bu")]
+    BackUp(BackUp),
+    /// Manage archives.
+    #[structopt(alias = "ar")]
+    Archive(Archive),
+    /// Manage content repositories.
+    #[structopt(alias = "repo")]
+    Repository(Repository),
+    /// Extract a file or directory from a snapshot.
+    Extract(Extract),
+    /// Manage snapshot files.
+    #[structopt(alias = "ss")]
+    Snapshot(Snapshot),
+}
+
+fn _alternate_main() {
+    let ergibus = Ergibus::from_args();
+    match ergibus {
+        Ergibus::BackUp(back_up) => back_up.exec(),
+        Ergibus::Archive(archive) => archive.exec(),
+        Ergibus::Repository(repository) => repository.exec(),
+        Ergibus::Extract(extract) => extract.exec(),
+        Ergibus::Snapshot(snapshot) => snapshot.exec(),
+    }
+}
 
 fn main() {
     let matches = clap::App::new("ergibus")

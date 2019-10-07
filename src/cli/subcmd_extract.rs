@@ -6,6 +6,7 @@ use std::time;
 
 // crates.io
 use clap;
+use structopt::StructOpt;
 
 // github
 use pw_pathux;
@@ -14,6 +15,129 @@ use pw_pathux;
 use crate::cli;
 use crate::eerror::EResult;
 use crate::snapshot::{ArchiveOrDirPath, ExtractionStats, SnapshotPersistentData};
+
+#[derive(Debug, StructOpt)]
+#[structopt(group = clap::ArgGroup::with_name("which").required(true), group = clap::ArgGroup::with_name("what").required(true))]
+pub struct Extract {
+    /// select the snapshot "N" places before the most recent. Use -1 to select oldest.
+    #[structopt(long, value_name = "N", default_value = "0")]
+    back_n: i64,
+    /// the name of the snapshot archive whose file or directory is to be extracted.
+    #[structopt(short = "A", long = "archive", group = "which")]
+    archive_name: Option<String>,
+    /// the name of the directory containing the snapshots whose file or
+    /// directory is to be extracted. This option is intended for use in those
+    /// cases where the configuration data has been lost (possibly due to file
+    /// system failure).  Individual snapshot files contain sufficient data for
+    /// extraction of files or directories without the need for the
+    /// configuration files provided their content repositories are also intact.
+    #[structopt(short = "X", long = "exigency", group = "which", parse(from_os_str))]
+    exigency_dir_path: Option<PathBuf>,
+    /// the path of the file to be copied.
+    #[structopt(
+        short = "F",
+        long = "file",
+        value_name = "path",
+        group = "what",
+        parse(from_os_str)
+    )]
+    file_path: Option<PathBuf>,
+    /// the path of the directory to be copied.
+    #[structopt(
+        short = "D",
+        long = "dir",
+        value_name = "path",
+        group = "what",
+        parse(from_os_str)
+    )]
+    dir_path: Option<PathBuf>,
+    /// overwrite the file/directory if it already exists instead of moving it aside.
+    #[structopt(long)]
+    overwrite: bool,
+    /// the name to be given to the copy of the file/directory.
+    #[structopt(long)]
+    with_name: Option<PathBuf>,
+    /// the path of the directory into which the file/directory is to be copied.
+    #[structopt(long)]
+    into_dir: Option<PathBuf>,
+    /// show statistics for the extraction process.
+    #[structopt(long)]
+    stats: bool,
+}
+
+impl Extract {
+    pub fn exec(&self) {
+        let archive_or_dir_path = if let Some(archive_name) = &self.archive_name {
+            ArchiveOrDirPath::Archive(archive_name.clone())
+        } else if let Some(dir_path) = &self.exigency_dir_path {
+            ArchiveOrDirPath::DirPath(dir_path.to_path_buf())
+        } else {
+            println!("either --archive or --exigency must be present");
+            std::process::exit(1);
+        };
+        let into_dir_path = if let Some(into_dir) = &self.into_dir {
+            into_dir.clone()
+        } else {
+            env::current_dir().unwrap()
+        };
+        if let Some(file_path) = &self.file_path {
+            println!(
+                "extract file: {:?} from: {:?}",
+                file_path, archive_or_dir_path
+            );
+            match copy_file_to(
+                &archive_or_dir_path,
+                self.back_n,
+                file_path,
+                &into_dir_path,
+                &self.with_name,
+                self.overwrite,
+            ) {
+                Ok(stats) => {
+                    if self.stats {
+                        println!("Transfered {} bytes in {:?}", stats.0, stats.1)
+                    }
+                }
+                Err(err) => {
+                    writeln!(stderr(), "Error: {:?}", err).unwrap();
+                    std::process::exit(1);
+                }
+            }
+        } else if let Some(dir_path) = &self.dir_path {
+            println!(
+                "extract dir: {:?} from: {:?}",
+                dir_path, archive_or_dir_path
+            );
+            match copy_dir_to(
+                &archive_or_dir_path,
+                self.back_n,
+                dir_path,
+                &into_dir_path,
+                &self.with_name,
+                self.overwrite,
+            ) {
+                Ok(stats) => {
+                    if self.stats {
+                        println!("Transfered {} files containing {} bytes and {} sym links in {} dirs in {:?}",
+                                 stats.0.file_count,
+                                 stats.0.bytes_count,
+                                 (stats.0.dir_sym_link_count + stats.0.file_sym_link_count),
+                                 stats.0.dir_count,
+                                 stats.1
+                        )
+                    }
+                }
+                Err(err) => {
+                    writeln!(stderr(), "Error: {:?}", err).unwrap();
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            println!("either --file or --dir must be present");
+            std::process::exit(1);
+        }
+    }
+}
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("extract")

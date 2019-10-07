@@ -72,6 +72,25 @@ fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> EResult<()> {
     Ok(())
 }
 
+pub fn get_repo_names() -> Vec<String> {
+    let mut names = Vec::new();
+    if let Ok(dir_entries) = fs::read_dir(config::get_repo_config_dir_path()) {
+        for entry_or_err in dir_entries {
+            if let Ok(entry) = entry_or_err {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(file_name) = path.file_name() {
+                        if let Some(file_name) = file_name.to_str() {
+                            names.push(file_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    };
+    names
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

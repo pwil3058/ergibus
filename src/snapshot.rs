@@ -1185,9 +1185,9 @@ mod tests {
             "test_ss",
             "test_repo",
             data_dir_str,
-            inclusions,
-            dir_exclusions,
-            file_exclusions,
+            &inclusions,
+            &dir_exclusions,
+            &file_exclusions,
         ) {
             panic!("new archive: {:?}", err);
         }

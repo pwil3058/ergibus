@@ -129,9 +129,9 @@ pub fn create_new_archive(
     name: &str,
     content_repo_name: &str,
     location: &str,
-    inclusions: Vec<String>,
-    dir_exclusions: Vec<String>,
-    file_exclusions: Vec<String>,
+    inclusions: &[String],
+    dir_exclusions: &[String],
+    file_exclusions: &[String],
 ) -> EResult<()> {
     if get_archive_spec_file_path(name).exists() {
         return Err(EError::ArchiveExists(name.to_string()));
@@ -139,10 +139,10 @@ pub fn create_new_archive(
     if !content_repo_exists(content_repo_name) {
         return Err(EError::UnknownRepo(content_repo_name.to_string()));
     }
-    for pattern in &dir_exclusions {
+    for pattern in dir_exclusions.iter() {
         let _glob = Glob::new(&pattern).map_err(|err| EError::GlobError(err))?;
     }
-    for pattern in &file_exclusions {
+    for pattern in file_exclusions.iter() {
         let _glob = Glob::new(&pattern).map_err(|err| EError::GlobError(err))?;
     }
     let mut snapshot_dir_path = PathBuf::from(location);
@@ -166,9 +166,9 @@ pub fn create_new_archive(
     let spec = ArchiveSpec {
         content_repo_name: content_repo_name.to_string(),
         snapshot_dir_path: sdp_str,
-        inclusions: inclusions,
-        dir_exclusions: dir_exclusions,
-        file_exclusions: file_exclusions,
+        inclusions: inclusions.to_vec(),
+        dir_exclusions: dir_exclusions.to_vec(),
+        file_exclusions: file_exclusions.to_vec(),
     };
     write_archive_spec(name, &spec, false)?;
     Ok(())

@@ -82,9 +82,9 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
         archive_name,
         repo_name,
         location,
-        inclusions,
-        dir_exclusions,
-        file_exclusions,
+        &inclusions,
+        &dir_exclusions,
+        &file_exclusions,
     ) {
         println!("{:?}", err);
         std::process::exit(1);
