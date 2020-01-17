@@ -109,7 +109,7 @@ fn delete_all_but_newest(
     archive_or_dir_path: &snapshot::ArchiveOrDirPath,
     newest_count: usize,
     clear_fell: bool,
-) -> EResult<(usize)> {
+) -> EResult<usize> {
     let mut deleted_count: usize = 0;
     if !clear_fell && newest_count == 0 {
         return Err(EError::LastSnapshot(archive_or_dir_path.clone()));
@@ -133,7 +133,7 @@ fn delete_ss_back_n(
     archive_or_dir_path: &snapshot::ArchiveOrDirPath,
     n: i64,
     clear_fell: bool,
-) -> EResult<(usize)> {
+) -> EResult<usize> {
     let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
     if snapshot_paths.len() == 0 {
         return Err(EError::ArchiveEmpty(archive_or_dir_path.clone()));

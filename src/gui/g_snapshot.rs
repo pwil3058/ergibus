@@ -7,9 +7,7 @@ use gtk::prelude::*;
 
 use crypto_hash::{Algorithm, Hasher};
 
-use pw_gix::gtkx::list_store::{
-    invalid_digest, BufferedUpdate, Digest, Row, RowBuffer, RowBufferCore,
-};
+use pw_gix::gtkx::list_store::*;
 use pw_gix::wrapper::*;
 
 use crate::snapshot;
@@ -93,7 +91,7 @@ impl BufferedUpdate<Vec<String>, gtk::ListStore> for SnapshotNameListStore {
 impl SnapshotNameListStore {
     pub fn new(archive_name: Option<String>) -> SnapshotNameListStore {
         let mut list_store = SnapshotNameListStore {
-            list_store: gtk::ListStore::new(&[gtk::Type::String]),
+            list_store: gtk::ListStore::new(&[glib::Type::String]),
             snapshot_row_buffer: Rc::new(RefCell::new(SnapshotRowBuffer::new(None))),
         };
         list_store.set_archive_name(archive_name);
@@ -110,12 +108,11 @@ impl SnapshotNameListStore {
     }
 }
 
+#[derive(PWO, Wrapper)]
 pub struct SnapshotNameTable {
     pub view: gtk::TreeView,
     list_store: RefCell<SnapshotNameListStore>,
 }
-
-impl_widget_wrapper!(view: gtk::TreeView, SnapshotNameTable);
 
 impl SnapshotNameTable {
     pub fn new_rc(archive_name: Option<String>) -> Rc<SnapshotNameTable> {
@@ -151,13 +148,12 @@ impl SnapshotNameTable {
     }
 }
 
+#[derive(PWO, Wrapper)]
 pub struct SnapshotSelector {
     vbox: gtk::Box,
     archive_selector: Rc<g_archive::ArchiveSelector>,
     snapshot_name_table: Rc<SnapshotNameTable>,
 }
-
-impl_widget_wrapper!(vbox: gtk::Box, SnapshotSelector);
 
 impl SnapshotSelector {
     pub fn new_rc() -> Rc<SnapshotSelector> {

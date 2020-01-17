@@ -40,8 +40,10 @@ pub struct Delete {
     #[structopt(value_name = "N", group = "which_ss")]
     back_n: Option<i64>,
     /// authorise deletion of the last remaining snapshot in the archive.
+    #[structopt(short, long)]
     clear_fell: bool,
     /// authorise deletion of the last remaining snapshot in the archive.
+    #[structopt(short, long)]
     verbose: bool,
 }
 
@@ -82,7 +84,7 @@ impl Delete {
         &self,
         archive_or_dir_path: &ArchiveOrDirPath,
         newest_count: usize,
-    ) -> EResult<(usize)> {
+    ) -> EResult<usize> {
         let mut deleted_count: usize = 0;
         if !self.clear_fell && newest_count == 0 {
             return Err(EError::LastSnapshot(archive_or_dir_path.clone()));
@@ -102,7 +104,7 @@ impl Delete {
         Ok(deleted_count)
     }
 
-    fn delete_ss_back_n(&self, archive_or_dir_path: &ArchiveOrDirPath, n: i64) -> EResult<(usize)> {
+    fn delete_ss_back_n(&self, archive_or_dir_path: &ArchiveOrDirPath, n: i64) -> EResult<usize> {
         let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
         if snapshot_paths.len() == 0 {
             return Err(EError::ArchiveEmpty(archive_or_dir_path.clone()));

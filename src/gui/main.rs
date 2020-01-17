@@ -1,8 +1,8 @@
 use gio;
 use gtk;
 
+use gio::prelude::ApplicationExtManual;
 use gio::ApplicationExt;
-use gio::ApplicationExtManual;
 
 use gtk::prelude::*;
 
