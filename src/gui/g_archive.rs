@@ -10,13 +10,12 @@ use crate::archive;
 use pw_gix::gtkx::combo_box_text::SortedUnique;
 use pw_gix::wrapper::*;
 
+#[derive(PWO, Wrapper)]
 pub struct ArchiveSelector {
     hbox: gtk::Box,
     combo: gtk::ComboBoxText,
     changed_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
 }
-
-impl_widget_wrapper!(hbox: gtk::Box, ArchiveSelector);
 
 impl ArchiveSelector {
     pub fn new_rc() -> Rc<ArchiveSelector> {
