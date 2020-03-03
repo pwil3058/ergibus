@@ -76,15 +76,3 @@ pub fn arg_back_n<'a, 'b>() -> clap::Arg<'a, 'b> {
         .takes_value(true)
         .help("select the snapshot \"N\" places before the most recent. Use -1 to select oldest.")
 }
-
-pub mod subcmd_archive;
-pub mod subcmd_back_up;
-pub mod subcmd_delete_snapshot;
-pub mod subcmd_delete_snapshot_file;
-pub mod subcmd_extract;
-pub mod subcmd_list_archives;
-pub mod subcmd_list_snapshots;
-pub mod subcmd_new_archive;
-pub mod subcmd_new_repo;
-pub mod subcmd_repo;
-pub mod subcmd_snapshot;

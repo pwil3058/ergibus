@@ -3,13 +3,24 @@ extern crate clap;
 
 use structopt::StructOpt;
 
-use ergibus_lib::cli;
+pub mod cli;
+pub mod subcmd_archive;
+pub mod subcmd_back_up;
+pub mod subcmd_delete_snapshot;
+pub mod subcmd_delete_snapshot_file;
+pub mod subcmd_extract;
+pub mod subcmd_list_archives;
+pub mod subcmd_list_snapshots;
+pub mod subcmd_new_archive;
+pub mod subcmd_new_repo;
+pub mod subcmd_repo;
+pub mod subcmd_snapshot;
 
-use crate::cli::subcmd_archive::Archive;
-use crate::cli::subcmd_back_up::BackUp;
-use crate::cli::subcmd_extract::Extract;
-use crate::cli::subcmd_repo::Repository;
-use crate::cli::subcmd_snapshot::Snapshot;
+use crate::subcmd_archive::Archive;
+use crate::subcmd_back_up::BackUp;
+use crate::subcmd_extract::Extract;
+use crate::subcmd_repo::Repository;
+use crate::subcmd_snapshot::Snapshot;
 
 #[derive(StructOpt)]
 #[structopt(about = "Experimental Rust Git Inspired Back Up System", author = crate_authors!())]
@@ -45,27 +56,27 @@ fn main() {
     let matches = clap::App::new("ergibus")
         .author(crate_authors!())
         .version(crate_version!())
-        .subcommand(cli::subcmd_back_up::sub_cmd())
-        .subcommand(cli::subcmd_delete_snapshot::sub_cmd())
-        .subcommand(cli::subcmd_delete_snapshot_file::sub_cmd())
-        .subcommand(cli::subcmd_extract::sub_cmd())
-        .subcommand(cli::subcmd_list_archives::sub_cmd())
-        .subcommand(cli::subcmd_list_snapshots::sub_cmd())
-        .subcommand(cli::subcmd_new_archive::sub_cmd())
-        .subcommand(cli::subcmd_new_repo::sub_cmd())
+        .subcommand(subcmd_back_up::sub_cmd())
+        .subcommand(subcmd_delete_snapshot::sub_cmd())
+        .subcommand(subcmd_delete_snapshot_file::sub_cmd())
+        .subcommand(subcmd_extract::sub_cmd())
+        .subcommand(subcmd_list_archives::sub_cmd())
+        .subcommand(subcmd_list_snapshots::sub_cmd())
+        .subcommand(subcmd_new_archive::sub_cmd())
+        .subcommand(subcmd_new_repo::sub_cmd())
         .get_matches();
 
     match matches.subcommand() {
-        ("back_up", Some(sub_matches)) => cli::subcmd_back_up::run_cmd(sub_matches),
-        ("delete_snapshot", Some(sub_matches)) => cli::subcmd_delete_snapshot::run_cmd(sub_matches),
+        ("back_up", Some(sub_matches)) => subcmd_back_up::run_cmd(sub_matches),
+        ("delete_snapshot", Some(sub_matches)) => subcmd_delete_snapshot::run_cmd(sub_matches),
         ("delete_snapshot_file", Some(sub_matches)) => {
-            cli::subcmd_delete_snapshot_file::run_cmd(sub_matches)
+            subcmd_delete_snapshot_file::run_cmd(sub_matches)
         }
-        ("extract", Some(sub_matches)) => cli::subcmd_extract::run_cmd(sub_matches),
-        ("list_archives", Some(sub_matches)) => cli::subcmd_list_archives::run_cmd(sub_matches),
-        ("list_snapshots", Some(sub_matches)) => cli::subcmd_list_snapshots::run_cmd(sub_matches),
-        ("new_archive", Some(sub_matches)) => cli::subcmd_new_archive::run_cmd(sub_matches),
-        ("new_repo", Some(sub_matches)) => cli::subcmd_new_repo::run_cmd(sub_matches),
+        ("extract", Some(sub_matches)) => subcmd_extract::run_cmd(sub_matches),
+        ("list_archives", Some(sub_matches)) => subcmd_list_archives::run_cmd(sub_matches),
+        ("list_snapshots", Some(sub_matches)) => subcmd_list_snapshots::run_cmd(sub_matches),
+        ("new_archive", Some(sub_matches)) => subcmd_new_archive::run_cmd(sub_matches),
+        ("new_repo", Some(sub_matches)) => subcmd_new_repo::run_cmd(sub_matches),
         _ => panic!("what happened"),
     }
 }

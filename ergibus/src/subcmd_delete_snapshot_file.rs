@@ -3,7 +3,7 @@ use std;
 use std::path::PathBuf;
 
 use crate::cli;
-use crate::snapshot;
+use ergibus_lib::snapshot;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("delete_snapshot_file")

@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::cli;
-use crate::eerror::{EError, EResult};
-use crate::snapshot;
+use ergibus_lib::eerror::{EError, EResult};
+use ergibus_lib::snapshot;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("delete_snapshot")

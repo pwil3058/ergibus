@@ -3,7 +3,7 @@
 use clap;
 
 //use cli;
-use crate::archive;
+use ergibus_lib::archive;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("list_archives")

@@ -5,7 +5,7 @@ use clap;
 use structopt::StructOpt;
 
 use crate::cli;
-use crate::snapshot;
+use ergibus_lib::snapshot;
 
 #[derive(Debug, StructOpt)]
 pub struct BackUp {

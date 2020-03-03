@@ -13,8 +13,8 @@ use pw_pathux;
 
 // local
 use crate::cli;
-use crate::eerror::EResult;
-use crate::snapshot::{ArchiveOrDirPath, ExtractionStats, SnapshotPersistentData};
+use ergibus_lib::eerror::EResult;
+use ergibus_lib::snapshot::{ArchiveOrDirPath, ExtractionStats, SnapshotPersistentData};
 
 #[derive(Debug, StructOpt)]
 #[structopt(group = clap::ArgGroup::with_name("which").required(true), group = clap::ArgGroup::with_name("what").required(true))]

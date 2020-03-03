@@ -3,7 +3,7 @@ use std;
 use clap;
 
 use crate::cli;
-use crate::content;
+use ergibus_lib::content;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("new_repo")

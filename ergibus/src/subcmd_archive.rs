@@ -1,6 +1,6 @@
 use structopt::StructOpt;
 
-use crate::archive;
+use ergibus_lib::archive;
 
 #[derive(Debug, StructOpt)]
 pub enum Archive {

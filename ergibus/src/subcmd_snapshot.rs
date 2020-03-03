@@ -2,8 +2,8 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use crate::eerror::{EError, EResult};
-use crate::snapshot::{self, ArchiveOrDirPath};
+use ergibus_lib::eerror::{EError, EResult};
+use ergibus_lib::snapshot::{self, ArchiveOrDirPath};
 
 #[derive(Debug, StructOpt)]
 pub struct Snapshot {
