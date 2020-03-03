@@ -3,7 +3,7 @@ extern crate clap;
 
 use structopt::StructOpt;
 
-use ergibus::cli;
+use ergibus_lib::cli;
 
 use crate::cli::subcmd_archive::Archive;
 use crate::cli::subcmd_back_up::BackUp;

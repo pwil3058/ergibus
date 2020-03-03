@@ -11,9 +11,9 @@ use pw_gix::recollections;
 use pw_gix::wrapper::*;
 
 //use ergibus::gui::g_archive;
-use ergibus::gui::g_snapshot;
+use ergibus_lib::gui::g_snapshot;
 
-use ergibus::config;
+use ergibus_lib::config;
 
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
