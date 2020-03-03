@@ -1,5 +1,7 @@
 [workspace]
 
 members = [
-    "ergibus_lib"
+    "ergibus_lib",
+    "ergibus",
+    "ergibus_gtk",
 ]
