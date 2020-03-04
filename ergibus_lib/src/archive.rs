@@ -6,9 +6,11 @@ use hostname;
 use serde_yaml;
 use users;
 
-use crate::config;
-use crate::content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey};
-use crate::eerror::{EError, EResult};
+use crate::{
+    config,
+    content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
+    EResult, Error,
+};
 use pw_pathux::expand_home_dir;
 
 #[derive(Debug)]
@@ -21,17 +23,17 @@ impl Exclusions {
     fn new(dir_patterns: &Vec<String>, file_patterns: &Vec<String>) -> EResult<Exclusions> {
         let mut dgs_builder = GlobSetBuilder::new();
         for pattern in dir_patterns {
-            let glob = Glob::new(pattern).map_err(|err| EError::GlobError(err))?;
+            let glob = Glob::new(pattern).map_err(|err| Error::GlobError(err))?;
             dgs_builder.add(glob);
         }
-        let dir_globset = dgs_builder.build().map_err(|err| EError::GlobError(err))?;
+        let dir_globset = dgs_builder.build().map_err(|err| Error::GlobError(err))?;
 
         let mut fgs_builder = GlobSetBuilder::new();
         for pattern in file_patterns {
-            let glob = Glob::new(pattern).map_err(|err| EError::GlobError(err))?;
+            let glob = Glob::new(pattern).map_err(|err| Error::GlobError(err))?;
             fgs_builder.add(glob);
         }
-        let file_globset = fgs_builder.build().map_err(|err| EError::GlobError(err))?;
+        let file_globset = fgs_builder.build().map_err(|err| Error::GlobError(err))?;
 
         Ok(Exclusions {
             dir_globset,
@@ -83,11 +85,11 @@ fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
-    // TODO: map error to a more specific EError.
+    // TODO: map error to a more specific Error.
     let spec_file = File::open(&spec_file_path)
-        .map_err(|err| EError::ArchiveReadError(err, spec_file_path.clone()))?;
+        .map_err(|err| Error::ArchiveReadError(err, spec_file_path.clone()))?;
     let spec: ArchiveSpec = serde_yaml::from_reader(&spec_file)
-        .map_err(|err| EError::ArchiveYamlReadError(err, archive_name.to_string()))?;
+        .map_err(|err| Error::ArchiveYamlReadError(err, archive_name.to_string()))?;
     Ok(spec)
 }
 
@@ -98,21 +100,21 @@ fn write_archive_spec(
 ) -> EResult<()> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
     if !overwrite && spec_file_path.exists() {
-        return Err(EError::ArchiveExists(archive_name.to_string()));
+        return Err(Error::ArchiveExists(archive_name.to_string()));
     }
     match spec_file_path.parent() {
         Some(config_dir_path) => {
             if !config_dir_path.exists() {
                 fs::create_dir_all(&config_dir_path)
-                    .map_err(|err| EError::ArchiveWriteError(err, config_dir_path.to_path_buf()))?;
+                    .map_err(|err| Error::ArchiveWriteError(err, config_dir_path.to_path_buf()))?;
             }
         }
         None => (),
     }
     let spec_file = File::create(&spec_file_path)
-        .map_err(|err| EError::ArchiveWriteError(err, spec_file_path.clone()))?;
+        .map_err(|err| Error::ArchiveWriteError(err, spec_file_path.clone()))?;
     serde_yaml::to_writer(&spec_file, archive_spec)
-        .map_err(|err| EError::ArchiveYamlWriteError(err, archive_name.to_string()))?;
+        .map_err(|err| Error::ArchiveYamlWriteError(err, archive_name.to_string()))?;
     Ok(())
 }
 
@@ -134,16 +136,16 @@ pub fn create_new_archive(
     file_exclusions: &[String],
 ) -> EResult<()> {
     if get_archive_spec_file_path(name).exists() {
-        return Err(EError::ArchiveExists(name.to_string()));
+        return Err(Error::ArchiveExists(name.to_string()));
     }
     if !content_repo_exists(content_repo_name) {
-        return Err(EError::UnknownRepo(content_repo_name.to_string()));
+        return Err(Error::UnknownRepo(content_repo_name.to_string()));
     }
     for pattern in dir_exclusions.iter() {
-        let _glob = Glob::new(&pattern).map_err(|err| EError::GlobError(err))?;
+        let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
     }
     for pattern in file_exclusions.iter() {
-        let _glob = Glob::new(&pattern).map_err(|err| EError::GlobError(err))?;
+        let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
     }
     let mut snapshot_dir_path = PathBuf::from(location);
     snapshot_dir_path.push("ergibus");
@@ -158,7 +160,7 @@ pub fn create_new_archive(
     };
     snapshot_dir_path.push(name);
     fs::create_dir_all(&snapshot_dir_path)
-        .map_err(|err| EError::ArchiveWriteError(err, snapshot_dir_path.clone()))?;
+        .map_err(|err| Error::ArchiveWriteError(err, snapshot_dir_path.clone()))?;
     let sdp_str = match snapshot_dir_path.to_str() {
         Some(sdp_ostr) => sdp_ostr.to_string(),
         None => panic!("{:?}: line {:?}", file!(), line!()),
@@ -181,7 +183,7 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let snapshot_dir_path = PathBuf::from(&archive_spec.snapshot_dir_path)
         .canonicalize()
         .map_err(|err| {
-            EError::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path))
+            Error::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path))
         })?;
     let mut includes = Vec::new();
     for inclusion in archive_spec.inclusions {
@@ -197,7 +199,7 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
         } else {
             let path_buf = PathBuf::from(inclusion);
             if path_buf.is_relative() {
-                return Err(EError::RelativeIncludePath(
+                return Err(Error::RelativeIncludePath(
                     path_buf,
                     archive_name.to_string(),
                 ));
@@ -226,7 +228,7 @@ pub fn get_archive_snapshot_dir_path(archive_name: &str) -> EResult<PathBuf> {
     let archive_spec = read_archive_spec(archive_name)?;
     PathBuf::from(&archive_spec.snapshot_dir_path)
         .canonicalize()
-        .map_err(|err| EError::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path)))
+        .map_err(|err| Error::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path)))
 }
 
 pub fn get_archive_names() -> Vec<String> {
@@ -295,7 +297,7 @@ mod tests {
         env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
         if let Err(err) = get_archive_data("dummy") {
             match err {
-                EError::UnknownRepo(_) => (),
+                Error::UnknownRepo(_) => (),
                 _ => panic!("ERR: {:?}", err),
             }
         };

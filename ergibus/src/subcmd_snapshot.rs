@@ -2,8 +2,8 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use ergibus_lib::eerror::{EError, EResult};
 use ergibus_lib::snapshot::{self, ArchiveOrDirPath};
+use ergibus_lib::{EResult, Error};
 
 #[derive(Debug, StructOpt)]
 pub struct Snapshot {
@@ -87,11 +87,11 @@ impl Delete {
     ) -> EResult<usize> {
         let mut deleted_count: usize = 0;
         if !self.clear_fell && newest_count == 0 {
-            return Err(EError::LastSnapshot(archive_or_dir_path.clone()));
+            return Err(Error::LastSnapshot(archive_or_dir_path.clone()));
         }
         let snapshot_paths = archive_or_dir_path.get_snapshot_paths(false)?;
         if snapshot_paths.len() == 0 {
-            return Err(EError::ArchiveEmpty(archive_or_dir_path.clone()));
+            return Err(Error::ArchiveEmpty(archive_or_dir_path.clone()));
         }
         if snapshot_paths.len() <= newest_count {
             return Ok(0);
@@ -107,7 +107,7 @@ impl Delete {
     fn delete_ss_back_n(&self, archive_or_dir_path: &ArchiveOrDirPath, n: i64) -> EResult<usize> {
         let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
         if snapshot_paths.len() == 0 {
-            return Err(EError::ArchiveEmpty(archive_or_dir_path.clone()));
+            return Err(Error::ArchiveEmpty(archive_or_dir_path.clone()));
         };
         let index: usize = if n < 0 {
             (snapshot_paths.len() as i64 + n) as usize
@@ -118,7 +118,7 @@ impl Delete {
             return Ok(0);
         }
         if !self.clear_fell && snapshot_paths.len() == 1 {
-            return Err(EError::LastSnapshot(archive_or_dir_path.clone()));
+            return Err(Error::LastSnapshot(archive_or_dir_path.clone()));
         }
         snapshot::delete_snapshot_file(&snapshot_paths[index])?;
         Ok(1)

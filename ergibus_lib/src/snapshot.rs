@@ -24,9 +24,9 @@ use pw_pathux::first_subpath_as_os_string;
 use crate::archive::{self, get_archive_data, ArchiveData, Exclusions};
 use crate::attributes::{Attributes, AttributesIfce};
 use crate::content::{ContentManager, ContentMgmtKey};
-use crate::eerror::{EError, EResult};
 use crate::path_buf_ext::RealPathBufType;
 use crate::report::{ignore_report_or_crash, report_broken_link_or_crash};
+use crate::{EResult, Error};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct FileData {
@@ -319,7 +319,7 @@ impl FileData {
         if to_file_path.exists() {
             if to_file_path.is_real_file() {
                 let mut file = File::open(to_file_path)
-                    .map_err(|err| EError::SnapshotReadIOError(err, to_file_path.to_path_buf()))?;
+                    .map_err(|err| Error::SnapshotReadIOError(err, to_file_path.to_path_buf()))?;
                 let content_is_same = c_mgr.check_content_token(&mut file, &self.content_token)?;
                 if content_is_same {
                     // nothing to do
@@ -329,7 +329,7 @@ impl FileData {
             if !overwrite {
                 let new_path = move_aside_file_path(to_file_path);
                 fs::rename(to_file_path, &new_path).map_err(|err| {
-                    EError::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err)
+                    Error::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err)
                 })?;
             }
         }
@@ -361,13 +361,13 @@ impl LinkData {
             if !overwrite {
                 let new_path = move_aside_file_path(as_path);
                 fs::rename(as_path, &new_path)
-                    .map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+                    .map_err(|err| Error::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
             }
         }
         if cfg!(target_family = "unix") {
             use std::os::unix::fs::symlink;
             symlink(&self.link_target, as_path)
-                .map_err(|err| EError::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+                .map_err(|err| Error::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
         } else {
             panic!("not implemented for this os")
         }
@@ -381,11 +381,11 @@ fn clear_way_for_new_dir(new_dir_path: &Path, overwrite: bool) -> EResult<()> {
         if overwrite {
             // Remove the file system object to make way for the directory
             fs::remove_file(new_dir_path)
-                .map_err(|err| EError::SnapshotDeleteIOError(err, new_dir_path.to_path_buf()))?;
+                .map_err(|err| Error::SnapshotDeleteIOError(err, new_dir_path.to_path_buf()))?;
         } else {
             let new_path = move_aside_file_path(new_dir_path);
             fs::rename(new_dir_path, &new_path)
-                .map_err(|err| EError::SnapshotMoveAsideFailed(new_dir_path.to_path_buf(), err))?;
+                .map_err(|err| Error::SnapshotMoveAsideFailed(new_dir_path.to_path_buf(), err))?;
         }
     };
     Ok(())
@@ -514,12 +514,12 @@ impl SnapshotDir {
         clear_way_for_new_dir(to_dir_path, overwrite)?;
         if !to_dir_path.is_dir() {
             fs::create_dir_all(to_dir_path)
-                .map_err(|err| EError::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
+                .map_err(|err| Error::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
             if let Some(to_dir) = self.find_subdir(to_dir_path) {
                 to_dir
                     .attributes
                     .set_file_attributes(to_dir_path, op_errf)
-                    .map_err(|err| EError::ContentCopyIOError(err))?;
+                    .map_err(|err| Error::ContentCopyIOError(err))?;
             }
         }
         stats.dir_count += 1;
@@ -530,11 +530,11 @@ impl SnapshotDir {
             clear_way_for_new_dir(&new_dir_path, overwrite)?;
             if !new_dir_path.is_dir() {
                 fs::create_dir_all(&new_dir_path)
-                    .map_err(|err| EError::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
+                    .map_err(|err| Error::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
                 subdir
                     .attributes
                     .set_file_attributes(&new_dir_path, op_errf)
-                    .map_err(|err| EError::ContentCopyIOError(err))?;
+                    .map_err(|err| Error::ContentCopyIOError(err))?;
             }
             stats.dir_count += 1;
         }
@@ -635,7 +635,7 @@ impl SnapshotPersistentData {
     fn serialize(&self) -> EResult<String> {
         match serde_json::to_string(self) {
             Ok(string) => Ok(string),
-            Err(err) => Err(EError::SnapshotSerializeError(err)),
+            Err(err) => Err(Error::SnapshotSerializeError(err)),
         }
     }
 
@@ -753,12 +753,12 @@ impl SnapshotPersistentData {
         let file_name = self.file_name();
         let path = dir_path.join(file_name);
         let file = File::create(&path)
-            .map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
+            .map_err(|err| Error::SnapshotWriteIOError(err, path.to_path_buf()))?;
         let json_text = self.serialize()?;
         let mut snappy_wtr = snap::Writer::new(file);
         snappy_wtr
             .write_all(json_text.as_bytes())
-            .map_err(|err| EError::SnapshotWriteIOError(err, path.to_path_buf()))?;
+            .map_err(|err| Error::SnapshotWriteIOError(err, path.to_path_buf()))?;
         Ok(path)
     }
 }
@@ -783,7 +783,7 @@ fn entry_is_ss_file(entry: &DirEntry) -> bool {
 
 fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
     let dir_entries = fs::read_dir(dir_path)
-        .map_err(|err| EError::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
     let mut ss_entries = Vec::new();
     for entry_or_err in dir_entries {
         match entry_or_err {
@@ -819,17 +819,17 @@ impl SnapshotPersistentData {
                 let mut snappy_rdr = snap::Reader::new(file);
                 match snappy_rdr.read_to_string(&mut spd_str) {
                     Err(err) => {
-                        return Err(EError::SnapshotReadIOError(err, file_path.to_path_buf()))
+                        return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()))
                     }
                     _ => (),
                 };
                 let spde = serde_json::from_str::<SnapshotPersistentData>(&spd_str);
                 match spde {
                     Ok(snapshot_persistent_data) => Ok(snapshot_persistent_data),
-                    Err(err) => Err(EError::SnapshotReadJsonError(err, file_path.to_path_buf())),
+                    Err(err) => Err(Error::SnapshotReadJsonError(err, file_path.to_path_buf())),
                 }
             }
-            Err(err) => Err(EError::SnapshotReadIOError(err, file_path.to_path_buf())),
+            Err(err) => Err(Error::SnapshotReadIOError(err, file_path.to_path_buf())),
         }
     }
 
@@ -851,7 +851,7 @@ impl SnapshotPersistentData {
         let file_data = match self.root_dir.find_file(fm_file_path) {
             Some(fd) => fd,
             None => {
-                return Err(EError::SnapshotUnknownFile(
+                return Err(Error::SnapshotUnknownFile(
                     self.archive_name(),
                     self.snapshot_name(),
                     fm_file_path.to_path_buf(),
@@ -878,7 +878,7 @@ impl SnapshotPersistentData {
         let fm_subdir = if let Some(subdir) = self.root_dir.find_subdir(fm_dir_path) {
             subdir
         } else {
-            return Err(EError::SnapshotUnknownDirectory(
+            return Err(Error::SnapshotUnknownDirectory(
                 self.archive_name(),
                 self.snapshot_name(),
                 fm_dir_path.to_path_buf(),
@@ -953,7 +953,7 @@ impl SnapshotGenerator {
     pub fn generation_duration(&self) -> EResult<time::Duration> {
         match self.snapshot {
             Some(ref snapshot) => Ok(snapshot.creation_duration()),
-            None => Err(EError::NoSnapshotAvailable),
+            None => Err(Error::NoSnapshotAvailable),
         }
     }
 
@@ -968,7 +968,7 @@ impl SnapshotGenerator {
     fn write_snapshot(&mut self) -> EResult<PathBuf> {
         let file_path = match self.snapshot {
             Some(ref snapshot) => snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?,
-            None => return Err(EError::NoSnapshotAvailable),
+            None => return Err(Error::NoSnapshotAvailable),
         };
         // check that the snapshot can be rebuilt from the file
         match SnapshotPersistentData::from_file(&file_path) {
@@ -980,10 +980,8 @@ impl SnapshotGenerator {
                 } else {
                     // The file is mangled so remove it
                     match fs::remove_file(&file_path) {
-                        Ok(_) => Err(EError::SnapshotMismatch(file_path.to_path_buf())),
-                        Err(err) => {
-                            Err(EError::SnapshotMismatchDirty(err, file_path.to_path_buf()))
-                        }
+                        Ok(_) => Err(Error::SnapshotMismatch(file_path.to_path_buf())),
+                        Err(err) => Err(Error::SnapshotMismatchDirty(err, file_path.to_path_buf())),
                     }
                 }
             }
@@ -1010,7 +1008,7 @@ pub fn generate_snapshot(
 pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     let snapshot = SnapshotPersistentData::from_file(ss_file_path)?;
     fs::remove_file(ss_file_path)
-        .map_err(|err| EError::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
+        .map_err(|err| Error::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
     snapshot.release_contents();
     Ok(())
 }
@@ -1085,7 +1083,7 @@ impl ArchiveOrDirPath {
     pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
         let snapshot_paths = self.get_snapshot_paths(true)?;
         if snapshot_paths.len() == 0 {
-            return Err(EError::ArchiveEmpty(self.clone()));
+            return Err(Error::ArchiveEmpty(self.clone()));
         };
         let index: usize = if n < 0 {
             (snapshot_paths.len() as i64 + n) as usize
@@ -1093,7 +1091,7 @@ impl ArchiveOrDirPath {
             n as usize
         };
         if snapshot_paths.len() <= index {
-            return Err(EError::SnapshotIndexOutOfRange(self.clone(), n));
+            return Err(Error::SnapshotIndexOutOfRange(self.clone(), n));
         }
         Ok(snapshot_paths[index].clone())
     }
