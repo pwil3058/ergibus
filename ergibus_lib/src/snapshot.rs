@@ -1119,7 +1119,7 @@ mod tests {
     fn find_or_add_subdir_works() {
         let mut sd = SnapshotDir::new(None)
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
-        let p = PathBuf::from("./TEST").canonicalize().unwrap();
+        let p = PathBuf::from("../TEST").canonicalize().unwrap();
         {
             let ssd = sd.find_or_add_subdir(&p);
             assert!(ssd.is_ok());
@@ -1132,13 +1132,13 @@ mod tests {
             None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         assert!(ssd.path == p.as_path());
-        let sdp = PathBuf::from("./").canonicalize().unwrap();
+        let sdp = PathBuf::from("../").canonicalize().unwrap();
         let ssd = match sd.find_subdir(&sdp) {
             Some(ssd) => ssd,
             None => panic!("{:?}: line {:?}", file!(), line!()),
         };
         assert_eq!(ssd.path, sdp.as_path());
-        let sdp1 = PathBuf::from("./TEST/config").canonicalize().unwrap();
+        let sdp1 = PathBuf::from("../TEST/config").canonicalize().unwrap();
         assert_eq!(sd.find_subdir(&sdp1), None);
     }
 
@@ -1146,7 +1146,7 @@ mod tests {
     fn test_write_snapshot() {
         let file = fs::OpenOptions::new()
             .write(true)
-            .open("./test_lock_file")
+            .open("../test_lock_file")
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         if let Err(err) = file.lock_exclusive() {
             panic!("lock failed: {:?}", err);
@@ -1168,7 +1168,7 @@ mod tests {
         let my_file = my_file
             .to_str()
             .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
-        let cli_dir = Path::new("./src/cli")
+        let cli_dir = Path::new("../ergibus")
             .canonicalize()
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         let cli_dir = cli_dir

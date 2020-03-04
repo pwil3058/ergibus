@@ -104,7 +104,7 @@ mod tests {
     fn repo_works() {
         let file = OpenOptions::new()
             .write(true)
-            .open("./test_lock_file")
+            .open("../test_lock_file")
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         if let Err(err) = file.lock_exclusive() {
             panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)

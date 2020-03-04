@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_get_archive() {
-        env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
+        env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
         if let Err(err) = get_archive_data("dummy") {
             match err {
                 EError::UnknownRepo(_) => (),
@@ -335,7 +335,7 @@ file_exclusions:\n
 
     #[test]
     fn test_read_write_archive_spec() {
-        env::set_var("ERGIBUS_CONFIG_DIR", "./TEST/config");
+        env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
         let spec: ArchiveSpec = read_archive_spec("dummy")
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         assert_eq!(spec.content_repo_name, "dummy");
