@@ -1,14 +1,10 @@
-use gio;
-use gtk;
-
-use gio::prelude::ApplicationExtManual;
-use gio::ApplicationExt;
-
-use gtk::prelude::*;
-
-use pw_gix::gdkx::format_geometry;
-use pw_gix::recollections;
-use pw_gix::wrapper::*;
+use pw_gix::{
+    gdkx::format_geometry,
+    gio::{self, prelude::ApplicationExtManual, ApplicationExt},
+    gtk::{self, prelude::*},
+    recollections,
+    wrapper::*,
+};
 
 //use ergibus::gui::g_archive;
 //use crate::g_snapshot;

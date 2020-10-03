@@ -1,14 +1,15 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gtk;
-use gtk::prelude::*;
+use pw_gix::{
+    gtk::{self, prelude::*},
+    gtkx::combo_box_text::SortedUnique,
+    wrapper::*,
+};
 
 use ergibus_lib::archive;
 
 //use pw_gix::gtkx::combo_box_text;
-use pw_gix::gtkx::combo_box_text::SortedUnique;
-use pw_gix::wrapper::*;
 
 #[derive(PWO, Wrapper)]
 pub struct ArchiveSelector {

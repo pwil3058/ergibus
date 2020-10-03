@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::io::{self, ErrorKind};
 use std::path::Path;
 
@@ -12,8 +11,8 @@ pub fn ignore_report_or_crash(err: &io::Error, path: &Path) {
         ErrorKind::PermissionDenied => log::warn!("{:?}: permission denied", path),
         // programming error that needs to be fixed
         _ => {
-            log::error!("{:?}: {:?}: {:?}", err.kind(), err.description(), path);
-            panic!("{:?}: {:?}: {:?}", err.kind(), err.description(), path);
+            log::error!("{:?}: {:?}: {:?}", err.kind(), err.to_string(), path);
+            panic!("{:?}: {:?}: {:?}", err.kind(), err.to_string(), path);
         }
     }
 }
@@ -31,14 +30,14 @@ pub fn report_broken_link_or_crash(err: &io::Error, link_path: &Path, target_pat
                 err.kind(),
                 link_path,
                 target_path,
-                err.description()
+                err.to_string()
             );
             panic!(
                 "{:?}: {:?}: {:?} -> {:?}",
                 err.kind(),
                 link_path,
                 target_path,
-                err.description()
+                err.to_string()
             );
         }
     }

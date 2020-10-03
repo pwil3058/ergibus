@@ -2,13 +2,14 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
 
-use gtk;
-use gtk::prelude::*;
+use pw_gix::{
+    glib,
+    gtk::{self, prelude::*},
+    gtkx::list_store::*,
+    wrapper::*,
+};
 
 use crypto_hash::{Algorithm, Hasher};
-
-use pw_gix::gtkx::list_store::*;
-use pw_gix::wrapper::*;
 
 use ergibus_lib::snapshot;
 
@@ -118,7 +119,7 @@ impl SnapshotNameTable {
     pub fn new_rc(archive_name: Option<String>) -> Rc<SnapshotNameTable> {
         let list_store = RefCell::new(SnapshotNameListStore::new(archive_name));
 
-        let view = gtk::TreeView::new_with_model(&list_store.borrow().get_list_store());
+        let view = gtk::TreeView::with_model(&list_store.borrow().get_list_store());
         view.set_headers_visible(true);
 
         view.get_selection().set_mode(gtk::SelectionMode::Multiple);
