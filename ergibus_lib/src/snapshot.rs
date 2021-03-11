@@ -55,7 +55,7 @@ struct SnapshotDir {
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
     let parent_dir_path = path
         .parent()
-        .unwrap_or_else(|| panic!("{:?}: line {:?}: can't find parent directory"));
+        .unwrap_or_else(|| panic!("Can't find parent directory"));
     let entries = fs::read_dir(&parent_dir_path)?;
     for entry_or_err in entries {
         if let Ok(entry) = entry_or_err {
