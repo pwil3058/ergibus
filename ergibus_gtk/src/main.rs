@@ -6,7 +6,7 @@ use pw_gix::{
     wrapper::*,
 };
 
-//use ergibus::gui::g_archive;
+//use ergibus_clap::gui::g_archive;
 //use crate::g_snapshot;
 
 use ergibus_lib::config;

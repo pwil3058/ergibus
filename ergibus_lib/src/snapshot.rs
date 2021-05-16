@@ -1166,7 +1166,7 @@ mod tests {
         let my_file = my_file
             .to_str()
             .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
-        let cli_dir = Path::new("../ergibus")
+        let cli_dir = Path::new("../ergibus_clap")
             .canonicalize()
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         let cli_dir = cli_dir
