@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use pw_pathux;
 
-const DEFAULT_CONFIG_DIR_PATH: &str = "~/.config/ergibus_clap";
+const DEFAULT_CONFIG_DIR_PATH: &str = "~/.config/ergibus";
 
 const DCDP_OVERRIDE_ENVAR: &str = "ERGIBUS_CONFIG_DIR";
 

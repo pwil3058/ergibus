@@ -44,7 +44,7 @@ fn get_repo_spec_file_path(repo_name: &str) -> PathBuf {
     config::get_repo_config_dir_path().join(repo_name)
 }
 
-fn read_repo_spec(repo_name: &str) -> EResult<RepoSpec> {
+pub fn read_repo_spec(repo_name: &str) -> EResult<RepoSpec> {
     let spec_file_path = get_repo_spec_file_path(repo_name);
     let spec_file = File::open(&spec_file_path)
         .map_err(|err| Error::RepoReadError(err, spec_file_path.clone()))?;
