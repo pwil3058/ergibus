@@ -4,6 +4,7 @@ extern crate serde_derive;
 use std::{
     cell::RefCell,
     collections::HashMap,
+    fmt,
     fs::{create_dir_all, remove_file, File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     ops::AddAssign,
@@ -38,6 +39,16 @@ impl FromStr for HashAlgorithm {
             "Sha256" | "SHA256" | "sha256" => Ok(HashAlgorithm::Sha256),
             "Sha512" | "SHA512" | "sha512" => Ok(HashAlgorithm::Sha512),
             _ => Err(RepoError::UnknownHashAlgorithm(src.to_string())),
+        }
+    }
+}
+
+impl fmt::Display for HashAlgorithm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HashAlgorithm::Sha1 => write!(f, "Sha1"),
+            HashAlgorithm::Sha256 => write!(f, "Sha256"),
+            HashAlgorithm::Sha512 => write!(f, "Sha512"),
         }
     }
 }
@@ -90,6 +101,17 @@ pub struct RepoSpec {
     base_dir_path: PathBuf,
     /// The hash algorithm to be used when calculating content digests.
     hash_algorithm: HashAlgorithm,
+}
+
+impl fmt::Display for RepoSpec {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "dir: {} digest: {}",
+            self.base_dir_path.as_os_str().to_string_lossy(),
+            self.hash_algorithm
+        )
+    }
 }
 
 impl RepoSpec {
@@ -762,7 +784,9 @@ mod tests {
 
     #[test]
     fn storage_file_name() {
-        let storage = Storage { base_dir_path: PathBuf::from("data") };
+        let storage = Storage {
+            base_dir_path: PathBuf::from("data"),
+        };
         let token_file_path = storage.token_content_file_path("AAGH");
         assert_eq!(token_file_path, PathBuf::from("data/AAG/H"));
     }
