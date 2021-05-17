@@ -28,7 +28,7 @@ pub fn create_new_repo(name: &str, location: &str, hash_algortithm_str: &str) ->
     let hash_algorithm = HashAlgorithm::from_str(hash_algortithm_str)?;
 
     let mut repo_dir_path = PathBuf::from(location);
-    repo_dir_path.push("ergibus_clap");
+    repo_dir_path.push("ergibus");
     repo_dir_path.push("repos");
     repo_dir_path.push(name);
 
