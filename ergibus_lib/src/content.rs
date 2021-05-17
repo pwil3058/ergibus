@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-pub use dychatat::{ContentManager, ContentMgmtKey, HashAlgorithm, RepoSpec};
+pub use dychatat::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, RepoSpec};
 
 use crate::config;
 use crate::{EResult, Error};
@@ -89,6 +89,15 @@ pub fn get_repo_names() -> Vec<String> {
         }
     };
     names
+}
+
+pub fn delete_repository(repo_name: &str) -> EResult<()> {
+    let repo_key = get_content_mgmt_key(repo_name)?;
+    let content_manager = repo_key.open_content_manager(Mutability::Mutable)?;
+    content_manager.delete()?;
+    let repo_spec_path = get_repo_spec_file_path(repo_name);
+    fs::remove_file(repo_spec_path)?;
+    Ok(())
 }
 
 #[cfg(test)]

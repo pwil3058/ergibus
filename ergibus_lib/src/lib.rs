@@ -25,6 +25,8 @@ pub enum Error {
 
     GlobError(globset::Error),
 
+    IOError(std::io::Error),
+
     ContentCopyIOError(std::io::Error),
     RepoError(dychatat::RepoError),
     RepoExists(String),
@@ -51,6 +53,12 @@ pub enum Error {
 impl From<dychatat::RepoError> for Error {
     fn from(error: dychatat::RepoError) -> Self {
         Error::RepoError(error)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Error::IOError(error)
     }
 }
 

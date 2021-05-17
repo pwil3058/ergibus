@@ -24,3 +24,16 @@ impl ListRepositories {
         Ok(())
     }
 }
+
+#[derive(Debug, StructOpt)]
+/// Delete a repository
+pub struct DeleteRepository {
+    /// The name of the repository to be deleted
+    repo_name: String,
+}
+
+impl DeleteRepository {
+    pub fn exec(&self) -> EResult<()> {
+        content::delete_repository(&self.repo_name)
+    }
+}
