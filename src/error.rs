@@ -1,5 +1,6 @@
 use std::{convert::From, error, ffi::OsString, fmt, io, path::PathBuf};
 
+use crate::ReferencedContentData;
 use serde_json;
 use serde_yaml;
 
@@ -15,6 +16,7 @@ pub enum RepoError {
     UnknownToken(String),
     YamlError(serde_yaml::Error),
     BadOsString(OsString),
+    StillBeingReferenced(ReferencedContentData),
 }
 
 impl fmt::Display for RepoError {
@@ -29,6 +31,11 @@ impl fmt::Display for RepoError {
             UnknownToken(string) => write!(f, "{}: unknown content token", string),
             YamlError(error) => write!(f, "{}", error),
             BadOsString(os_string) => write!(f, "{:?}: malformed string", os_string),
+            StillBeingReferenced(rcd) => write!(
+                f,
+                "Still has {} references to {} itemts",
+                rcd.num_references, rcd.num_items
+            ),
         }
     }
 }
@@ -56,13 +63,5 @@ impl From<serde_yaml::Error> for RepoError {
 impl From<OsString> for RepoError {
     fn from(os_string: OsString) -> Self {
         RepoError::BadOsString(os_string)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }
