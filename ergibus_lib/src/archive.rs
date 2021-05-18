@@ -148,7 +148,7 @@ pub fn create_new_archive(
         let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
     }
     let mut snapshot_dir_path = PathBuf::from(location);
-    snapshot_dir_path.push("ergibus_clap");
+    snapshot_dir_path.push("ergibus");
     snapshot_dir_path.push("archives");
     match hostname::get_hostname() {
         Some(hostname) => snapshot_dir_path.push(hostname),
@@ -307,10 +307,10 @@ mod tests {
     fn test_yaml_decode() {
         let yaml_str = "
 content_repo_name: dummy\n
-snapshot_dir_path: ./TEST/store/ergibus_clap/archives/dummy\n
+snapshot_dir_path: ./TEST/store/ergibus/archives/dummy\n
 inclusions:\n
-   - ~/SRC/GITHUB/ergibus_clap.git/src\n
-   - ~/SRC/GITHUB/ergibus_clap.git/target\n
+   - ~/SRC/GITHUB/ergibus.git/src\n
+   - ~/SRC/GITHUB/ergibus.git/target\n
 dir_exclusions:\n
    - lost+found\n
 file_exclusions:\n
@@ -322,13 +322,13 @@ file_exclusions:\n
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
-            "./TEST/store/ergibus_clap/archives/dummy"
+            "./TEST/store/ergibus/archives/dummy"
         );
         assert_eq!(
             spec.inclusions,
             vec![
-                "~/SRC/GITHUB/ergibus_clap.git/src",
-                "~/SRC/GITHUB/ergibus_clap.git/target"
+                "~/SRC/GITHUB/ergibus.git/src",
+                "~/SRC/GITHUB/ergibus.git/target"
             ]
         );
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);
@@ -343,13 +343,13 @@ file_exclusions:\n
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
-            "./TEST/store/ergibus_clap/archives/dummy"
+            "./TEST/store/ergibus/archives/dummy"
         );
         assert_eq!(
             spec.inclusions,
             vec![
-                "~/SRC/GITHUB/ergibus_clap.git/src",
-                "~/SRC/GITHUB/ergibus_clap.git/target"
+                "~/SRC/GITHUB/ergibus.git/src",
+                "~/SRC/GITHUB/ergibus.git/target"
             ]
         );
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);
@@ -362,13 +362,13 @@ file_exclusions:\n
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
-            "./TEST/store/ergibus_clap/archives/dummy"
+            "./TEST/store/ergibus/archives/dummy"
         );
         assert_eq!(
             spec.inclusions,
             vec![
-                "~/SRC/GITHUB/ergibus_clap.git/src",
-                "~/SRC/GITHUB/ergibus_clap.git/target"
+                "~/SRC/GITHUB/ergibus.git/src",
+                "~/SRC/GITHUB/ergibus.git/target"
             ]
         );
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);

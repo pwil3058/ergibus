@@ -138,7 +138,7 @@ mod tests {
         assert!(temp_dir
             .path()
             .join("data")
-            .join("ergibus_clap")
+            .join("ergibus")
             .join("repos")
             .join("test_repo")
             .join("ref_count")
