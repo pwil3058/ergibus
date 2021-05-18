@@ -4,30 +4,23 @@ mod repositories;
 
 use structopt::StructOpt;
 
-use crate::repositories::{DeleteRepository, ListRepositories, NewRepository};
+use crate::repositories::ManageRepositories;
 
 #[derive(Debug, StructOpt)]
 /// Experimental Rust Git Inspired Back Up System
 enum Ergibus {
-    /// List repositories
-    #[structopt(alias = "lr")]
-    LR(ListRepositories),
-    /// Delete a repository
-    #[structopt(alias = "dr")]
-    DR(DeleteRepository),
-    /// Delete a repository
-    #[structopt(alias = "nr")]
-    NewR(NewRepository),
+    /// Manage repositories
+    #[structopt(alias = "r")]
+    Repo(ManageRepositories),
 }
 
 fn main() {
     let ergibus = Ergibus::from_args();
 
     if let Err(err) = match ergibus {
-        Ergibus::LR(sub_cmd) => sub_cmd.exec(),
-        Ergibus::DR(sub_cmd) => sub_cmd.exec(),
-        Ergibus::NewR(sub_cmd) => sub_cmd.exec(),
+        Ergibus::Repo(sub_cmd) => sub_cmd.exec(),
     } {
         println!("failed: {:?}", err);
+        std::process::exit(1);
     }
 }

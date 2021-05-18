@@ -5,6 +5,31 @@ use structopt::StructOpt;
 use ergibus_lib::{content, EResult};
 
 #[derive(Debug, StructOpt)]
+/// Manage content repositories
+pub enum ManageRepositories {
+    /// List repositories
+    #[structopt(alias = "ls")]
+    List(ListRepositories),
+    /// Delete a repository
+    #[structopt(alias = "del")]
+    Delete(DeleteRepository),
+    /// Create a new repository
+    #[structopt(alias = "new")]
+    NewRepo(NewRepository),
+}
+
+impl ManageRepositories {
+    pub fn exec(&self) -> EResult<()> {
+        use ManageRepositories::*;
+        match self {
+            List(sub_cmd) => sub_cmd.exec(),
+            Delete(sub_cmd) => sub_cmd.exec(),
+            NewRepo(sub_cmd) => sub_cmd.exec(),
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
 /// List content repositories
 pub struct ListRepositories {
     /// Show specification
