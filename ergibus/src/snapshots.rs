@@ -30,8 +30,22 @@ pub struct Snapshots {
 pub enum SubCmd {
     /// List the snapshots for a nominated archive (or in a nominated directory).
     List,
-    // /// Delete the specified snapshot(s).
-    // Delete(Delete),
+    /// Delete the specified snapshot(s).
+    #[structopt(alias = "del", group = ArgGroup::with_name("which_ss").required(true))]
+    Delete {
+        /// all but newest `N` snapshots.
+        #[structopt(short, long, value_name = "N", group = "which_ss")]
+        all_but_newest_n: Option<usize>,
+        /// delete the snapshot "N" places before the most recent. Use -1 to select oldest.
+        #[structopt(short, long, value_name = "N", group = "which_ss")]
+        back_n: Option<i64>,
+        /// authorise deletion of the last remaining snapshot in the archive.
+        #[structopt(short, long)]
+        clear_fell: bool,
+        /// Verbose: report the number of snapshots deleted.
+        #[structopt(short, long)]
+        verbose: bool,
+    },
 }
 
 impl Snapshots {
@@ -48,7 +62,24 @@ impl Snapshots {
                 for name in snapshot_dir.get_snapshot_names(false)?.iter() {
                     println!("{:?}", name);
                 }
-            } //     SubCmd::Delete(ref delete) => delete.exec(&snapshot_dir),
+            }
+            SubCmd::Delete {
+                all_but_newest_n,
+                back_n,
+                clear_fell,
+                verbose,
+            } => {
+                let number = if let Some(count) = all_but_newest_n {
+                    snapshot_dir.delete_all_but_newest(count, clear_fell)?
+                } else if let Some(back_n) = back_n {
+                    snapshot_dir.delete_ss_back_n(back_n, clear_fell)?
+                } else {
+                    panic!("clap shouldn't let us get here")
+                };
+                if verbose {
+                    println!("{} snapshots deleted.", number)
+                }
+            }
         }
         Ok(())
     }
