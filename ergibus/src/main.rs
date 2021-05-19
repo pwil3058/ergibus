@@ -11,7 +11,7 @@ use crate::repositories::ManageRepositories;
 #[derive(Debug, StructOpt)]
 /// Experimental Rust Git Inspired Back Up System
 enum Ergibus {
-    /// Manage repositories
+    /// Manage archives
     #[structopt(alias = "a")]
     Archive(ManageArchives),
     /// Manage repositories

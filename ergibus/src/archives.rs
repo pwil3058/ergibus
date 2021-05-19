@@ -29,6 +29,12 @@ pub enum ManageArchives {
     },
     /// List defined archives.
     List,
+    /// Delete the specified archive
+    #[structopt(alias = "del")]
+    Delete {
+        /// The name of the archive to be deleted
+        archive_name: String,
+    },
 }
 
 impl ManageArchives {
@@ -59,6 +65,7 @@ impl ManageArchives {
                 }
                 Ok(())
             }
+            Delete { archive_name } => archive::delete_archive(archive_name),
         }
     }
 }

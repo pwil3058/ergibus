@@ -2,8 +2,8 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use ergibus_lib::snapshot::{self, ArchiveOrDirPath};
-use ergibus_lib::{EResult, Error};
+use ergibus_lib::archive::SnapshotDir;
+use std::convert::TryFrom;
 
 #[derive(Debug, StructOpt)]
 pub struct Snapshot {
@@ -48,9 +48,9 @@ pub struct Delete {
 }
 
 impl Delete {
-    pub fn exec(&self, archive_or_dir_path: &ArchiveOrDirPath) {
+    pub fn exec(&self, snapshot_dir: &SnapshotDir) {
         if let Some(count) = self.all_but_newest_n {
-            match self.delete_all_but_newest(archive_or_dir_path, count) {
+            match snapshot_dir.delete_all_but_newest(count, self.clear_fell) {
                 Ok(number) => {
                     if self.verbose {
                         println!("{} snapshots deleted.", number)
@@ -63,7 +63,7 @@ impl Delete {
                 }
             }
         } else if let Some(back_n) = self.back_n {
-            match self.delete_ss_back_n(archive_or_dir_path, back_n) {
+            match snapshot_dir.delete_ss_back_n(back_n, self.clear_fell) {
                 Ok(number) => {
                     if self.verbose {
                         println!("{} snapshots deleted.", number)
@@ -79,64 +79,20 @@ impl Delete {
             panic!("clap shouldn't le us get here")
         }
     }
-
-    fn delete_all_but_newest(
-        &self,
-        archive_or_dir_path: &ArchiveOrDirPath,
-        newest_count: usize,
-    ) -> EResult<usize> {
-        let mut deleted_count: usize = 0;
-        if !self.clear_fell && newest_count == 0 {
-            return Err(Error::LastSnapshot(archive_or_dir_path.clone()));
-        }
-        let snapshot_paths = archive_or_dir_path.get_snapshot_paths(false)?;
-        if snapshot_paths.len() == 0 {
-            return Err(Error::ArchiveEmpty(archive_or_dir_path.clone()));
-        }
-        if snapshot_paths.len() <= newest_count {
-            return Ok(0);
-        }
-        let last_index = snapshot_paths.len() - newest_count;
-        for snapshot_path in snapshot_paths[0..last_index].iter() {
-            snapshot::delete_snapshot_file(snapshot_path)?;
-            deleted_count += 1;
-        }
-        Ok(deleted_count)
-    }
-
-    fn delete_ss_back_n(&self, archive_or_dir_path: &ArchiveOrDirPath, n: i64) -> EResult<usize> {
-        let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
-        if snapshot_paths.len() == 0 {
-            return Err(Error::ArchiveEmpty(archive_or_dir_path.clone()));
-        };
-        let index: usize = if n < 0 {
-            (snapshot_paths.len() as i64 + n) as usize
-        } else {
-            n as usize
-        };
-        if snapshot_paths.len() <= index {
-            return Ok(0);
-        }
-        if !self.clear_fell && snapshot_paths.len() == 1 {
-            return Err(Error::LastSnapshot(archive_or_dir_path.clone()));
-        }
-        snapshot::delete_snapshot_file(&snapshot_paths[index])?;
-        Ok(1)
-    }
 }
 
 impl Snapshot {
     pub fn exec(&self) {
-        let archive_or_dir_path = if let Some(archive_name) = &self.archive_name {
-            ArchiveOrDirPath::Archive(archive_name.clone())
+        let snapshot_dir = if let Some(archive_name) = &self.archive_name {
+            SnapshotDir::try_from(archive_name.as_str()).expect("no bad names")
         } else if let Some(dir_path) = &self.exigency_dir_path {
-            ArchiveOrDirPath::DirPath(dir_path.to_path_buf())
+            SnapshotDir::try_from(dir_path.as_path()).expect("no bad names")
         } else {
             println!("either --archive or --exigency must be present");
             std::process::exit(1);
         };
         match self.sub_cmd {
-            SubCmd::List => match archive_or_dir_path.get_snapshot_names(false) {
+            SubCmd::List => match snapshot_dir.get_snapshot_names(false) {
                 Ok(snapshot_names) => {
                     for name in snapshot_names {
                         println!("{:?}", name);
@@ -147,7 +103,7 @@ impl Snapshot {
                     std::process::exit(1);
                 }
             },
-            SubCmd::Delete(ref delete) => delete.exec(&archive_or_dir_path),
+            SubCmd::Delete(ref delete) => delete.exec(&snapshot_dir),
         }
     }
 }

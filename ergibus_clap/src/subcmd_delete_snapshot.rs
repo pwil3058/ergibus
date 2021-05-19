@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::cli;
-use ergibus_lib::snapshot;
-use ergibus_lib::{EResult, Error};
+use ergibus_lib::archive;
+use std::convert::TryFrom;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("delete_snapshot")
@@ -54,12 +54,13 @@ are also intact.",
 }
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
-    let archive_or_dir_path = if let Some(archive_name) = arg_matches.value_of("archive_name") {
-        snapshot::ArchiveOrDirPath::Archive(archive_name.to_string())
+    let snapshot_dir = if let Some(archive_name) = arg_matches.value_of("archive_name") {
+        archive::SnapshotDir::try_from(archive_name).expect("miraculously no bad names given")
     } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {
-        snapshot::ArchiveOrDirPath::DirPath(PathBuf::from(dir_path))
+        let path = PathBuf::from(dir_path);
+        archive::SnapshotDir::try_from(path.as_path()).expect("miraculously no bad names given")
     } else {
-        panic!("{:?}: line {:?}", file!(), line!())
+        panic!("either --archive or --exigency must be present")
     };
     let remove_last_ok = arg_matches.is_present("remove_last_ok");
     if let Some(n_as_str) = arg_matches.value_of("all_but_newest_n") {
@@ -70,7 +71,7 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
                 std::process::exit(1);
             }
         };
-        match delete_all_but_newest(&archive_or_dir_path, n, remove_last_ok) {
+        match snapshot_dir.delete_all_but_newest(n, remove_last_ok) {
             Ok(n) => {
                 if arg_matches.is_present("verbose") {
                     println!("{} snapshots deleted", n)
@@ -89,7 +90,7 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
                 std::process::exit(1);
             }
         };
-        match delete_ss_back_n(&archive_or_dir_path, n, remove_last_ok) {
+        match snapshot_dir.delete_ss_back_n(n, remove_last_ok) {
             Ok(n) => {
                 if arg_matches.is_present("verbose") {
                     println!("{} snapshots deleted", n)
@@ -103,52 +104,4 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
     } else {
         panic!("{:?}: line {:?}", file!(), line!())
     }
-}
-
-fn delete_all_but_newest(
-    archive_or_dir_path: &snapshot::ArchiveOrDirPath,
-    newest_count: usize,
-    clear_fell: bool,
-) -> EResult<usize> {
-    let mut deleted_count: usize = 0;
-    if !clear_fell && newest_count == 0 {
-        return Err(Error::LastSnapshot(archive_or_dir_path.clone()));
-    }
-    let snapshot_paths = archive_or_dir_path.get_snapshot_paths(false)?;
-    if snapshot_paths.len() == 0 {
-        return Err(Error::ArchiveEmpty(archive_or_dir_path.clone()));
-    }
-    if snapshot_paths.len() <= newest_count {
-        return Ok(0);
-    }
-    let last_index = snapshot_paths.len() - newest_count;
-    for snapshot_path in snapshot_paths[0..last_index].iter() {
-        snapshot::delete_snapshot_file(snapshot_path)?;
-        deleted_count += 1;
-    }
-    Ok(deleted_count)
-}
-
-fn delete_ss_back_n(
-    archive_or_dir_path: &snapshot::ArchiveOrDirPath,
-    n: i64,
-    clear_fell: bool,
-) -> EResult<usize> {
-    let snapshot_paths = archive_or_dir_path.get_snapshot_paths(true)?;
-    if snapshot_paths.len() == 0 {
-        return Err(Error::ArchiveEmpty(archive_or_dir_path.clone()));
-    };
-    let index: usize = if n < 0 {
-        (snapshot_paths.len() as i64 + n) as usize
-    } else {
-        n as usize
-    };
-    if snapshot_paths.len() <= index {
-        return Ok(0);
-    }
-    if !clear_fell && snapshot_paths.len() == 1 {
-        return Err(Error::LastSnapshot(archive_or_dir_path.clone()));
-    }
-    snapshot::delete_snapshot_file(&snapshot_paths[index])?;
-    Ok(1)
 }

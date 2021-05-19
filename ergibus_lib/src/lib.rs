@@ -12,11 +12,14 @@ mod path_buf_ext;
 mod report;
 pub mod snapshot;
 
+use crate::archive::ArchiveNameOrDirPath;
+
 #[derive(Debug)]
 pub enum Error {
     ArchiveDirError(std::io::Error, std::path::PathBuf),
-    ArchiveEmpty(crate::snapshot::ArchiveOrDirPath),
+    ArchiveEmpty(ArchiveNameOrDirPath),
     ArchiveExists(String),
+    ArchiveUnknown(String),
     ArchiveReadError(std::io::Error, std::path::PathBuf),
     ArchiveWriteError(std::io::Error, std::path::PathBuf),
     ArchiveYamlReadError(serde_yaml::Error, String),
@@ -34,11 +37,11 @@ pub enum Error {
     RepoWriteError(std::io::Error, std::path::PathBuf),
     UnknownRepo(String),
 
-    LastSnapshot(crate::snapshot::ArchiveOrDirPath),
+    LastSnapshot(ArchiveNameOrDirPath),
     NoSnapshotAvailable,
     SnapshotDeleteIOError(std::io::Error, std::path::PathBuf),
     SnapshotDirIOError(std::io::Error, std::path::PathBuf),
-    SnapshotIndexOutOfRange(crate::snapshot::ArchiveOrDirPath, i64),
+    SnapshotIndexOutOfRange(ArchiveNameOrDirPath, i64),
     SnapshotMismatch(std::path::PathBuf),
     SnapshotMismatchDirty(std::io::Error, std::path::PathBuf),
     SnapshotMoveAsideFailed(std::path::PathBuf, std::io::Error),

@@ -1079,22 +1079,6 @@ impl ArchiveOrDirPath {
         let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, reverse)?;
         Ok(snapshot_paths)
     }
-
-    pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
-        let snapshot_paths = self.get_snapshot_paths(true)?;
-        if snapshot_paths.len() == 0 {
-            return Err(Error::ArchiveEmpty(self.clone()));
-        };
-        let index: usize = if n < 0 {
-            (snapshot_paths.len() as i64 + n) as usize
-        } else {
-            n as usize
-        };
-        if snapshot_paths.len() <= index {
-            return Err(Error::SnapshotIndexOutOfRange(self.clone(), n));
-        }
-        Ok(snapshot_paths[index].clone())
-    }
 }
 
 #[cfg(test)]

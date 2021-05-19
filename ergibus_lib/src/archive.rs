@@ -6,12 +6,16 @@ use hostname;
 use serde_yaml;
 use users;
 
+use crate::snapshot::{ExtractionStats, SnapshotPersistentData};
 use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
-    EResult, Error,
+    snapshot, EResult, Error,
 };
 use pw_pathux::expand_home_dir;
+use std::convert::TryFrom;
+use std::io::{stderr, ErrorKind};
+use std::time;
 
 #[derive(Debug)]
 pub struct Exclusions {
@@ -85,9 +89,10 @@ fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
-    // TODO: map error to a more specific Error.
-    let spec_file = File::open(&spec_file_path)
-        .map_err(|err| Error::ArchiveReadError(err, spec_file_path.clone()))?;
+    let spec_file = File::open(&spec_file_path).map_err(|err| match err.kind() {
+        ErrorKind::NotFound => Error::ArchiveUnknown(archive_name.to_string()),
+        _ => Error::ArchiveReadError(err, spec_file_path.clone()),
+    })?;
     let spec: ArchiveSpec = serde_yaml::from_reader(&spec_file)
         .map_err(|err| Error::ArchiveYamlReadError(err, archive_name.to_string()))?;
     Ok(spec)
@@ -176,6 +181,13 @@ pub fn create_new_archive(
     Ok(())
 }
 
+pub fn delete_archive(archive_name: &str) -> EResult<()> {
+    let snapshot_dir = SnapshotDir::try_from(archive_name)?;
+    let spec_file_path = get_archive_spec_file_path(archive_name);
+    fs::remove_file(&spec_file_path)?;
+    snapshot_dir.delete()
+}
+
 pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let archive_spec = read_archive_spec(archive_name)?;
     let name = archive_name.to_string();
@@ -248,6 +260,205 @@ pub fn get_archive_names() -> Vec<String> {
         }
     };
     names
+}
+
+#[derive(Debug, Clone)]
+pub enum ArchiveNameOrDirPath {
+    ArchiveName(String),
+    DirPath(PathBuf),
+}
+
+impl From<&str> for ArchiveNameOrDirPath {
+    fn from(name: &str) -> Self {
+        ArchiveNameOrDirPath::ArchiveName(name.to_string())
+    }
+}
+
+impl From<&Path> for ArchiveNameOrDirPath {
+    fn from(path: &Path) -> Self {
+        ArchiveNameOrDirPath::DirPath(path.to_path_buf())
+    }
+}
+
+#[derive(Debug)]
+pub struct SnapshotDir {
+    id: ArchiveNameOrDirPath,
+    dir_path: PathBuf,
+}
+
+impl TryFrom<&str> for SnapshotDir {
+    type Error = crate::Error;
+
+    fn try_from(name: &str) -> Result<Self, Self::Error> {
+        let id = ArchiveNameOrDirPath::from(name);
+        let dir_path = get_archive_snapshot_dir_path(name)?;
+        Ok(Self { id, dir_path })
+    }
+}
+
+impl TryFrom<&Path> for SnapshotDir {
+    type Error = crate::Error;
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        let id = ArchiveNameOrDirPath::from(path);
+        let dir_path = PathBuf::from(path)
+            .canonicalize()
+            .map_err(|err| Error::ArchiveDirError(err, PathBuf::from(path)))?;
+        Ok(Self { id, dir_path })
+    }
+}
+
+impl SnapshotDir {
+    pub fn id(&self) -> &ArchiveNameOrDirPath {
+        &self.id
+    }
+
+    pub fn delete(&self) -> EResult<()> {
+        let snapshot_paths = self.get_snapshot_paths(false)?;
+        // NB: this necessary to free all the references to content data
+        for snapshot_path in snapshot_paths.iter() {
+            snapshot::delete_snapshot_file(snapshot_path)?;
+        }
+        fs::remove_dir(&self.dir_path)?;
+        Ok(())
+    }
+
+    pub fn get_snapshot_paths(&self, reverse: bool) -> EResult<Vec<PathBuf>> {
+        snapshot::get_snapshot_paths_in_dir(&self.dir_path, reverse)
+    }
+
+    pub fn get_snapshot_names(&self, reverse: bool) -> EResult<Vec<String>> {
+        snapshot::get_snapshot_names_in_dir(&self.dir_path, reverse)
+    }
+
+    pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
+        let snapshot_paths = self.get_snapshot_paths(true)?;
+        if snapshot_paths.len() == 0 {
+            return Err(Error::ArchiveEmpty(self.id.clone()));
+        };
+        let index: usize = if n < 0 {
+            (snapshot_paths.len() as i64 + n) as usize
+        } else {
+            n as usize
+        };
+        if snapshot_paths.len() <= index {
+            return Err(Error::SnapshotIndexOutOfRange(self.id.clone(), n));
+        }
+        Ok(snapshot_paths[index].clone())
+    }
+
+    pub fn delete_all_but_newest(&self, newest_count: usize, clear_fell: bool) -> EResult<usize> {
+        let mut deleted_count: usize = 0;
+        if !clear_fell && newest_count == 0 {
+            return Err(Error::LastSnapshot(self.id.clone()));
+        }
+        let snapshot_paths = self.get_snapshot_paths(false)?;
+        if snapshot_paths.len() == 0 {
+            return Err(Error::ArchiveEmpty(self.id.clone()));
+        }
+        if snapshot_paths.len() <= newest_count {
+            return Ok(0);
+        }
+        let last_index = snapshot_paths.len() - newest_count;
+        for snapshot_path in snapshot_paths[0..last_index].iter() {
+            snapshot::delete_snapshot_file(snapshot_path)?;
+            deleted_count += 1;
+        }
+        Ok(deleted_count)
+    }
+
+    pub fn delete_ss_back_n(&self, n: i64, clear_fell: bool) -> EResult<usize> {
+        let snapshot_paths = self.get_snapshot_paths(true)?;
+        if snapshot_paths.len() == 0 {
+            return Err(Error::ArchiveEmpty(self.id.clone()));
+        };
+        let index: usize = if n < 0 {
+            (snapshot_paths.len() as i64 + n) as usize
+        } else {
+            n as usize
+        };
+        if snapshot_paths.len() <= index {
+            return Ok(0);
+        }
+        if !clear_fell && snapshot_paths.len() == 1 {
+            return Err(Error::LastSnapshot(self.id.clone()));
+        }
+        snapshot::delete_snapshot_file(&snapshot_paths[index])?;
+        Ok(1)
+    }
+
+    pub fn copy_file_to(
+        &self,
+        n: i64,
+        file_path: &Path,
+        into_dir_path: &Path,
+        opt_with_name: &Option<PathBuf>,
+        overwrite: bool,
+    ) -> EResult<(u64, time::Duration)> {
+        let started_at = time::SystemTime::now();
+
+        let snapshot_file_path = self.get_snapshot_path_back_n(n)?;
+        let target_path = if let Some(with_name) = opt_with_name {
+            into_dir_path.join(with_name)
+        } else if let Some(file_name) = file_path.file_name() {
+            into_dir_path.join(file_name)
+        } else {
+            panic!("{:?}: line {:?}", file!(), line!())
+        };
+        let abs_file_path = if file_path.starts_with("~") {
+            pw_pathux::expand_home_dir(file_path).unwrap()
+        } else {
+            pw_pathux::absolute_path_buf(file_path)
+        };
+        let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
+        let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite)?;
+
+        let finished_at = time::SystemTime::now();
+        let duration = match finished_at.duration_since(started_at) {
+            Ok(duration) => duration,
+            Err(_) => time::Duration::new(0, 0),
+        };
+        Ok((bytes, duration))
+    }
+
+    pub fn copy_dir_to(
+        &self,
+        n: i64,
+        dir_path: &Path,
+        into_dir_path: &Path,
+        opt_with_name: &Option<PathBuf>,
+        overwrite: bool,
+    ) -> EResult<(ExtractionStats, time::Duration)> {
+        let started_at = time::SystemTime::now();
+
+        let snapshot_file_path = self.get_snapshot_path_back_n(n)?;
+        let target_path = if let Some(with_name) = opt_with_name {
+            into_dir_path.join(with_name)
+        } else if let Some(dir_name) = dir_path.file_name() {
+            into_dir_path.join(dir_name)
+        } else {
+            panic!("{:?}: line {:?}", file!(), line!())
+        };
+        let abs_dir_path = if dir_path.starts_with("~") {
+            pw_pathux::expand_home_dir(dir_path).unwrap()
+        } else {
+            pw_pathux::absolute_path_buf(dir_path)
+        };
+        let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
+        let stats = spd.copy_dir_to(
+            &abs_dir_path,
+            &target_path,
+            overwrite,
+            &mut Some(&mut stderr()),
+        )?;
+
+        let finished_at = time::SystemTime::now();
+        let duration = match finished_at.duration_since(started_at) {
+            Ok(duration) => duration,
+            Err(_) => time::Duration::new(0, 0),
+        };
+        Ok((stats, duration))
+    }
 }
 
 #[cfg(test)]
