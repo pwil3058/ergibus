@@ -1,14 +1,14 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-mod archives;
-mod repositories;
-mod snapshots;
+mod archive_sub_cmds;
+mod repository_sub_cmds;
+mod snapshot_sub_cmds;
 
 use structopt::StructOpt;
 
-use crate::archives::ManageArchives;
-use crate::repositories::ManageRepositories;
-use crate::snapshots::{BackUp, SnapshotContents, Snapshots};
+use crate::archive_sub_cmds::ManageArchives;
+use crate::repository_sub_cmds::ManageRepositories;
+use crate::snapshot_sub_cmds::{BackUp, SnapshotContents, Snapshots};
 
 #[derive(Debug, StructOpt)]
 /// Experimental Rust Git Inspired Back Up System
