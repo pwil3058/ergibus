@@ -24,7 +24,7 @@ serde_yaml = "0.7.1"
 snap = "0.2"
 tempdir = "0.3"
 users = "0.5.0"
-walkdir = "1.0.7"
+walkdir = "2.3.2"
 
 pw_pathux = { git = "https://github.com/pwil3058/rs_pw_pathux.git" }
 dychatat = { git = "https://github.com/pwil3058/dychatat.git" }

@@ -15,7 +15,7 @@ use chrono::prelude::*;
 use regex;
 use serde_json;
 use snap;
-use walkdir::{WalkDir, WalkDirIterator};
+use walkdir::WalkDir;
 
 // PW crate access
 use pw_pathux::first_subpath_as_os_string;
@@ -671,16 +671,14 @@ impl SnapshotPersistentData {
         self.file_stats += file_stats;
         self.sym_link_stats += sym_link_stats;
         let mut delta_repo_size = drsz;
+        // TODO: create exclusion function for DirEntry
         for entry in WalkDir::new(abs_dir_path)
             .into_iter()
-            .filter_entry(|e| e.file_type().is_dir())
+            .filter_entry(|e| e.file_type().is_dir() && !exclusions.is_excluded_dir(e.path()))
         {
             match entry {
                 Ok(e_data) => {
                     let e_path = e_data.path();
-                    if exclusions.is_excluded_dir(e_path) {
-                        continue;
-                    }
                     match dir.find_or_add_subdir(e_path) {
                         Ok(sub_dir) => {
                             let (file_stats, sym_link_stats, drsz) =
