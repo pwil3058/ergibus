@@ -8,7 +8,7 @@ use structopt::StructOpt;
 
 use crate::archives::ManageArchives;
 use crate::repositories::ManageRepositories;
-use crate::snapshots::Snapshots;
+use crate::snapshots::{BackUp, SnapshotContents, Snapshots};
 
 #[derive(Debug, StructOpt)]
 /// Experimental Rust Git Inspired Back Up System
@@ -20,8 +20,14 @@ enum Ergibus {
     #[structopt(alias = "r")]
     Repo(ManageRepositories),
     /// Manage archive snapshots
-    #[structopt(alias = "ss")]
+    #[structopt(alias = "sm")]
     Snapshots(Snapshots),
+    /// Manage snapshot contents
+    #[structopt(alias = "sc")]
+    SnapshotContents(SnapshotContents),
+    /// Take backup snapshots
+    #[structopt(alias = "bu")]
+    BackUp(BackUp),
 }
 
 fn main() {
@@ -31,6 +37,8 @@ fn main() {
         Ergibus::Archive(sub_cmd) => sub_cmd.exec(),
         Ergibus::Repo(sub_cmd) => sub_cmd.exec(),
         Ergibus::Snapshots(sub_cmd) => sub_cmd.exec(),
+        Ergibus::SnapshotContents(sub_cmd) => sub_cmd.exec(),
+        Ergibus::BackUp(sub_cmd) => sub_cmd.exec(),
     } {
         println!("failed: {:?}", err);
         std::process::exit(1);
