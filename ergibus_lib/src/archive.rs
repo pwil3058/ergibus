@@ -5,6 +5,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use hostname;
 use serde_yaml;
 use users;
+use walkdir;
 
 use crate::snapshot::{ExtractionStats, SnapshotPersistentData};
 use crate::{
@@ -43,6 +44,22 @@ impl Exclusions {
             dir_globset,
             file_globset,
         })
+    }
+
+    pub fn is_non_excluded_dir(&self, dir_entry: &walkdir::DirEntry) -> bool {
+        if dir_entry.file_type().is_dir() {
+            if self.dir_globset.is_empty() {
+                true
+            } else if self.dir_globset.is_match(&dir_entry.file_name()) {
+                false
+            } else if self.dir_globset.is_match(&dir_entry.path()) {
+                false
+            } else {
+                true
+            }
+        } else {
+            false
+        }
     }
 
     pub fn is_excluded_dir(&self, abs_dir_path: &Path) -> bool {

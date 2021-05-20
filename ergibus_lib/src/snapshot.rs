@@ -671,10 +671,9 @@ impl SnapshotPersistentData {
         self.file_stats += file_stats;
         self.sym_link_stats += sym_link_stats;
         let mut delta_repo_size = drsz;
-        // TODO: create exclusion function for DirEntry
         for entry in WalkDir::new(abs_dir_path)
             .into_iter()
-            .filter_entry(|e| e.file_type().is_dir() && !exclusions.is_excluded_dir(e.path()))
+            .filter_entry(|e| exclusions.is_non_excluded_dir(e))
         {
             match entry {
                 Ok(e_data) => {
