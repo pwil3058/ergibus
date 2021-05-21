@@ -1,4 +1,5 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+use std::path::PathBuf;
 
 use structopt::StructOpt;
 
@@ -72,8 +73,8 @@ pub struct NewRepository {
     /// The name of the new repository
     repo_name: String,
     /// The location of the base directory in which the repository is to be placed.
-    #[structopt(short, long)]
-    location: String,
+    #[structopt(short, long, parse(from_os_str))]
+    location: PathBuf,
     /// The hash algorithm to use when generating repository's file content token
     #[structopt(short, long, possible_values(ALGORITHMS))]
     algorithm: String,

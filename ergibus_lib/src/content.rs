@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 pub use dychatat::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, RepoSpec};
@@ -20,14 +20,18 @@ pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
     }
 }
 
-pub fn create_new_repo(name: &str, location: &str, hash_algortithm_str: &str) -> EResult<()> {
+pub fn create_new_repo<P: AsRef<Path>>(
+    name: &str,
+    location: P,
+    hash_algortithm_str: &str,
+) -> EResult<()> {
     if content_repo_exists(name) {
         return Err(Error::RepoExists(name.to_string()));
     }
 
     let hash_algorithm = HashAlgorithm::from_str(hash_algortithm_str)?;
 
-    let mut repo_dir_path = PathBuf::from(location);
+    let mut repo_dir_path = location.as_ref().to_path_buf();
     repo_dir_path.push("ergibus");
     repo_dir_path.push("repos");
     repo_dir_path.push(name);

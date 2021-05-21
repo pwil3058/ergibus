@@ -91,6 +91,7 @@ impl Exclusions {
     }
 }
 
+// TODO: use PathBuf in spec files
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct ArchiveSpec {
     content_repo_name: String,
@@ -149,10 +150,10 @@ pub struct ArchiveData {
     pub exclusions: Exclusions,
 }
 
-pub fn create_new_archive(
+pub fn create_new_archive<P: AsRef<Path>>(
     name: &str,
     content_repo_name: &str,
-    location: &str,
+    location: P,
     inclusions: &[String],
     dir_exclusions: &[String],
     file_exclusions: &[String],
@@ -169,7 +170,7 @@ pub fn create_new_archive(
     for pattern in file_exclusions.iter() {
         let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
     }
-    let mut snapshot_dir_path = PathBuf::from(location);
+    let mut snapshot_dir_path = location.as_ref().to_path_buf();
     snapshot_dir_path.push("ergibus");
     snapshot_dir_path.push("archives");
     match hostname::get_hostname() {

@@ -1,4 +1,6 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+use std::path::PathBuf;
+
 use structopt::StructOpt;
 
 use ergibus_lib::{archive, EResult};
@@ -15,8 +17,8 @@ pub enum ManageArchives {
         #[structopt(short = "r", long = "repo")]
         content_repo_name: String,
         /// the directory path of the location where the archive should store its snapshots.
-        #[structopt(short, long = "location")]
-        location: String,
+        #[structopt(short, long = "location", parse(from_os_str))]
+        location: PathBuf,
         /// the path of a file/directory that should be included in the archive's snapshots.
         #[structopt(short, long = "include")]
         inclusions: Vec<String>,
