@@ -91,12 +91,11 @@ impl Exclusions {
     }
 }
 
-// TODO: use PathBuf in spec files
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct ArchiveSpec {
     content_repo_name: String,
-    snapshot_dir_path: String,
-    inclusions: Vec<String>,
+    snapshot_dir_path: PathBuf,
+    inclusions: Vec<PathBuf>,
     dir_exclusions: Vec<String>,
     file_exclusions: Vec<String>,
 }
@@ -154,7 +153,7 @@ pub fn create_new_archive<P: AsRef<Path>>(
     name: &str,
     content_repo_name: &str,
     location: P,
-    inclusions: &[String],
+    inclusions: &[PathBuf],
     dir_exclusions: &[String],
     file_exclusions: &[String],
 ) -> EResult<()> {
@@ -184,13 +183,9 @@ pub fn create_new_archive<P: AsRef<Path>>(
     snapshot_dir_path.push(name);
     fs::create_dir_all(&snapshot_dir_path)
         .map_err(|err| Error::ArchiveWriteError(err, snapshot_dir_path.clone()))?;
-    let sdp_str = match snapshot_dir_path.to_str() {
-        Some(sdp_ostr) => sdp_ostr.to_string(),
-        None => panic!("{:?}: line {:?}", file!(), line!()),
-    };
     let spec = ArchiveSpec {
         content_repo_name: content_repo_name.to_string(),
-        snapshot_dir_path: sdp_str,
+        snapshot_dir_path: snapshot_dir_path,
         inclusions: inclusions.to_vec(),
         dir_exclusions: dir_exclusions.to_vec(),
         file_exclusions: file_exclusions.to_vec(),

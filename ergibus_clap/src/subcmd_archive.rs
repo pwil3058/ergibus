@@ -1,6 +1,7 @@
 use structopt::StructOpt;
 
 use ergibus_lib::archive;
+use std::path::PathBuf;
 
 #[derive(Debug, StructOpt)]
 pub enum Archive {
@@ -16,8 +17,8 @@ pub enum Archive {
         #[structopt(short = "L", long = "location")]
         location: String,
         /// the path of a file/directory that should be included in the archive's snapshots.
-        #[structopt(short = "I", long = "include")]
-        inclusions: Vec<String>,
+        #[structopt(short = "I", long = "include", parse(from_os_str))]
+        inclusions: Vec<PathBuf>,
         /// exclude directories matching this glob expression from patches.
         #[structopt(short = "D", long = "exclude_dirs", required = false)]
         dir_exclusions: Vec<String>,

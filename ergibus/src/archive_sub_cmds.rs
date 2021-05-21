@@ -20,8 +20,8 @@ pub enum ManageArchives {
         #[structopt(short, long = "location", parse(from_os_str))]
         location: PathBuf,
         /// the path of a file/directory that should be included in the archive's snapshots.
-        #[structopt(short, long = "include")]
-        inclusions: Vec<String>,
+        #[structopt(short, long = "include", parse(from_os_str))]
+        inclusions: Vec<PathBuf>,
         /// exclude directories matching this glob expression from patches.
         #[structopt(short, long = "exclude_dirs", required = false)]
         dir_exclusions: Vec<String>,

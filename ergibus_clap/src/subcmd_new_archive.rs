@@ -3,6 +3,7 @@ use std;
 
 use crate::cli;
 use ergibus_lib::archive;
+use std::path::PathBuf;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("new_archive").visible_alias("newa")
@@ -51,11 +52,11 @@ pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
         .value_of("location")
         .ok_or(0)
         .unwrap_or_else(|_| panic!("{:?}: line {:?}", file!(), line!()));
-    let mut inclusions: Vec<String> = Vec::new();
+    let mut inclusions: Vec<PathBuf> = Vec::new();
     match arg_matches.values_of("inclusions") {
         Some(inclusion_values) => {
             for inclusion in inclusion_values {
-                inclusions.push(inclusion.to_string());
+                inclusions.push(PathBuf::from(inclusion));
             }
         }
         None => (),
