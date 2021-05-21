@@ -199,7 +199,7 @@ pub fn create_new_archive(
 }
 
 pub fn delete_archive(archive_name: &str) -> EResult<()> {
-    let snapshot_dir = SnapshotDir::try_from(archive_name)?;
+    let snapshot_dir = ArchiveSnapshotDir::try_from(archive_name)?;
     let spec_file_path = get_archive_spec_file_path(archive_name);
     fs::remove_file(&spec_file_path)?;
     snapshot_dir.delete()
@@ -298,12 +298,12 @@ impl From<&Path> for ArchiveNameOrDirPath {
 }
 
 #[derive(Debug)]
-pub struct SnapshotDir {
+pub struct ArchiveSnapshotDir {
     id: ArchiveNameOrDirPath,
     dir_path: PathBuf,
 }
 
-impl TryFrom<&str> for SnapshotDir {
+impl TryFrom<&str> for ArchiveSnapshotDir {
     type Error = crate::Error;
 
     fn try_from(name: &str) -> Result<Self, Self::Error> {
@@ -313,7 +313,7 @@ impl TryFrom<&str> for SnapshotDir {
     }
 }
 
-impl TryFrom<&Path> for SnapshotDir {
+impl TryFrom<&Path> for ArchiveSnapshotDir {
     type Error = crate::Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
@@ -325,7 +325,7 @@ impl TryFrom<&Path> for SnapshotDir {
     }
 }
 
-impl SnapshotDir {
+impl ArchiveSnapshotDir {
     pub fn id(&self) -> &ArchiveNameOrDirPath {
         &self.id
     }
