@@ -169,6 +169,20 @@ pub fn create_new_archive<P: AsRef<Path>>(
     for pattern in file_exclusions.iter() {
         let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
     }
+    // expand inclusion paths while relativity is well defined
+    let mut exp_inclusions = vec![];
+    for inclusion in inclusions {
+        if inclusion.starts_with("~") {
+            match expand_home_dir(inclusion) {
+                Some(expanded_path) => exp_inclusions.push(expanded_path),
+                None => panic!("home dir expansion failed",),
+            }
+        } else if inclusion.is_relative() {
+            exp_inclusions.push(inclusion.canonicalize()?)
+        } else {
+            exp_inclusions.push(inclusion.clone())
+        }
+    }
     let mut snapshot_dir_path = location.as_ref().to_path_buf();
     snapshot_dir_path.push("ergibus");
     snapshot_dir_path.push("archives");
@@ -186,7 +200,7 @@ pub fn create_new_archive<P: AsRef<Path>>(
     let spec = ArchiveSpec {
         content_repo_name: content_repo_name.to_string(),
         snapshot_dir_path: snapshot_dir_path,
-        inclusions: inclusions.to_vec(),
+        inclusions: exp_inclusions,
         dir_exclusions: dir_exclusions.to_vec(),
         file_exclusions: file_exclusions.to_vec(),
     };
@@ -205,31 +219,26 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let archive_spec = read_archive_spec(archive_name)?;
     let name = archive_name.to_string();
     let content_mgmt_key = get_content_mgmt_key(&archive_spec.content_repo_name)?;
-    let snapshot_dir_path = PathBuf::from(&archive_spec.snapshot_dir_path)
+    let snapshot_dir_path = archive_spec
+        .snapshot_dir_path
         .canonicalize()
-        .map_err(|err| {
-            Error::ArchiveDirError(err, PathBuf::from(&archive_spec.snapshot_dir_path))
-        })?;
+        .map_err(|err| Error::ArchiveDirError(err, archive_spec.snapshot_dir_path.clone()))?;
+    // recheck paths in case spec file has been manually edited
     let mut includes = Vec::new();
     for inclusion in archive_spec.inclusions {
         let included_file_path = if inclusion.starts_with("~") {
-            match expand_home_dir(&PathBuf::from(inclusion)) {
+            match expand_home_dir(&inclusion) {
                 Some(expanded_path) => expanded_path,
-                None => panic!(
-                    "{:?}: line {:?}: home dir expansion failed",
-                    file!(),
-                    line!()
-                ),
+                None => panic!("home dir expansion failed",),
             }
         } else {
-            let path_buf = PathBuf::from(inclusion);
-            if path_buf.is_relative() {
+            if inclusion.is_relative() {
                 return Err(Error::RelativeIncludePath(
-                    path_buf,
+                    inclusion,
                     archive_name.to_string(),
                 ));
             };
-            path_buf
+            inclusion
         };
         includes.push(included_file_path);
     }
