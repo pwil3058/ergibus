@@ -1,9 +1,10 @@
 use clap;
 use std;
-use std::path::PathBuf;
+use std::convert::TryFrom;
+use std::path::Path;
 
 use crate::cli;
-use ergibus_lib::snapshot;
+use ergibus_lib::archive::SnapshotDir;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("list_snapshots")
@@ -38,14 +39,14 @@ repositories are also intact.",
 }
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
-    let archive_or_dir_path = if let Some(archive_name) = arg_matches.value_of("archive_name") {
-        snapshot::ArchiveOrDirPath::Archive(archive_name.to_string())
+    let snapshot_dir = if let Some(archive_name) = arg_matches.value_of("archive_name") {
+        SnapshotDir::try_from(archive_name).expect("should work")
     } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {
-        snapshot::ArchiveOrDirPath::DirPath(PathBuf::from(dir_path))
+        SnapshotDir::try_from(Path::new(dir_path)).expect("should work")
     } else {
-        panic!("{:?}: line {:?}", file!(), line!())
+        panic!("either --archive or --exigency must be present");
     };
-    match archive_or_dir_path.get_snapshot_names(false) {
+    match snapshot_dir.get_snapshot_names(false) {
         Ok(snapshot_names) => {
             for name in snapshot_names {
                 println!("{:?}", name);
