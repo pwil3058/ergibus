@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::path::Path;
 
 use crate::cli;
-use ergibus_lib::archive::ArchiveSnapshotDir;
+use ergibus_lib::archive::Snapshots;
 
 pub fn sub_cmd<'a, 'b>() -> clap::App<'a, 'b> {
     clap::SubCommand::with_name("list_snapshots")
@@ -40,9 +40,9 @@ repositories are also intact.",
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
     let snapshot_dir = if let Some(archive_name) = arg_matches.value_of("archive_name") {
-        ArchiveSnapshotDir::try_from(archive_name).expect("should work")
+        Snapshots::try_from(archive_name).expect("should work")
     } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {
-        ArchiveSnapshotDir::try_from(Path::new(dir_path)).expect("should work")
+        Snapshots::try_from(Path::new(dir_path)).expect("should work")
     } else {
         panic!("either --archive or --exigency must be present");
     };

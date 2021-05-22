@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use ergibus_lib::archive::ArchiveSnapshotDir;
+use ergibus_lib::archive::Snapshots;
 use std::convert::TryFrom;
 
 #[derive(Debug, StructOpt)]
@@ -48,7 +48,7 @@ pub struct Delete {
 }
 
 impl Delete {
-    pub fn exec(&self, snapshot_dir: &ArchiveSnapshotDir) {
+    pub fn exec(&self, snapshot_dir: &Snapshots) {
         if let Some(count) = self.all_but_newest_n {
             match snapshot_dir.delete_all_but_newest(count, self.clear_fell) {
                 Ok(number) => {
@@ -84,9 +84,9 @@ impl Delete {
 impl Snapshot {
     pub fn exec(&self) {
         let snapshot_dir = if let Some(archive_name) = &self.archive_name {
-            ArchiveSnapshotDir::try_from(archive_name.as_str()).expect("no bad names")
+            Snapshots::try_from(archive_name.as_str()).expect("no bad names")
         } else if let Some(dir_path) = &self.exigency_dir_path {
-            ArchiveSnapshotDir::try_from(dir_path.as_path()).expect("no bad names")
+            Snapshots::try_from(dir_path.as_path()).expect("no bad names")
         } else {
             println!("either --archive or --exigency must be present");
             std::process::exit(1);

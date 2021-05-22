@@ -64,12 +64,11 @@ pub struct Extract {
 impl Extract {
     pub fn exec(&self) {
         let snapshot_dir = if let Some(archive_name) = &self.archive_name {
-            archive::ArchiveSnapshotDir::try_from(archive_name.as_str())
+            archive::Snapshots::try_from(archive_name.as_str())
                 .expect("miraculously no bad names given")
         } else if let Some(dir_path) = &self.exigency_dir_path {
             let path = PathBuf::from(dir_path);
-            archive::ArchiveSnapshotDir::try_from(path.as_path())
-                .expect("miraculously no bad names given")
+            archive::Snapshots::try_from(path.as_path()).expect("miraculously no bad names given")
         } else {
             panic!("either --archive or --exigency must be present")
         };
@@ -193,12 +192,10 @@ configuration files provided their content repositories are also intact.",
 
 pub fn run_cmd(arg_matches: &clap::ArgMatches<'_>) {
     let snapshot_dir = if let Some(archive_name) = arg_matches.value_of("archive_name") {
-        archive::ArchiveSnapshotDir::try_from(archive_name)
-            .expect("miraculously no bad names given")
+        archive::Snapshots::try_from(archive_name).expect("miraculously no bad names given")
     } else if let Some(dir_path) = arg_matches.value_of("exigency_dir_path") {
         let path = PathBuf::from(dir_path);
-        archive::ArchiveSnapshotDir::try_from(path.as_path())
-            .expect("miraculously no bad names given")
+        archive::Snapshots::try_from(path.as_path()).expect("miraculously no bad names given")
     } else {
         panic!("either --archive or --exigency must be present")
     };

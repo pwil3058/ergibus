@@ -209,7 +209,7 @@ pub fn create_new_archive<P: AsRef<Path>>(
 }
 
 pub fn delete_archive(archive_name: &str) -> EResult<()> {
-    let snapshot_dir = ArchiveSnapshotDir::try_from(archive_name)?;
+    let snapshot_dir = Snapshots::try_from(archive_name)?;
     let spec_file_path = get_archive_spec_file_path(archive_name);
     fs::remove_file(&spec_file_path)?;
     snapshot_dir.delete()
@@ -303,36 +303,45 @@ impl From<&Path> for ArchiveNameOrDirPath {
 }
 
 #[derive(Debug)]
-pub struct ArchiveSnapshotDir {
-    id: ArchiveNameOrDirPath,
+pub struct Snapshots {
+    archive_name: Option<String>,
     dir_path: PathBuf,
 }
 
-impl TryFrom<&str> for ArchiveSnapshotDir {
+impl TryFrom<&str> for Snapshots {
     type Error = crate::Error;
 
     fn try_from(name: &str) -> Result<Self, Self::Error> {
-        let id = ArchiveNameOrDirPath::from(name);
+        let archive_name = Some(name.to_string());
         let dir_path = get_archive_snapshot_dir_path(name)?;
-        Ok(Self { id, dir_path })
+        Ok(Self {
+            archive_name,
+            dir_path,
+        })
     }
 }
 
-impl TryFrom<&Path> for ArchiveSnapshotDir {
+impl TryFrom<&Path> for Snapshots {
     type Error = crate::Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let id = ArchiveNameOrDirPath::from(path);
         let dir_path = PathBuf::from(path)
             .canonicalize()
             .map_err(|err| Error::ArchiveDirError(err, PathBuf::from(path)))?;
-        Ok(Self { id, dir_path })
+        Ok(Self {
+            archive_name: None,
+            dir_path,
+        })
     }
 }
 
-impl ArchiveSnapshotDir {
-    pub fn id(&self) -> &ArchiveNameOrDirPath {
-        &self.id
+impl Snapshots {
+    pub fn id(&self) -> ArchiveNameOrDirPath {
+        if let Some(ref name) = self.archive_name {
+            ArchiveNameOrDirPath::ArchiveName(name.clone())
+        } else {
+            ArchiveNameOrDirPath::DirPath(self.dir_path.clone())
+        }
     }
 
     pub fn delete(&self) -> EResult<()> {
@@ -356,7 +365,7 @@ impl ArchiveSnapshotDir {
     pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
         let snapshot_paths = self.get_snapshot_paths(true)?;
         if snapshot_paths.len() == 0 {
-            return Err(Error::ArchiveEmpty(self.id.clone()));
+            return Err(Error::ArchiveEmpty(self.id()));
         };
         let index: usize = if n < 0 {
             (snapshot_paths.len() as i64 + n) as usize
@@ -364,7 +373,7 @@ impl ArchiveSnapshotDir {
             n as usize
         };
         if snapshot_paths.len() <= index {
-            return Err(Error::SnapshotIndexOutOfRange(self.id.clone(), n));
+            return Err(Error::SnapshotIndexOutOfRange(self.id(), n));
         }
         Ok(snapshot_paths[index].clone())
     }
@@ -372,11 +381,11 @@ impl ArchiveSnapshotDir {
     pub fn delete_all_but_newest(&self, newest_count: usize, clear_fell: bool) -> EResult<usize> {
         let mut deleted_count: usize = 0;
         if !clear_fell && newest_count == 0 {
-            return Err(Error::LastSnapshot(self.id.clone()));
+            return Err(Error::LastSnapshot(self.id()));
         }
         let snapshot_paths = self.get_snapshot_paths(false)?;
         if snapshot_paths.len() == 0 {
-            return Err(Error::ArchiveEmpty(self.id.clone()));
+            return Err(Error::ArchiveEmpty(self.id()));
         }
         if snapshot_paths.len() <= newest_count {
             return Ok(0);
@@ -392,7 +401,7 @@ impl ArchiveSnapshotDir {
     pub fn delete_ss_back_n(&self, n: i64, clear_fell: bool) -> EResult<usize> {
         let snapshot_paths = self.get_snapshot_paths(true)?;
         if snapshot_paths.len() == 0 {
-            return Err(Error::ArchiveEmpty(self.id.clone()));
+            return Err(Error::ArchiveEmpty(self.id()));
         };
         let index: usize = if n < 0 {
             (snapshot_paths.len() as i64 + n) as usize
@@ -403,7 +412,7 @@ impl ArchiveSnapshotDir {
             return Ok(0);
         }
         if !clear_fell && snapshot_paths.len() == 1 {
-            return Err(Error::LastSnapshot(self.id.clone()));
+            return Err(Error::LastSnapshot(self.id()));
         }
         snapshot::delete_snapshot_file(&snapshot_paths[index])?;
         Ok(1)

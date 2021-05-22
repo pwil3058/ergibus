@@ -5,12 +5,12 @@ use std::path::PathBuf;
 
 use structopt::{clap::ArgGroup, StructOpt};
 
-use ergibus_lib::{archive::ArchiveSnapshotDir, snapshot, EResult, Error};
+use ergibus_lib::{archive::Snapshots, snapshot, EResult, Error};
 use std::env;
 
 #[derive(Debug, StructOpt)]
 #[structopt(group = ArgGroup::with_name("which").required(true))]
-pub struct Snapshots {
+pub struct SnapshotManager {
     /// the name of the snapshot archive that contains the snapshot(s) to be acted on.
     #[structopt(short, long = "archive", group = "which")]
     archive_name: Option<String>,
@@ -49,12 +49,12 @@ pub enum SubCmd {
     },
 }
 
-impl Snapshots {
+impl SnapshotManager {
     pub fn exec(&self) -> EResult<()> {
         let snapshot_dir = if let Some(archive_name) = &self.archive_name {
-            ArchiveSnapshotDir::try_from(archive_name.as_str())?
+            Snapshots::try_from(archive_name.as_str())?
         } else if let Some(dir_path) = &self.exigency_dir_path {
-            ArchiveSnapshotDir::try_from(dir_path.as_path())?
+            Snapshots::try_from(dir_path.as_path())?
         } else {
             panic!("either --archive or --exigency must be present");
         };
@@ -149,9 +149,9 @@ pub enum ContentsSubCmd {
 impl SnapshotContents {
     pub fn exec(&self) -> EResult<()> {
         let snapshot_dir = if let Some(archive_name) = &self.archive_name {
-            ArchiveSnapshotDir::try_from(archive_name.as_str())?
+            Snapshots::try_from(archive_name.as_str())?
         } else if let Some(dir_path) = &self.exigency_dir_path {
-            ArchiveSnapshotDir::try_from(dir_path.as_path())?
+            Snapshots::try_from(dir_path.as_path())?
         } else {
             panic!("either --archive or --exigency must be present");
         };
