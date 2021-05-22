@@ -144,6 +144,12 @@ pub enum ContentsSubCmd {
         #[structopt(long = "stats")]
         show_stats: bool,
     },
+    /// List the contents of a directory inside a snapshot
+    List {
+        /// the path of the directory to be listed
+        #[structopt(parse(from_os_str))]
+        dir_path: Option<PathBuf>,
+    },
 }
 
 impl SnapshotContents {
@@ -201,6 +207,22 @@ impl SnapshotContents {
                 } else {
                     panic!("clap shouldn't have let us get here")
                 };
+                Ok(())
+            }
+            List { dir_path } => {
+                let snapshot_persistent_data = snapshot_dir.get_snapshot_back_n(self.back_n)?;
+                let base_dir = snapshot_persistent_data.base_dir();
+                let dir = if let Some(dir_path) = dir_path {
+                    base_dir.get_subdir(dir_path)?
+                } else {
+                    base_dir
+                };
+                for subdir in dir.subdir_names().chain(dir.subdir_link_names()) {
+                    println!("{}/", subdir)
+                }
+                for file in dir.file_names().chain(dir.file_link_names()) {
+                    println!("{}", file)
+                }
                 Ok(())
             }
         }

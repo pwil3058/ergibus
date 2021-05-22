@@ -44,7 +44,7 @@ struct LinkData {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
-struct SnapshotDir {
+pub struct SnapshotDir {
     path: PathBuf,
     attributes: Attributes,
     subdirs: BTreeMap<String, SnapshotDir>,
@@ -387,6 +387,52 @@ pub struct ExtractionStats {
 }
 
 impl SnapshotDir {
+    fn content_count(&self) -> usize {
+        self.subdirs.len() + self.files.len() + self.file_links.len() + self.subdir_links.len()
+    }
+
+    fn base_dir_path(&self) -> &Path {
+        if self.content_count() > 1 {
+            self.path.as_path()
+        } else {
+            if let Some(sub_dir) = self.subdirs.values().next() {
+                debug_assert!(self.subdirs.len() == 1);
+                sub_dir.base_dir_path()
+            } else {
+                self.path.as_path()
+            }
+        }
+    }
+
+    fn base_dir(&self) -> &Self {
+        if self.content_count() > 1 {
+            self
+        } else {
+            if let Some(sub_dir) = self.subdirs.values().next() {
+                debug_assert!(self.subdirs.len() == 1);
+                sub_dir.base_dir()
+            } else {
+                self
+            }
+        }
+    }
+
+    pub fn subdir_names(&self) -> impl Iterator<Item = &String> {
+        self.subdirs.keys()
+    }
+
+    pub fn subdir_link_names(&self) -> impl Iterator<Item = &String> {
+        self.subdir_links.keys()
+    }
+
+    pub fn file_names(&self) -> impl Iterator<Item = &String> {
+        self.files.keys()
+    }
+
+    pub fn file_link_names(&self) -> impl Iterator<Item = &String> {
+        self.file_links.keys()
+    }
+
     // Interrogation/extraction/restoration methods
     fn subdir_iter(&self, recursive: bool) -> SnapshotDirIter<'_> {
         let values = self.subdirs.values();
@@ -400,6 +446,32 @@ impl SnapshotDir {
             values,
             subdir_iters,
             current_subdir_iter,
+        }
+    }
+
+    pub fn get_subdir<P: AsRef<Path>>(&self, path_arg: P) -> EResult<&Self> {
+        let subdir_path = path_arg.as_ref();
+        let rel_path = if subdir_path.is_absolute() {
+            subdir_path
+                .strip_prefix(&self.path)
+                .map_err(|_| Error::SnapshotUnknownSubdir(subdir_path.to_path_buf()))?
+        } else {
+            subdir_path
+        };
+        match first_subpath_as_os_string(rel_path) {
+            None => Ok(self),
+            Some(first_name) => {
+                let first_name_key = String::from(first_name.to_string_lossy());
+                match self.subdirs.get(&first_name_key) {
+                    Some(sd) => {
+                        let rel_path = rel_path
+                            .strip_prefix(&first_name)
+                            .map_err(|_| Error::SnapshotUnknownSubdir(subdir_path.to_path_buf()))?;
+                        sd.get_subdir(&rel_path)
+                    }
+                    None => Err(Error::SnapshotUnknownSubdir(subdir_path.to_path_buf())),
+                }
+            }
         }
     }
 
@@ -799,6 +871,15 @@ fn move_aside_file_path(path: &Path) -> PathBuf {
 
 impl SnapshotPersistentData {
     // Interrogation/extraction/restoration methods
+
+    pub fn base_dir_path(&self) -> &Path {
+        self.root_dir.base_dir_path()
+    }
+
+    pub fn base_dir(&self) -> &SnapshotDir {
+        self.root_dir.base_dir()
+    }
+
     pub fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
         match File::open(file_path) {
             Ok(file) => {

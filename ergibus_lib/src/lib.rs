@@ -51,6 +51,7 @@ pub enum Error {
     SnapshotUnknownDirectory(String, String, std::path::PathBuf),
     SnapshotWriteIOError(std::io::Error, std::path::PathBuf),
     SnapshotSerializeError(serde_json::Error),
+    SnapshotUnknownSubdir(std::path::PathBuf),
     SnapshotsFailed(i32),
 }
 
