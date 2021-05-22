@@ -1,7 +1,7 @@
 // TODO: fix use of is_dir() and is_file() throughout this file
 
 // Standard Library access
-use std::collections::{hash_map, HashMap};
+use std::collections::{btree_map, BTreeMap};
 use std::ffi::OsString;
 use std::fs::{self, DirEntry, File};
 use std::io;
@@ -46,10 +46,10 @@ struct LinkData {
 struct SnapshotDir {
     path: PathBuf,
     attributes: Attributes,
-    subdirs: HashMap<String, SnapshotDir>,
-    files: HashMap<String, FileData>,
-    file_links: HashMap<String, LinkData>,
-    subdir_links: HashMap<String, LinkData>,
+    subdirs: BTreeMap<String, SnapshotDir>,
+    files: BTreeMap<String, FileData>,
+    file_links: BTreeMap<String, LinkData>,
+    subdir_links: BTreeMap<String, LinkData>,
 }
 
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
@@ -80,10 +80,10 @@ impl SnapshotDir {
         let metadata = rootdir.metadata()?;
         let path = rootdir.canonicalize()?;
 
-        let subdirs = HashMap::<String, SnapshotDir>::new();
-        let files = HashMap::<String, FileData>::new();
-        let file_links = HashMap::<String, LinkData>::new();
-        let subdir_links = HashMap::<String, LinkData>::new();
+        let subdirs = BTreeMap::<String, SnapshotDir>::new();
+        let files = BTreeMap::<String, FileData>::new();
+        let file_links = BTreeMap::<String, LinkData>::new();
+        let subdir_links = BTreeMap::<String, LinkData>::new();
 
         Ok(SnapshotDir {
             path: path,
@@ -281,7 +281,7 @@ impl SnapshotDir {
 }
 
 struct SnapshotDirIter<'a> {
-    values: hash_map::Values<'a, String, SnapshotDir>,
+    values: btree_map::Values<'a, String, SnapshotDir>,
     subdir_iters: Vec<SnapshotDirIter<'a>>,
     current_subdir_iter: Box<Option<SnapshotDirIter<'a>>>,
 }
