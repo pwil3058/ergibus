@@ -30,14 +30,14 @@ use crate::report::{ignore_report_or_crash, report_broken_link_or_crash};
 use crate::{EResult, Error};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct FileData {
+pub struct FileData {
     file_name: OsString,
     attributes: Attributes,
     content_token: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct LinkData {
+pub struct LinkData {
     file_name: OsString,
     attributes: Attributes,
     link_target: PathBuf,
@@ -423,7 +423,7 @@ impl SnapshotDir {
         }
     }
 
-    pub fn find_subdir<P: AsRef<Path>>(&self, path_arg: P) -> EResult<&Self> {
+    fn find_subdir<P: AsRef<Path>>(&self, path_arg: P) -> EResult<&Self> {
         let subdir_path = path_arg.as_ref();
         let rel_path = if subdir_path.is_absolute() {
             subdir_path
@@ -880,13 +880,21 @@ impl SnapshotPersistentData {
         &self.archive_name
     }
 
+    pub fn find_subdir<P: AsRef<Path>>(&self, dir_path_arg: P) -> EResult<&SnapshotDir> {
+        self.base_dir().find_subdir(dir_path_arg)
+    }
+
+    pub fn find_file<P: AsRef<Path>>(&self, file_path_arg: P) -> EResult<&FileData> {
+        self.base_dir().find_file(file_path_arg)
+    }
+
     pub fn copy_file_to(
         &self,
         fm_file_path: &Path,
         to_file_path: &Path,
         overwrite: bool,
     ) -> EResult<u64> {
-        let file_data = self.base_dir().find_file(fm_file_path)?;
+        let file_data = self.find_file(fm_file_path)?;
         let c_mgr = self
             .content_mgmt_key
             .open_content_manager(dychatat::Mutability::Immutable)?;
@@ -903,7 +911,7 @@ impl SnapshotPersistentData {
     where
         W: std::io::Write,
     {
-        let fm_subdir = self.base_dir().find_subdir(fm_dir_path)?;
+        let fm_subdir = self.find_subdir(fm_dir_path)?;
         let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite, op_errf)?;
         Ok(stats)
     }
