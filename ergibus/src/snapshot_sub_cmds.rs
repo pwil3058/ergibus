@@ -213,7 +213,7 @@ impl SnapshotContents {
                 let snapshot_persistent_data = snapshot_dir.get_snapshot_back_n(self.back_n)?;
                 let base_dir = snapshot_persistent_data.base_dir();
                 let dir = if let Some(dir_path) = dir_path {
-                    base_dir.get_subdir(dir_path)?
+                    base_dir.find_subdir(dir_path)?
                 } else {
                     base_dir
                 };

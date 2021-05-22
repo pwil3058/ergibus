@@ -391,32 +391,6 @@ impl SnapshotDir {
         self.subdirs.len() + self.files.len() + self.file_links.len() + self.subdir_links.len()
     }
 
-    fn base_dir_path(&self) -> &Path {
-        if self.content_count() > 1 {
-            self.path.as_path()
-        } else {
-            if let Some(sub_dir) = self.subdirs.values().next() {
-                debug_assert!(self.subdirs.len() == 1);
-                sub_dir.base_dir_path()
-            } else {
-                self.path.as_path()
-            }
-        }
-    }
-
-    fn base_dir(&self) -> &Self {
-        if self.content_count() > 1 {
-            self
-        } else {
-            if let Some(sub_dir) = self.subdirs.values().next() {
-                debug_assert!(self.subdirs.len() == 1);
-                sub_dir.base_dir()
-            } else {
-                self
-            }
-        }
-    }
-
     pub fn subdir_names(&self) -> impl Iterator<Item = &String> {
         self.subdirs.keys()
     }
@@ -449,12 +423,12 @@ impl SnapshotDir {
         }
     }
 
-    pub fn get_subdir<P: AsRef<Path>>(&self, path_arg: P) -> EResult<&Self> {
+    pub fn find_subdir<P: AsRef<Path>>(&self, path_arg: P) -> EResult<&Self> {
         let subdir_path = path_arg.as_ref();
         let rel_path = if subdir_path.is_absolute() {
             subdir_path
                 .strip_prefix(&self.path)
-                .map_err(|_| Error::SnapshotUnknownSubdir(subdir_path.to_path_buf()))?
+                .map_err(|_| Error::SnapshotUnknownContent(subdir_path.to_path_buf()))?
         } else {
             subdir_path
         };
@@ -464,46 +438,37 @@ impl SnapshotDir {
                 let first_name_key = String::from(first_name.to_string_lossy());
                 match self.subdirs.get(&first_name_key) {
                     Some(sd) => {
-                        let rel_path = rel_path
-                            .strip_prefix(&first_name)
-                            .map_err(|_| Error::SnapshotUnknownSubdir(subdir_path.to_path_buf()))?;
-                        sd.get_subdir(&rel_path)
+                        let rel_path = rel_path.strip_prefix(&first_name).map_err(|_| {
+                            Error::SnapshotUnknownContent(subdir_path.to_path_buf())
+                        })?;
+                        sd.find_subdir(&rel_path)
                     }
-                    None => Err(Error::SnapshotUnknownSubdir(subdir_path.to_path_buf())),
+                    None => Err(Error::SnapshotUnknownContent(subdir_path.to_path_buf())),
                 }
             }
         }
     }
 
-    fn find_subdir(&self, abs_subdir_path: &Path) -> Option<&SnapshotDir> {
-        assert!(abs_subdir_path.is_absolute());
-        match abs_subdir_path.strip_prefix(&self.path) {
-            Ok(rel_path) => {
-                let first_name = match first_subpath_as_os_string(rel_path) {
-                    Some(fname) => fname,
-                    None => return Some(self),
-                };
-                let first_name_key = String::from(first_name.to_string_lossy());
-                match self.subdirs.get(&first_name_key) {
-                    Some(sd) => sd.find_subdir(abs_subdir_path),
-                    None => None,
+    fn find_file<P: AsRef<Path>>(&self, file_path_arg: P) -> EResult<&FileData> {
+        let file_path = file_path_arg.as_ref();
+        match file_path.file_name() {
+            Some(file_name) => {
+                let file_name_key = String::from(file_name.to_string_lossy());
+                if let Some(dir_path) = file_path.parent() {
+                    let subdir = self.find_subdir(dir_path)?;
+                    match subdir.files.get(&file_name_key) {
+                        Some(file_data) => Ok(file_data),
+                        None => Err(Error::SnapshotUnknownContent(file_path.to_path_buf())),
+                    }
+                } else {
+                    match self.files.get(&file_name_key) {
+                        Some(file_data) => Ok(file_data),
+                        None => Err(Error::SnapshotUnknownContent(file_path.to_path_buf())),
+                    }
                 }
             }
-            Err(_) => None,
+            None => Err(Error::SnapshotUnknownContent(file_path.to_path_buf())),
         }
-    }
-
-    fn find_file(&self, abs_file_path: &Path) -> Option<&FileData> {
-        assert!(abs_file_path.is_absolute());
-        if let Some(abs_dir_path) = abs_file_path.parent() {
-            if let Some(subdir) = self.find_subdir(abs_dir_path) {
-                if let Some(file_name) = abs_file_path.file_name() {
-                    let file_name_key = String::from(file_name.to_string_lossy());
-                    return subdir.files.get(&file_name_key);
-                }
-            }
-        }
-        None
     }
 
     fn copy_files_into(
@@ -571,9 +536,10 @@ impl SnapshotDir {
         let mut stats = ExtractionStats::default();
         clear_way_for_new_dir(to_dir_path, overwrite)?;
         if !to_dir_path.is_dir() {
+            // TODO: rethink the logic for this bit
             fs::create_dir_all(to_dir_path)
                 .map_err(|err| Error::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
-            if let Some(to_dir) = self.find_subdir(to_dir_path) {
+            if let Ok(to_dir) = self.find_subdir(to_dir_path) {
                 to_dir
                     .attributes
                     .set_file_attributes(to_dir_path, op_errf)
@@ -873,11 +839,20 @@ impl SnapshotPersistentData {
     // Interrogation/extraction/restoration methods
 
     pub fn base_dir_path(&self) -> &Path {
-        self.root_dir.base_dir_path()
+        &self.base_dir().path
     }
 
     pub fn base_dir(&self) -> &SnapshotDir {
-        self.root_dir.base_dir()
+        let mut bd = &self.root_dir;
+        while bd.content_count() < 2 {
+            if let Some(subdir) = bd.subdirs.values().next() {
+                debug_assert!(bd.subdirs.len() == 1);
+                bd = subdir
+            } else {
+                break;
+            }
+        }
+        bd
     }
 
     pub fn from_file(file_path: &Path) -> EResult<SnapshotPersistentData> {
@@ -901,7 +876,7 @@ impl SnapshotPersistentData {
         }
     }
 
-    fn archive_name(&self) -> &str {
+    pub fn archive_name(&self) -> &str {
         &self.archive_name
     }
 
@@ -911,21 +886,11 @@ impl SnapshotPersistentData {
         to_file_path: &Path,
         overwrite: bool,
     ) -> EResult<u64> {
-        let file_data = match self.root_dir.find_file(fm_file_path) {
-            Some(fd) => fd,
-            None => {
-                return Err(Error::SnapshotUnknownFile(
-                    self.archive_name().to_string(),
-                    self.snapshot_name(),
-                    fm_file_path.to_path_buf(),
-                ))
-            }
-        };
+        let file_data = self.base_dir().find_file(fm_file_path)?;
         let c_mgr = self
             .content_mgmt_key
             .open_content_manager(dychatat::Mutability::Immutable)?;
-        let bytes = file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?;
-        Ok(bytes)
+        Ok(file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?)
     }
 
     pub fn copy_dir_to<W>(
@@ -938,15 +903,7 @@ impl SnapshotPersistentData {
     where
         W: std::io::Write,
     {
-        let fm_subdir = if let Some(subdir) = self.root_dir.find_subdir(fm_dir_path) {
-            subdir
-        } else {
-            return Err(Error::SnapshotUnknownDirectory(
-                self.archive_name().to_string(),
-                self.snapshot_name(),
-                fm_dir_path.to_path_buf(),
-            ));
-        };
+        let fm_subdir = self.base_dir().find_subdir(fm_dir_path)?;
         let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite, op_errf)?;
         Ok(stats)
     }
@@ -1141,18 +1098,18 @@ mod tests {
             assert!(ssd.path == p.as_path());
         }
         let ssd = match sd.find_subdir(&p) {
-            Some(ssd) => ssd,
-            None => panic!("{:?}: line {:?}", file!(), line!()),
+            Ok(ssd) => ssd,
+            Err(err) => panic!("{:?}", err),
         };
         assert!(ssd.path == p.as_path());
         let sdp = PathBuf::from("../").canonicalize().unwrap();
         let ssd = match sd.find_subdir(&sdp) {
-            Some(ssd) => ssd,
-            None => panic!("{:?}: line {:?}", file!(), line!()),
+            Ok(ssd) => ssd,
+            Err(err) => panic!("{:?}", err),
         };
         assert_eq!(ssd.path, sdp.as_path());
         let sdp1 = PathBuf::from("../TEST/config").canonicalize().unwrap();
-        assert_eq!(sd.find_subdir(&sdp1), None);
+        assert!(sd.find_subdir(&sdp1).is_err());
     }
 
     #[test]
