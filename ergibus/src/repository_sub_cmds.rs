@@ -14,6 +14,9 @@ pub enum ManageRepositories {
     /// Delete a repository
     #[structopt(alias = "del")]
     Delete(DeleteRepository),
+    /// Prune a repository
+    #[structopt(alias = "pr")]
+    Prune(PruneRepository),
     /// Create a new repository
     #[structopt(alias = "new")]
     NewRepo(NewRepository),
@@ -25,6 +28,7 @@ impl ManageRepositories {
         match self {
             List(sub_cmd) => sub_cmd.exec(),
             Delete(sub_cmd) => sub_cmd.exec(),
+            Prune(sub_cmd) => sub_cmd.exec(),
             NewRepo(sub_cmd) => sub_cmd.exec(),
         }
     }
@@ -62,6 +66,21 @@ pub struct DeleteRepository {
 impl DeleteRepository {
     pub fn exec(&self) -> EResult<()> {
         content::delete_repository(&self.repo_name)
+    }
+}
+
+#[derive(Debug, StructOpt)]
+/// Prune a content repository
+pub struct PruneRepository {
+    /// The name of the repository to be pruned
+    repo_name: String,
+}
+
+impl PruneRepository {
+    pub fn exec(&self) -> EResult<()> {
+        let stats = content::prune_repository(&self.repo_name)?;
+        println!("{:?}", stats);
+        Ok(())
     }
 }
 

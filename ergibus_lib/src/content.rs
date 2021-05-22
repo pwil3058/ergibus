@@ -6,6 +6,7 @@ pub use dychatat::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, Re
 
 use crate::config;
 use crate::{EResult, Error};
+use dychatat::UnreferencedContentData;
 
 pub fn content_repo_exists(repo_name: &str) -> bool {
     get_repo_spec_file_path(repo_name).exists()
@@ -102,6 +103,12 @@ pub fn delete_repository(repo_name: &str) -> EResult<()> {
     let repo_spec_path = get_repo_spec_file_path(repo_name);
     fs::remove_file(repo_spec_path)?;
     Ok(())
+}
+
+pub fn prune_repository(repo_name: &str) -> EResult<UnreferencedContentData> {
+    let repo_key = get_content_mgmt_key(repo_name)?;
+    let content_manager = repo_key.open_content_manager(Mutability::Mutable)?;
+    Ok(content_manager.prune_contents()?)
 }
 
 #[cfg(test)]
