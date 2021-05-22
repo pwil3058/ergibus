@@ -3,6 +3,5 @@
 members = [
     "ergibus",
     "ergibus_lib",
-    "ergibus_clap",
     "ergibus_gtk",
 ]
