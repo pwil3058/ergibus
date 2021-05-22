@@ -2,12 +2,13 @@
 
 // Standard Library access
 use std::collections::{btree_map, BTreeMap};
+use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::fs::{self, DirEntry, File};
 use std::io;
 use std::io::prelude::*;
 use std::ops::AddAssign;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time;
 
 // cargo.io crates access
@@ -42,7 +43,7 @@ struct LinkData {
     link_target: PathBuf,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 struct SnapshotDir {
     path: PathBuf,
     attributes: Attributes,
@@ -72,27 +73,12 @@ fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
 
 impl SnapshotDir {
     // Creation/destruction methods
-    fn new(opt_rootdir: Option<&Path>) -> io::Result<SnapshotDir> {
-        let rootdir = match opt_rootdir {
-            Some(p) => p,
-            None => Path::new("/"),
-        };
-        let metadata = rootdir.metadata()?;
-        let path = rootdir.canonicalize()?;
+    fn new<P: AsRef<Path>>(root_dir: P) -> io::Result<SnapshotDir> {
+        let mut snapshot_dir = SnapshotDir::default();
+        snapshot_dir.path = root_dir.as_ref().canonicalize()?;
+        snapshot_dir.attributes = snapshot_dir.path.metadata()?.into();
 
-        let subdirs = BTreeMap::<String, SnapshotDir>::new();
-        let files = BTreeMap::<String, FileData>::new();
-        let file_links = BTreeMap::<String, LinkData>::new();
-        let subdir_links = BTreeMap::<String, LinkData>::new();
-
-        Ok(SnapshotDir {
-            path: path,
-            attributes: metadata.into(),
-            subdirs: subdirs,
-            files: files,
-            file_links: file_links,
-            subdir_links: subdir_links,
-        })
+        Ok(snapshot_dir)
     }
 
     fn release_contents(&self, content_mgr: &ContentManager) {
@@ -119,7 +105,7 @@ impl SnapshotDir {
                     let mut path_buf = PathBuf::new();
                     path_buf.push(self.path.clone());
                     path_buf.push(first_name.clone());
-                    let snapshot_dir = SnapshotDir::new(Some(&path_buf))?;
+                    let snapshot_dir = SnapshotDir::new(&path_buf)?;
                     self.subdirs.insert(first_name_key.clone(), snapshot_dir);
                 }
                 match self.subdirs.get_mut(&first_name_key) {
@@ -617,21 +603,24 @@ pub struct SnapshotPersistentData {
     sym_link_stats: SymLinkStats,
 }
 
-impl SnapshotPersistentData {
-    fn new(archive_name: &str, cmk: &ContentMgmtKey) -> SnapshotPersistentData {
-        let sd = SnapshotDir::new(None)
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
-        SnapshotPersistentData {
-            root_dir: sd,
-            content_mgmt_key: cmk.clone(),
-            archive_name: archive_name.to_string(),
+impl TryFrom<&ArchiveData> for SnapshotPersistentData {
+    type Error = Error;
+
+    fn try_from(archive_data: &ArchiveData) -> EResult<Self> {
+        let root_dir = SnapshotDir::new(Component::RootDir)?;
+        Ok(Self {
+            root_dir,
+            content_mgmt_key: archive_data.content_mgmt_key.clone(),
+            archive_name: archive_data.name.clone(),
             started_create: time::SystemTime::now(),
             finished_create: time::SystemTime::now(),
             file_stats: FileStats::default(),
             sym_link_stats: SymLinkStats::default(),
-        }
+        })
     }
+}
 
+impl SnapshotPersistentData {
     fn serialize(&self) -> EResult<String> {
         match serde_json::to_string(self) {
             Ok(string) => Ok(string),
@@ -742,12 +731,13 @@ impl SnapshotPersistentData {
         }
     }
 
-    fn file_name(&self) -> PathBuf {
-        PathBuf::from(self.snapshot_name())
+    fn snapshot_name(&self) -> String {
+        let dt = DateTime::<Local>::from(self.finished_create);
+        format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
     }
 
     fn write_to_dir(&self, dir_path: &Path) -> EResult<PathBuf> {
-        let file_name = self.file_name();
+        let file_name = self.snapshot_name();
         let path = dir_path.join(file_name);
         let file = File::create(&path)
             .map_err(|err| Error::SnapshotWriteIOError(err, path.to_path_buf()))?;
@@ -830,13 +820,8 @@ impl SnapshotPersistentData {
         }
     }
 
-    fn archive_name(&self) -> String {
-        self.archive_name.clone()
-    }
-
-    fn snapshot_name(&self) -> String {
-        let dt = DateTime::<Local>::from(self.finished_create);
-        format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
+    fn archive_name(&self) -> &str {
+        &self.archive_name
     }
 
     pub fn copy_file_to(
@@ -849,7 +834,7 @@ impl SnapshotPersistentData {
             Some(fd) => fd,
             None => {
                 return Err(Error::SnapshotUnknownFile(
-                    self.archive_name(),
+                    self.archive_name().to_string(),
                     self.snapshot_name(),
                     fm_file_path.to_path_buf(),
                 ))
@@ -876,7 +861,7 @@ impl SnapshotPersistentData {
             subdir
         } else {
             return Err(Error::SnapshotUnknownDirectory(
-                self.archive_name(),
+                self.archive_name().to_string(),
                 self.snapshot_name(),
                 fm_dir_path.to_path_buf(),
             ));
@@ -903,6 +888,8 @@ impl Drop for SnapshotGenerator {
 impl SnapshotGenerator {
     pub fn new(archive_name: &str) -> EResult<SnapshotGenerator> {
         let archive_data = get_archive_data(archive_name)?;
+        // Check that there'll be no problem creating snapshots
+        let _dummy = SnapshotPersistentData::try_from(&archive_data)?;
         let snapshot: Option<SnapshotPersistentData> = None;
         Ok(SnapshotGenerator {
             snapshot,
@@ -915,16 +902,13 @@ impl SnapshotGenerator {
         self.snapshot.is_some()
     }
 
-    fn generate_snapshot(&mut self) -> (time::Duration, FileStats, SymLinkStats, u64) {
+    fn generate_snapshot(&mut self) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
         if self.snapshot.is_some() {
             // This snapshot is being thrown away so we release its contents
             self.release_snapshot();
         }
         let mut delta_repo_size: u64 = 0;
-        let mut snapshot = SnapshotPersistentData::new(
-            &self.archive_data.name,
-            &self.archive_data.content_mgmt_key,
-        );
+        let mut snapshot = SnapshotPersistentData::try_from(&self.archive_data)?;
         for abs_path in self.archive_data.includes.iter() {
             if abs_path.is_dir() {
                 match snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
@@ -943,7 +927,7 @@ impl SnapshotGenerator {
         let file_stats = snapshot.file_stats;
         let sym_link_stats = snapshot.sym_link_stats;
         self.snapshot = Some(snapshot);
-        (duration, file_stats, sym_link_stats, delta_repo_size)
+        Ok((duration, file_stats, sym_link_stats, delta_repo_size))
     }
 
     #[cfg(test)]
@@ -997,7 +981,7 @@ pub fn generate_snapshot(
     archive_name: &str,
 ) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
     let mut sg = SnapshotGenerator::new(archive_name)?;
-    let stats = sg.generate_snapshot();
+    let stats = sg.generate_snapshot()?;
     sg.write_snapshot()?;
     Ok(stats)
 }

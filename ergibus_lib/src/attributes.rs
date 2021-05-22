@@ -21,7 +21,7 @@ pub trait AttributesIfce: From<Metadata> {
         W: std::io::Write;
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy, Default)]
 #[cfg(target_family = "unix")]
 pub struct Attributes {
     st_dev: u64,

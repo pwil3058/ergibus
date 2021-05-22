@@ -140,15 +140,6 @@ fn write_archive_spec(
     Ok(())
 }
 
-#[derive(Debug)]
-pub struct ArchiveData {
-    pub name: String,
-    pub content_mgmt_key: ContentMgmtKey,
-    pub snapshot_dir_path: PathBuf,
-    pub includes: Vec<PathBuf>,
-    pub exclusions: Exclusions,
-}
-
 pub fn create_new_archive<P: AsRef<Path>>(
     name: &str,
     content_repo_name: &str,
@@ -213,6 +204,15 @@ pub fn delete_archive(archive_name: &str) -> EResult<()> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
     fs::remove_file(&spec_file_path)?;
     snapshot_dir.delete()
+}
+
+#[derive(Debug)]
+pub struct ArchiveData {
+    pub name: String,
+    pub content_mgmt_key: ContentMgmtKey,
+    pub snapshot_dir_path: PathBuf,
+    pub includes: Vec<PathBuf>,
+    pub exclusions: Exclusions,
 }
 
 pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
@@ -376,6 +376,11 @@ impl Snapshots {
             return Err(Error::SnapshotIndexOutOfRange(self.id(), n));
         }
         Ok(snapshot_paths[index].clone())
+    }
+
+    pub fn get_snapshot_back_n(&self, n: i64) -> EResult<SnapshotPersistentData> {
+        let snapshot_file_path = self.get_snapshot_path_back_n(n)?;
+        SnapshotPersistentData::from_file(&snapshot_file_path)
     }
 
     pub fn delete_all_but_newest(&self, newest_count: usize, clear_fell: bool) -> EResult<usize> {
