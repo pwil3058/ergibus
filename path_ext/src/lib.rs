@@ -27,6 +27,34 @@ impl From<StripPrefixError> for Error {
     }
 }
 
+pub enum PathType {
+    Absolute,
+    RelativeCurDir,
+    RelativeCurDirImplicit,
+    RelativeParentDir,
+    RelativeHomeDir,
+    Empty,
+}
+
+pub fn path_type<P: AsRef<Path>>(path_arg: P) -> PathType {
+    let path = path_arg.as_ref();
+    match path.components().next() {
+        None => PathType::Empty,
+        Some(component) => match component {
+            Component::RootDir | Component::Prefix(_) => PathType::Absolute,
+            Component::CurDir => PathType::RelativeCurDir,
+            Component::ParentDir => PathType::RelativeParentDir,
+            Component::Normal(os_string) => {
+                if os_string == "~" {
+                    PathType::RelativeHomeDir
+                } else {
+                    PathType::RelativeCurDirImplicit
+                }
+            }
+        },
+    }
+}
+
 pub fn expand_current_dir<P: AsRef<Path>>(path_arg: P) -> Result<PathBuf, Error> {
     let path = path_arg.as_ref();
     if path.starts_with(Component::CurDir) {
@@ -87,20 +115,13 @@ pub fn prepend_current_dir<P: AsRef<Path>>(path_arg: P) -> Result<PathBuf, Error
 
 pub fn absolute_path_buf<P: AsRef<Path>>(path_arg: P) -> Result<PathBuf, Error> {
     let path = path_arg.as_ref();
-    match path.components().next() {
-        None => Ok(env::current_dir()?),
-        Some(component) => match component {
-            Component::RootDir | Component::Prefix(_) => Ok(path.to_path_buf()),
-            Component::CurDir => expand_current_dir(path),
-            Component::ParentDir => expand_parent_dir(path),
-            Component::Normal(os_string) => {
-                if os_string == "~" {
-                    expand_home_dir(path)
-                } else {
-                    prepend_current_dir(path)
-                }
-            }
-        },
+    match path_type(path) {
+        PathType::Absolute => Ok(path.to_path_buf()),
+        PathType::RelativeCurDir => expand_current_dir(path),
+        PathType::RelativeParentDir => expand_parent_dir(path),
+        PathType::RelativeHomeDir => expand_home_dir(path),
+        PathType::RelativeCurDirImplicit => prepend_current_dir(path),
+        PathType::Empty => Ok(env::current_dir()?),
     }
 }
 

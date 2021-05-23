@@ -10,8 +10,8 @@ use serde_yaml;
 use users;
 use walkdir;
 
-use path_ext::absolute_path_buf;
 use path_ext::expand_home_dir;
+use path_ext::{absolute_path_buf, path_type, PathType};
 
 use crate::{
     config,
@@ -433,11 +433,13 @@ impl Snapshots {
         } else {
             panic!("{:?}: line {:?}", file!(), line!())
         };
-        // TODO: don't require absolute paths for source
-        let abs_file_path = absolute_path_buf(file_path)
-            .map_err(|e| Error::ArchiveIncludePathError(e, file_path.to_path_buf()))?;
+        let src_file_path = match path_type(file_path) {
+            PathType::RelativeCurDirImplicit => file_path.to_path_buf(),
+            _ => absolute_path_buf(file_path)
+                .map_err(|e| Error::ArchiveIncludePathError(e, file_path.to_path_buf()))?,
+        };
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-        let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite)?;
+        let bytes = spd.copy_file_to(&src_file_path, &target_path, overwrite)?;
 
         let finished_at = time::SystemTime::now();
         let duration = match finished_at.duration_since(started_at) {
@@ -465,12 +467,14 @@ impl Snapshots {
         } else {
             panic!("{:?}: line {:?}", file!(), line!())
         };
-        // TODO: don't require absolute paths for source
-        let abs_dir_path = absolute_path_buf(dir_path)
-            .map_err(|e| Error::ArchiveIncludePathError(e, dir_path.to_path_buf()))?;
+        let src_dir_path = match path_type(dir_path) {
+            PathType::RelativeCurDirImplicit => dir_path.to_path_buf(),
+            _ => absolute_path_buf(dir_path)
+                .map_err(|e| Error::ArchiveIncludePathError(e, dir_path.to_path_buf()))?,
+        };
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
         let stats = spd.copy_dir_to(
-            &abs_dir_path,
+            &src_dir_path,
             &target_path,
             overwrite,
             &mut Some(&mut stderr()),
