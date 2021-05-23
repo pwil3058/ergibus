@@ -4,4 +4,5 @@ members = [
     "ergibus",
     "ergibus_lib",
     "ergibus_gtk",
+    "path_ext",
 ]
