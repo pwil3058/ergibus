@@ -212,6 +212,7 @@ impl SnapshotContents {
             List { dir_path } => {
                 let snapshot_persistent_data = snapshot_dir.get_snapshot_back_n(self.back_n)?;
                 let dir = if let Some(dir_path) = dir_path {
+                    // TODO: be smarter about target path for listing
                     snapshot_persistent_data.find_subdir(dir_path)?
                 } else {
                     snapshot_persistent_data.base_dir()
