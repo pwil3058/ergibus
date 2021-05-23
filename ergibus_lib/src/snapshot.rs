@@ -18,9 +18,6 @@ use serde_json;
 use snap;
 use walkdir::WalkDir;
 
-// PW crate access
-use crate::path_ext::first_subpath_as_os_string;
-
 // local modules access
 use crate::archive::{self, get_archive_data, ArchiveData, Exclusions};
 use crate::attributes::{Attributes, AttributesIfce};
@@ -28,6 +25,19 @@ use crate::content::{ContentManager, ContentMgmtKey};
 use crate::path_buf_ext::RealPathBufType;
 use crate::report::{ignore_report_or_crash, report_broken_link_or_crash};
 use crate::{EResult, Error};
+
+fn first_subpath_as_os_string(path: &Path) -> Option<OsString> {
+    for c in path.components() {
+        match c {
+            Component::RootDir => continue,
+            Component::Normal(component) => {
+                return Some(component.to_os_string());
+            }
+            _ => break,
+        }
+    }
+    None
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct FileData {

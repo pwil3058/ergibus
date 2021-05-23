@@ -3,13 +3,14 @@ extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
 
+use path_ext;
+
 pub mod archive;
 pub mod attributes;
 pub mod config;
 pub mod content;
 //pub mod eerror;
 mod path_buf_ext;
-mod path_ext;
 mod report;
 pub mod snapshot;
 
@@ -26,6 +27,7 @@ pub enum Error {
     ArchiveYamlReadError(serde_yaml::Error, String),
     ArchiveYamlWriteError(serde_yaml::Error, String),
     RelativeIncludePath(std::path::PathBuf, String),
+    ArchiveIncludePathError(path_ext::Error, std::path::PathBuf),
 
     GlobError(globset::Error),
 

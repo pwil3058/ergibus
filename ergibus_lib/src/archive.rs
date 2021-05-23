@@ -10,11 +10,12 @@ use serde_yaml;
 use users;
 use walkdir;
 
-use crate::path_ext::absolute_path_buf;
+use path_ext::absolute_path_buf;
+use path_ext::expand_home_dir;
+
 use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
-    path_ext::expand_home_dir,
     snapshot::{self, ExtractionStats, SnapshotPersistentData},
     EResult, Error,
 };
@@ -164,16 +165,9 @@ pub fn create_new_archive<P: AsRef<Path>>(
     // expand inclusion paths while relativity is well defined
     let mut exp_inclusions = vec![];
     for inclusion in inclusions {
-        if inclusion.starts_with("~") {
-            match expand_home_dir(inclusion) {
-                Some(expanded_path) => exp_inclusions.push(expanded_path),
-                None => panic!("home dir expansion failed",),
-            }
-        } else if inclusion.is_relative() {
-            exp_inclusions.push(inclusion.canonicalize()?)
-        } else {
-            exp_inclusions.push(inclusion.clone())
-        }
+        let abs_inclusion = absolute_path_buf(inclusion)
+            .map_err(|e| Error::ArchiveIncludePathError(e, inclusion.to_path_buf()))?;
+        exp_inclusions.push(abs_inclusion.canonicalize()?);
     }
     let mut snapshot_dir_path = location.as_ref().to_path_buf();
     snapshot_dir_path.push("ergibus");
@@ -228,18 +222,15 @@ pub fn get_archive_data(archive_name: &str) -> EResult<ArchiveData> {
     let mut includes = Vec::new();
     for inclusion in archive_spec.inclusions {
         let included_file_path = if inclusion.starts_with("~") {
-            match expand_home_dir(&inclusion) {
-                Some(expanded_path) => expanded_path,
-                None => panic!("home dir expansion failed",),
-            }
-        } else {
-            if inclusion.is_relative() {
-                return Err(Error::RelativeIncludePath(
-                    inclusion,
-                    archive_name.to_string(),
-                ));
-            };
+            expand_home_dir(&inclusion)
+                .map_err(|e| Error::ArchiveIncludePathError(e, inclusion.to_path_buf()))?
+        } else if inclusion.is_absolute() {
             inclusion
+        } else {
+            return Err(Error::RelativeIncludePath(
+                inclusion,
+                archive_name.to_string(),
+            ));
         };
         includes.push(included_file_path);
     }
@@ -442,11 +433,9 @@ impl Snapshots {
         } else {
             panic!("{:?}: line {:?}", file!(), line!())
         };
-        let abs_file_path = if file_path.starts_with("~") {
-            expand_home_dir(file_path).unwrap()
-        } else {
-            absolute_path_buf(file_path)
-        };
+        // TODO: don't require absolute paths for source
+        let abs_file_path = absolute_path_buf(file_path)
+            .map_err(|e| Error::ArchiveIncludePathError(e, file_path.to_path_buf()))?;
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
         let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite)?;
 
@@ -476,11 +465,9 @@ impl Snapshots {
         } else {
             panic!("{:?}: line {:?}", file!(), line!())
         };
-        let abs_dir_path = if dir_path.starts_with("~") {
-            expand_home_dir(dir_path).unwrap()
-        } else {
-            absolute_path_buf(dir_path)
-        };
+        // TODO: don't require absolute paths for source
+        let abs_dir_path = absolute_path_buf(dir_path)
+            .map_err(|e| Error::ArchiveIncludePathError(e, dir_path.to_path_buf()))?;
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
         let stats = spd.copy_dir_to(
             &abs_dir_path,

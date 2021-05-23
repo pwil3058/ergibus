@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use dirs;
 
-use crate::path_ext;
+use path_ext;
 
 const DEFAULT_CONFIG_DIR_PATH: &str = "~/.config/ergibus";
 
@@ -13,8 +13,8 @@ pub fn abs_default_config_dir_path() -> PathBuf {
     match dirs::config_dir() {
         Some(config_dir) => config_dir.join("ergibus"),
         None => match path_ext::expand_home_dir(&PathBuf::from(DEFAULT_CONFIG_DIR_PATH)) {
-            Some(expanded_dir) => expanded_dir,
-            None => panic!("config dir path expansion failed"),
+            Ok(expanded_dir) => expanded_dir,
+            Err(_) => panic!("config dir path expansion failed"),
         },
     }
 }
@@ -26,8 +26,8 @@ fn get_config_dir_path() -> PathBuf {
                 abs_default_config_dir_path()
             } else if dir_path.starts_with("~") {
                 match path_ext::expand_home_dir(&PathBuf::from(dir_path)) {
-                    Some(expanded_dir) => expanded_dir,
-                    None => panic!("config dir path expansion failed",),
+                    Ok(expanded_dir) => expanded_dir,
+                    Err(_) => panic!("config dir path expansion failed",),
                 }
             } else {
                 PathBuf::from(dir_path)
