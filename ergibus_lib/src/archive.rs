@@ -570,13 +570,13 @@ file_exclusions:\n
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
-            "./TEST/store/ergibus/archives/dummy"
+            PathBuf::from("./TEST/store/ergibus/archives/dummy")
         );
         assert_eq!(
             spec.inclusions,
             vec![
-                "~/SRC/GITHUB/ergibus.git/src",
-                "~/SRC/GITHUB/ergibus.git/target"
+                PathBuf::from("~/SRC/GITHUB/ergibus.git/src"),
+                PathBuf::from("~/SRC/GITHUB/ergibus.git/target")
             ]
         );
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);
@@ -591,32 +591,29 @@ file_exclusions:\n
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
-            "./TEST/store/ergibus/archives/dummy"
+            PathBuf::from("./TEST/store/ergibus/archives/dummy")
         );
         assert_eq!(
             spec.inclusions,
             vec![
-                "~/SRC/GITHUB/ergibus.git/src",
-                "~/SRC/GITHUB/ergibus.git/target"
+                PathBuf::from("~/SRC/GITHUB/ergibus.git/src"),
+                PathBuf::from("~/SRC/GITHUB/ergibus.git/target")
             ]
         );
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);
         assert_eq!(spec.file_exclusions, vec!["*.[oa]", "*.py[co]"]);
-        if let Err(err) = write_archive_spec("dummy", &spec, true) {
-            panic!("write spec failed: {:?}", err)
-        };
-        let spec: ArchiveSpec = read_archive_spec("dummy")
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        assert!(write_archive_spec("dummy", &spec, true).is_ok());
+        let spec: ArchiveSpec = read_archive_spec("dummy").unwrap();
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
-            "./TEST/store/ergibus/archives/dummy"
+            PathBuf::from("./TEST/store/ergibus/archives/dummy")
         );
         assert_eq!(
             spec.inclusions,
             vec![
-                "~/SRC/GITHUB/ergibus.git/src",
-                "~/SRC/GITHUB/ergibus.git/target"
+                PathBuf::from("~/SRC/GITHUB/ergibus.git/src"),
+                PathBuf::from("~/SRC/GITHUB/ergibus.git/target")
             ]
         );
         assert_eq!(spec.dir_exclusions, vec!["lost+found"]);

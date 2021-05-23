@@ -1095,7 +1095,7 @@ mod tests {
 
     #[test]
     fn find_or_add_subdir_works() {
-        let mut sd = SnapshotDir::new(None)
+        let mut sd = SnapshotDir::new(Component::RootDir)
             .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
         let p = PathBuf::from("../TEST").canonicalize().unwrap();
         {
@@ -1140,23 +1140,9 @@ mod tests {
         if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
             panic!("new repo: {:?}", err);
         }
-        let my_file = Path::new("./src/snapshot.rs")
-            .canonicalize()
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
-        let my_file = my_file
-            .to_str()
-            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
-        let cli_dir = Path::new("../ergibus")
-            .canonicalize()
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
-        let cli_dir = cli_dir
-            .to_str()
-            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
-        let inclusions = vec![
-            "~/Documents".to_string(),
-            cli_dir.to_string(),
-            my_file.to_string(),
-        ];
+        let my_file = Path::new("./src/snapshot.rs").canonicalize().unwrap();
+        let cli_dir = Path::new("../ergibus").canonicalize().unwrap();
+        let inclusions = vec![PathBuf::from("~/Documents"), cli_dir, my_file];
         let dir_exclusions = vec!["lost+found".to_string()];
         let file_exclusions = vec!["*.iso".to_string()];
         if let Err(err) = archive::create_new_archive(
@@ -1176,7 +1162,7 @@ mod tests {
                 Err(err) => panic!("new SG: {:?}", err),
             };
             println!("Generating for {:?}", "test_ss");
-            sg.generate_snapshot();
+            assert!(sg.generate_snapshot().is_ok());
             println!(
                 "Generating for {:?} took {:?}",
                 "test_ss",
