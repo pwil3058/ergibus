@@ -9,6 +9,7 @@ pub mod config;
 pub mod content;
 //pub mod eerror;
 mod path_buf_ext;
+mod path_ext;
 mod report;
 pub mod snapshot;
 

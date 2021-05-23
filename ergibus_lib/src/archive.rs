@@ -1,5 +1,8 @@
+use std::convert::TryFrom;
 use std::fs::{self, File};
+use std::io::{stderr, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::time;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use hostname;
@@ -7,16 +10,14 @@ use serde_yaml;
 use users;
 use walkdir;
 
-use crate::snapshot::{ExtractionStats, SnapshotPersistentData};
+use crate::path_ext::absolute_path_buf;
 use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
-    snapshot, EResult, Error,
+    path_ext::expand_home_dir,
+    snapshot::{self, ExtractionStats, SnapshotPersistentData},
+    EResult, Error,
 };
-use pw_pathux::expand_home_dir;
-use std::convert::TryFrom;
-use std::io::{stderr, ErrorKind};
-use std::time;
 
 #[derive(Debug)]
 pub struct Exclusions {
@@ -442,9 +443,9 @@ impl Snapshots {
             panic!("{:?}: line {:?}", file!(), line!())
         };
         let abs_file_path = if file_path.starts_with("~") {
-            pw_pathux::expand_home_dir(file_path).unwrap()
+            expand_home_dir(file_path).unwrap()
         } else {
-            pw_pathux::absolute_path_buf(file_path)
+            absolute_path_buf(file_path)
         };
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
         let bytes = spd.copy_file_to(&abs_file_path, &target_path, overwrite)?;
@@ -476,9 +477,9 @@ impl Snapshots {
             panic!("{:?}: line {:?}", file!(), line!())
         };
         let abs_dir_path = if dir_path.starts_with("~") {
-            pw_pathux::expand_home_dir(dir_path).unwrap()
+            expand_home_dir(dir_path).unwrap()
         } else {
-            pw_pathux::absolute_path_buf(dir_path)
+            absolute_path_buf(dir_path)
         };
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
         let stats = spd.copy_dir_to(

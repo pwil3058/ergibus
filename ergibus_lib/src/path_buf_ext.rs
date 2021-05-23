@@ -27,6 +27,7 @@ macro_rules! impl_real_path_buf_type {
                 };
                 false
             }
+
             fn is_real_file(&self) -> bool {
                 if let Ok(md) = self.symlink_metadata() {
                     md.is_file()

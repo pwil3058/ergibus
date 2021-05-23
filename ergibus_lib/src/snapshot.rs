@@ -19,7 +19,7 @@ use snap;
 use walkdir::WalkDir;
 
 // PW crate access
-use pw_pathux::first_subpath_as_os_string;
+use crate::path_ext::first_subpath_as_os_string;
 
 // local modules access
 use crate::archive::{self, get_archive_data, ArchiveData, Exclusions};
