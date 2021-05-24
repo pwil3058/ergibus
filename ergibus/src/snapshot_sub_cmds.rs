@@ -218,10 +218,10 @@ impl SnapshotContents {
                     snapshot_persistent_data.base_dir()
                 };
                 for subdir in dir.subdir_names().chain(dir.subdir_link_names()) {
-                    println!("{}/", subdir)
+                    println!("{}/", subdir.to_string_lossy())
                 }
                 for file in dir.file_names().chain(dir.file_link_names()) {
-                    println!("{}", file)
+                    println!("{}", file.to_string_lossy())
                 }
                 Ok(())
             }

@@ -4,5 +4,6 @@ members = [
     "ergibus",
     "ergibus_lib",
     "ergibus_gtk",
+    "ordered_map",
     "path_ext",
 ]

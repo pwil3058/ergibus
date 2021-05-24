@@ -1,7 +1,6 @@
 // TODO: fix use of is_dir() and is_file() throughout this file
 
 // Standard Library access
-use std::collections::{btree_map, BTreeMap};
 use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::fs::{self, DirEntry, File};
@@ -18,6 +17,9 @@ use serde_json;
 use snap;
 use walkdir::WalkDir;
 
+use ordered_map::OrderedMap;
+use path_ext::{absolute_path_buf, PathType};
+
 // local modules access
 use crate::archive::{self, get_archive_data, ArchiveData, Exclusions};
 use crate::attributes::{Attributes, AttributesIfce};
@@ -25,7 +27,6 @@ use crate::content::{ContentManager, ContentMgmtKey};
 use crate::path_buf_ext::RealPathBufType;
 use crate::report::{ignore_report_or_crash, report_broken_link_or_crash};
 use crate::{EResult, Error};
-use path_ext::{absolute_path_buf, PathType};
 
 fn first_subpath_as_os_string(path: &Path) -> Option<OsString> {
     for c in path.components() {
@@ -58,10 +59,10 @@ pub struct LinkData {
 pub struct SnapshotDir {
     path: PathBuf,
     attributes: Attributes,
-    subdirs: BTreeMap<String, SnapshotDir>,
-    files: BTreeMap<String, FileData>,
-    file_links: BTreeMap<String, LinkData>,
-    subdir_links: BTreeMap<String, LinkData>,
+    subdirs: OrderedMap<OsString, SnapshotDir>,
+    files: OrderedMap<OsString, FileData>,
+    file_links: OrderedMap<OsString, LinkData>,
+    subdir_links: OrderedMap<OsString, LinkData>,
 }
 
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
@@ -111,15 +112,14 @@ impl SnapshotDir {
                     Some(fname) => fname,
                     None => return Ok(self),
                 };
-                let first_name_key = String::from(first_name.to_string_lossy());
-                if !self.subdirs.contains_key(&first_name_key) {
+                if !self.subdirs.contains_key(&first_name) {
                     let mut path_buf = PathBuf::new();
                     path_buf.push(self.path.clone());
                     path_buf.push(first_name.clone());
                     let snapshot_dir = SnapshotDir::new(&path_buf)?;
-                    self.subdirs.insert(first_name_key.clone(), snapshot_dir);
+                    self.subdirs.insert(first_name.clone(), snapshot_dir);
                 }
-                match self.subdirs.get_mut(&first_name_key) {
+                match self.subdirs.get_mut(&first_name) {
                     Some(subdir) => subdir.find_or_add_subdir(abs_subdir_path),
                     None => panic!("{:?}: line {:?}", file!(), line!()),
                 }
@@ -173,8 +173,7 @@ impl SnapshotDir {
         content_mgr: &ContentManager,
     ) -> (FileStats, u64) {
         let file_name = dir_entry.file_name().as_os_str().to_os_string();
-        let file_name_key = String::from(file_name.to_string_lossy());
-        if self.files.contains_key(&file_name_key) {
+        if self.files.contains_key(&file_name) {
             return (FileStats::default(), 0);
         }
         let attributes: Attributes = match dir_entry.metadata() {
@@ -207,7 +206,7 @@ impl SnapshotDir {
             stored_byte_count: stored_size,
         };
         self.files.insert(
-            file_name_key,
+            file_name.clone(),
             FileData {
                 file_name,
                 attributes,
@@ -219,10 +218,7 @@ impl SnapshotDir {
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
         let file_name = dir_entry.file_name().as_os_str().to_os_string();
-        let file_name_key = String::from(file_name.to_string_lossy());
-        if self.file_links.contains_key(&file_name_key)
-            || self.subdir_links.contains_key(&file_name_key)
-        {
+        if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
             return SymLinkStats::default();
         }
         let attributes: Attributes = match dir_entry.metadata() {
@@ -248,7 +244,7 @@ impl SnapshotDir {
         };
         if abs_target_path.is_file() {
             self.file_links.insert(
-                file_name_key,
+                file_name.clone(),
                 LinkData {
                     file_name,
                     attributes,
@@ -261,7 +257,7 @@ impl SnapshotDir {
             };
         } else if abs_target_path.is_dir() {
             self.subdir_links.insert(
-                file_name_key,
+                file_name.clone(),
                 LinkData {
                     file_name,
                     attributes,
@@ -278,7 +274,7 @@ impl SnapshotDir {
 }
 
 struct SnapshotDirIter<'a> {
-    values: btree_map::Values<'a, String, SnapshotDir>,
+    values: ordered_map::Values<'a, SnapshotDir>,
     subdir_iters: Vec<SnapshotDirIter<'a>>,
     current_subdir_iter: Box<Option<SnapshotDirIter<'a>>>,
 }
@@ -402,19 +398,19 @@ impl SnapshotDir {
         self.subdirs.len() + self.files.len() + self.file_links.len() + self.subdir_links.len()
     }
 
-    pub fn subdir_names(&self) -> impl Iterator<Item = &String> {
+    pub fn subdir_names(&self) -> impl Iterator<Item = &OsString> {
         self.subdirs.keys()
     }
 
-    pub fn subdir_link_names(&self) -> impl Iterator<Item = &String> {
+    pub fn subdir_link_names(&self) -> impl Iterator<Item = &OsString> {
         self.subdir_links.keys()
     }
 
-    pub fn file_names(&self) -> impl Iterator<Item = &String> {
+    pub fn file_names(&self) -> impl Iterator<Item = &OsString> {
         self.files.keys()
     }
 
-    pub fn file_link_names(&self) -> impl Iterator<Item = &String> {
+    pub fn file_link_names(&self) -> impl Iterator<Item = &OsString> {
         self.file_links.keys()
     }
 
@@ -445,18 +441,15 @@ impl SnapshotDir {
         };
         match first_subpath_as_os_string(rel_path) {
             None => Ok(self),
-            Some(first_name) => {
-                let first_name_key = String::from(first_name.to_string_lossy());
-                match self.subdirs.get(&first_name_key) {
-                    Some(sd) => {
-                        let rel_path = rel_path.strip_prefix(&first_name).map_err(|_| {
-                            Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())
-                        })?;
-                        sd.find_subdir(&rel_path)
-                    }
-                    None => Err(Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())),
+            Some(first_name) => match self.subdirs.get(&first_name) {
+                Some(sd) => {
+                    let rel_path = rel_path
+                        .strip_prefix(&first_name)
+                        .map_err(|_| Error::SnapshotUnknownDirectory(subdir_path.to_path_buf()))?;
+                    sd.find_subdir(&rel_path)
                 }
-            }
+                None => Err(Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())),
+            },
         }
     }
 
@@ -464,15 +457,14 @@ impl SnapshotDir {
         let file_path = file_path_arg.as_ref();
         match file_path.file_name() {
             Some(file_name) => {
-                let file_name_key = String::from(file_name.to_string_lossy());
                 if let Some(dir_path) = file_path.parent() {
                     let subdir = self.find_subdir(dir_path)?;
-                    match subdir.files.get(&file_name_key) {
+                    match subdir.files.get(file_name) {
                         Some(file_data) => Ok(file_data),
                         None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
                     }
                 } else {
-                    match self.files.get(&file_name_key) {
+                    match self.files.get(file_name) {
                         Some(file_data) => Ok(file_data),
                         None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
                     }
