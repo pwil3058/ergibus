@@ -66,14 +66,13 @@ pub struct SnapshotDir {
 }
 
 fn get_entry_for_path(path: &Path) -> io::Result<fs::DirEntry> {
-    let parent_dir_path = path
-        .parent()
-        .unwrap_or_else(|| panic!("Can't find parent directory"));
-    let entries = fs::read_dir(&parent_dir_path)?;
-    for entry_or_err in entries {
-        if let Ok(entry) = entry_or_err {
-            if entry.path() == path {
-                return Ok(entry);
+    if let Some(parent_dir_path) = path.parent() {
+        let entries = fs::read_dir(&parent_dir_path)?;
+        for entry_or_err in entries {
+            if let Ok(entry) = entry_or_err {
+                if entry.path() == path {
+                    return Ok(entry);
+                }
             }
         }
     }
@@ -93,6 +92,7 @@ impl SnapshotDir {
         Ok(snapshot_dir)
     }
 
+    // TODO: make release_contents() return error
     fn release_contents(&self, content_mgr: &ContentManager) {
         for file_data in self.files.values() {
             if let Err(err) = content_mgr.release_contents(&file_data.content_token) {
@@ -106,25 +106,23 @@ impl SnapshotDir {
 
     fn find_or_add_subdir(&mut self, abs_subdir_path: &Path) -> io::Result<&mut SnapshotDir> {
         assert!(abs_subdir_path.is_absolute());
-        match abs_subdir_path.strip_prefix(&self.path.clone()) {
-            Ok(rel_path) => {
-                let first_name = match first_subpath_as_os_string(rel_path) {
-                    Some(fname) => fname,
-                    None => return Ok(self),
-                };
+        let rel_path = abs_subdir_path
+            .strip_prefix(&self.path)
+            .expect("programmer error: inform pwil3058@bigpond.net.au");
+        match first_subpath_as_os_string(rel_path) {
+            None => Ok(self),
+            Some(first_name) => {
                 if !self.subdirs.contains_key(&first_name) {
-                    let mut path_buf = PathBuf::new();
-                    path_buf.push(self.path.clone());
-                    path_buf.push(first_name.clone());
+                    let path_buf = self.path.join(&first_name);
                     let snapshot_dir = SnapshotDir::new(&path_buf)?;
                     self.subdirs.insert(first_name.clone(), snapshot_dir);
                 }
-                match self.subdirs.get_mut(&first_name) {
-                    Some(subdir) => subdir.find_or_add_subdir(abs_subdir_path),
-                    None => panic!("{:?}: line {:?}", file!(), line!()),
-                }
+                let subdir = self
+                    .subdirs
+                    .get_mut(&first_name)
+                    .expect("it was just inserted");
+                subdir.find_or_add_subdir(abs_subdir_path)
             }
-            Err(err) => panic!("{:?}: line {:?}: {:?}", file!(), line!(), err),
         }
     }
 
@@ -172,7 +170,7 @@ impl SnapshotDir {
         dir_entry: &fs::DirEntry,
         content_mgr: &ContentManager,
     ) -> (FileStats, u64) {
-        let file_name = dir_entry.file_name().as_os_str().to_os_string();
+        let file_name = dir_entry.file_name();
         if self.files.contains_key(&file_name) {
             return (FileStats::default(), 0);
         }
@@ -217,7 +215,7 @@ impl SnapshotDir {
     }
 
     fn add_symlink(&mut self, dir_entry: &fs::DirEntry) -> SymLinkStats {
-        let file_name = dir_entry.file_name().as_os_str().to_os_string();
+        let file_name = dir_entry.file_name();
         if self.file_links.contains_key(&file_name) || self.subdir_links.contains_key(&file_name) {
             return SymLinkStats::default();
         }
