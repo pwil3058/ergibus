@@ -25,6 +25,7 @@ use crate::content::{ContentManager, ContentMgmtKey};
 use crate::path_buf_ext::RealPathBufType;
 use crate::report::{ignore_report_or_crash, report_broken_link_or_crash};
 use crate::{EResult, Error};
+use path_ext::{absolute_path_buf, PathType};
 
 fn first_subpath_as_os_string(path: &Path) -> Option<OsString> {
     for c in path.components() {
@@ -438,7 +439,7 @@ impl SnapshotDir {
         let rel_path = if subdir_path.is_absolute() {
             subdir_path
                 .strip_prefix(&self.path)
-                .map_err(|_| Error::SnapshotUnknownContent(subdir_path.to_path_buf()))?
+                .map_err(|_| Error::SnapshotUnknownDirectory(subdir_path.to_path_buf()))?
         } else {
             subdir_path
         };
@@ -449,11 +450,11 @@ impl SnapshotDir {
                 match self.subdirs.get(&first_name_key) {
                     Some(sd) => {
                         let rel_path = rel_path.strip_prefix(&first_name).map_err(|_| {
-                            Error::SnapshotUnknownContent(subdir_path.to_path_buf())
+                            Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())
                         })?;
                         sd.find_subdir(&rel_path)
                     }
-                    None => Err(Error::SnapshotUnknownContent(subdir_path.to_path_buf())),
+                    None => Err(Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())),
                 }
             }
         }
@@ -468,16 +469,16 @@ impl SnapshotDir {
                     let subdir = self.find_subdir(dir_path)?;
                     match subdir.files.get(&file_name_key) {
                         Some(file_data) => Ok(file_data),
-                        None => Err(Error::SnapshotUnknownContent(file_path.to_path_buf())),
+                        None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
                     }
                 } else {
                     match self.files.get(&file_name_key) {
                         Some(file_data) => Ok(file_data),
-                        None => Err(Error::SnapshotUnknownContent(file_path.to_path_buf())),
+                        None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
                     }
                 }
             }
-            None => Err(Error::SnapshotUnknownContent(file_path.to_path_buf())),
+            None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
         }
     }
 
@@ -891,11 +892,29 @@ impl SnapshotPersistentData {
     }
 
     pub fn find_subdir<P: AsRef<Path>>(&self, dir_path_arg: P) -> EResult<&SnapshotDir> {
-        self.base_dir().find_subdir(dir_path_arg)
+        let dir_path = dir_path_arg.as_ref();
+        match PathType::of(dir_path) {
+            PathType::Absolute => self.root_dir.find_subdir(dir_path),
+            PathType::RelativeCurDirImplicit => self.base_dir().find_subdir(dir_path),
+            PathType::Empty => Ok(self.base_dir()),
+            _ => self.root_dir.find_subdir(
+                absolute_path_buf(dir_path)
+                    .map_err(|_| Error::SnapshotUnknownDirectory(dir_path.to_path_buf()))?,
+            ),
+        }
     }
 
     pub fn find_file<P: AsRef<Path>>(&self, file_path_arg: P) -> EResult<&FileData> {
-        self.base_dir().find_file(file_path_arg)
+        let file_path = file_path_arg.as_ref();
+        match PathType::of(file_path) {
+            PathType::Absolute => self.root_dir.find_file(file_path),
+            PathType::RelativeCurDirImplicit => self.base_dir().find_file(file_path),
+            PathType::Empty => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
+            _ => self.root_dir.find_file(
+                absolute_path_buf(file_path)
+                    .map_err(|_| Error::SnapshotUnknownFile(file_path.to_path_buf()))?,
+            ),
+        }
     }
 
     pub fn copy_file_to(

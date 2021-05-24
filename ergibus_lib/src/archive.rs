@@ -11,7 +11,7 @@ use users;
 use walkdir;
 
 use path_ext::expand_home_dir;
-use path_ext::{absolute_path_buf, path_type, PathType};
+use path_ext::{absolute_path_buf, PathType};
 
 use crate::{
     config,
@@ -433,7 +433,7 @@ impl Snapshots {
         } else {
             panic!("{:?}: line {:?}", file!(), line!())
         };
-        let src_file_path = match path_type(file_path) {
+        let src_file_path = match PathType::of(file_path) {
             PathType::RelativeCurDirImplicit => file_path.to_path_buf(),
             _ => absolute_path_buf(file_path)
                 .map_err(|e| Error::ArchiveIncludePathError(e, file_path.to_path_buf()))?,
@@ -467,7 +467,7 @@ impl Snapshots {
         } else {
             panic!("{:?}: line {:?}", file!(), line!())
         };
-        let src_dir_path = match path_type(dir_path) {
+        let src_dir_path = match PathType::of(dir_path) {
             PathType::RelativeCurDirImplicit => dir_path.to_path_buf(),
             _ => absolute_path_buf(dir_path)
                 .map_err(|e| Error::ArchiveIncludePathError(e, dir_path.to_path_buf()))?,

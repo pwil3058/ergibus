@@ -27,6 +27,7 @@ impl From<StripPrefixError> for Error {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PathType {
     Absolute,
     RelativeCurDir,
@@ -36,22 +37,24 @@ pub enum PathType {
     Empty,
 }
 
-pub fn path_type<P: AsRef<Path>>(path_arg: P) -> PathType {
-    let path = path_arg.as_ref();
-    match path.components().next() {
-        None => PathType::Empty,
-        Some(component) => match component {
-            Component::RootDir | Component::Prefix(_) => PathType::Absolute,
-            Component::CurDir => PathType::RelativeCurDir,
-            Component::ParentDir => PathType::RelativeParentDir,
-            Component::Normal(os_string) => {
-                if os_string == "~" {
-                    PathType::RelativeHomeDir
-                } else {
-                    PathType::RelativeCurDirImplicit
+impl PathType {
+    pub fn of<P: AsRef<Path>>(path_arg: P) -> Self {
+        let path = path_arg.as_ref();
+        match path.components().next() {
+            None => PathType::Empty,
+            Some(component) => match component {
+                Component::RootDir | Component::Prefix(_) => PathType::Absolute,
+                Component::CurDir => PathType::RelativeCurDir,
+                Component::ParentDir => PathType::RelativeParentDir,
+                Component::Normal(os_string) => {
+                    if os_string == "~" {
+                        PathType::RelativeHomeDir
+                    } else {
+                        PathType::RelativeCurDirImplicit
+                    }
                 }
-            }
-        },
+            },
+        }
     }
 }
 
@@ -115,7 +118,7 @@ pub fn prepend_current_dir<P: AsRef<Path>>(path_arg: P) -> Result<PathBuf, Error
 
 pub fn absolute_path_buf<P: AsRef<Path>>(path_arg: P) -> Result<PathBuf, Error> {
     let path = path_arg.as_ref();
-    match path_type(path) {
+    match PathType::of(path) {
         PathType::Absolute => Ok(path.to_path_buf()),
         PathType::RelativeCurDir => expand_current_dir(path),
         PathType::RelativeParentDir => expand_parent_dir(path),

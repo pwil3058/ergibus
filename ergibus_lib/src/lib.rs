@@ -50,11 +50,10 @@ pub enum Error {
     SnapshotMoveAsideFailed(std::path::PathBuf, std::io::Error),
     SnapshotReadIOError(std::io::Error, std::path::PathBuf),
     SnapshotReadJsonError(serde_json::Error, std::path::PathBuf),
-    SnapshotUnknownFile(String, String, std::path::PathBuf),
-    SnapshotUnknownDirectory(String, String, std::path::PathBuf),
+    SnapshotUnknownFile(std::path::PathBuf),
+    SnapshotUnknownDirectory(std::path::PathBuf),
     SnapshotWriteIOError(std::io::Error, std::path::PathBuf),
     SnapshotSerializeError(serde_json::Error),
-    SnapshotUnknownContent(std::path::PathBuf),
     SnapshotsFailed(i32),
 }
 
