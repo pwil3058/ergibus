@@ -6,12 +6,14 @@ use std::ffi::OsString;
 use std::fs::{self, DirEntry, File};
 use std::io;
 use std::io::prelude::*;
+use std::io::ErrorKind;
 use std::ops::AddAssign;
 use std::path::{Component, Path, PathBuf};
 use std::time;
 
 // cargo.io crates access
 use chrono::prelude::*;
+use log::*;
 use regex;
 use serde_json;
 use snap;
@@ -978,12 +980,18 @@ impl SnapshotGenerator {
             if abs_path.is_dir() {
                 match snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
                     Ok(drsz) => delta_repo_size += drsz,
-                    Err(err) => ignore_report_or_crash(&err, &abs_path),
+                    Err(err) => match err.kind() {
+                        ErrorKind::NotFound => warn!("{:?}: not found", abs_path),
+                        _ => ignore_report_or_crash(&err, &abs_path),
+                    },
                 };
             } else {
                 match snapshot.add_other(&abs_path) {
                     Ok(drsz) => delta_repo_size += drsz,
-                    Err(err) => ignore_report_or_crash(&err, &abs_path),
+                    Err(err) => match err.kind() {
+                        ErrorKind::NotFound => warn!("{:?}: not found", abs_path),
+                        _ => ignore_report_or_crash(&err, &abs_path),
+                    },
                 };
             }
         }
