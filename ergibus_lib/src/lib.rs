@@ -58,6 +58,7 @@ pub enum Error {
     SnapshotsFailed(i32),
 
     DuplicateFileSystemObjectName,
+    FSOMalformedPath(std::path::PathBuf),
 }
 
 impl From<dychatat::RepoError> for Error {

@@ -4,7 +4,7 @@ use crate::attributes::Attributes;
 use crate::{EResult, Error};
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub trait Key {
     fn key(&self) -> &OsStr;
@@ -24,13 +24,13 @@ impl Key for FileData {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct LinkData {
+pub struct SymLinkData {
     file_name: OsString,
     attributes: Attributes,
     link_target: PathBuf,
 }
 
-impl Key for LinkData {
+impl Key for SymLinkData {
     fn key(&self) -> &OsStr {
         &self.file_name
     }
@@ -51,6 +51,27 @@ impl DirectoryData {
 
         Ok(dir_data)
     }
+
+    pub fn find_or_add_subdir<P>(&mut self, path_arg: P) -> EResult<&mut DirectoryData>
+    where
+        P: AsRef<Path>,
+    {
+        let abs_subdir_path = path_arg.as_ref();
+        debug_assert!(abs_subdir_path.is_absolute());
+        let rel_path = abs_subdir_path
+            .strip_prefix(&self.path)
+            .expect("unexpected error: inform pwil3058@bigpond.net.au");
+        match rel_path.components().next() {
+            None => Ok(self),
+            Some(Component::Normal(first_name)) => {
+                let subdir = self
+                    .file_system_objects
+                    .get_or_insert_dir(first_name, &self.path)?;
+                subdir.find_or_add_subdir(abs_subdir_path)
+            }
+            _ => Err(Error::FSOMalformedPath(rel_path.to_path_buf())),
+        }
+    }
 }
 
 impl Key for DirectoryData {
@@ -62,7 +83,7 @@ impl Key for DirectoryData {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum FileSystemObject {
     File(FileData),
-    SymLink(LinkData),
+    SymLink(SymLinkData, bool),
     Directory(DirectoryData),
 }
 
@@ -71,7 +92,7 @@ impl Key for FileSystemObject {
         use FileSystemObject::*;
         match self {
             File(file_data) => file_data.key(),
-            SymLink(link_data) => link_data.key(),
+            SymLink(link_data, _) => link_data.key(),
             Directory(dir_data) => dir_data.key(),
         }
     }
@@ -98,6 +119,22 @@ impl FileSystemObject {
         use FileSystemObject::*;
         match self {
             File(file_data) => Some(file_data),
+            _ => None,
+        }
+    }
+
+    pub fn get_file_sym_link_data(&self) -> Option<&SymLinkData> {
+        use FileSystemObject::*;
+        match self {
+            SymLink(link_data, true) => Some(link_data),
+            _ => None,
+        }
+    }
+
+    pub fn get_dir_sym_link_data(&self) -> Option<&SymLinkData> {
+        use FileSystemObject::*;
+        match self {
+            SymLink(link_data, false) => Some(link_data),
             _ => None,
         }
     }
@@ -148,7 +185,22 @@ impl FileSystemObjects {
         }
     }
 
+    pub fn get_directory(&self, key: &OsStr) -> Option<&DirectoryData> {
+        match self.key_index(key) {
+            Ok(index) => self.0[index].get_dir_data(),
+            Err(_) => None,
+        }
+    }
+
     pub fn files(&self) -> impl Iterator<Item = &FileData> {
         self.0.iter().filter_map(|o| o.get_file_data())
+    }
+
+    pub fn file_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
+        self.0.iter().filter_map(|o| o.get_file_sym_link_data())
+    }
+
+    pub fn dir_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
+        self.0.iter().filter_map(|o| o.get_dir_sym_link_data())
     }
 }
