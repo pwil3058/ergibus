@@ -10,6 +10,7 @@ pub mod attributes;
 pub mod config;
 pub mod content;
 //pub mod eerror;
+pub mod fs_objects;
 mod path_buf_ext;
 mod report;
 pub mod snapshot;
@@ -55,6 +56,8 @@ pub enum Error {
     SnapshotWriteIOError(std::io::Error, std::path::PathBuf),
     SnapshotSerializeError(serde_json::Error),
     SnapshotsFailed(i32),
+
+    DuplicateFileSystemObjectName,
 }
 
 impl From<dychatat::RepoError> for Error {
