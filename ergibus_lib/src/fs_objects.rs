@@ -1,7 +1,7 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::attributes::Attributes;
-use crate::{EResult, Error};
+use crate::{EResult, Error, UNEXPECTED};
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -58,9 +58,7 @@ impl DirectoryData {
     {
         let abs_subdir_path = path_arg.as_ref();
         debug_assert!(abs_subdir_path.is_absolute());
-        let rel_path = abs_subdir_path
-            .strip_prefix(&self.path)
-            .expect("unexpected error: inform pwil3058@bigpond.net.au");
+        let rel_path = abs_subdir_path.strip_prefix(&self.path).expect(UNEXPECTED);
         match rel_path.components().next() {
             None => Ok(self),
             Some(Component::Normal(first_name)) => {
@@ -76,7 +74,7 @@ impl DirectoryData {
 
 impl Key for DirectoryData {
     fn key(&self) -> &OsStr {
-        self.path.file_name().expect("should be valid")
+        self.path.file_name().expect(UNEXPECTED)
     }
 }
 
@@ -171,9 +169,7 @@ impl FileSystemObjects {
             Err(index) => {
                 let dir_data = DirectoryData::new(&parent.as_ref().join(key))?;
                 self.0.insert(index, FileSystemObject::Directory(dir_data));
-                Ok(self.0[index]
-                    .get_dir_data_mut()
-                    .expect("programmer error: inform <pwil3058@bigpond.net.au>"))
+                Ok(self.0[index].get_dir_data_mut().expect(UNEXPECTED))
             }
         }
     }

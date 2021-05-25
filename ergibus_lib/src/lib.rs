@@ -17,6 +17,8 @@ pub mod snapshot;
 
 use crate::archive::ArchiveNameOrDirPath;
 
+static UNEXPECTED: &str = "Unexpected error: please inform <pwil3058@bigpond.net.au>";
+
 #[derive(Debug)]
 pub enum Error {
     ArchiveDirError(std::io::Error, std::path::PathBuf),
