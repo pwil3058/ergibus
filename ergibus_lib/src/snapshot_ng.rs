@@ -1,17 +1,34 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::archive::{get_archive_data, ArchiveData};
+use crate::archive::{get_archive_data, ArchiveData, Exclusions};
 use crate::content::ContentMgmtKey;
 use crate::fs_objects::DirectoryData;
-use crate::snapshot::{FileStats, SymLinkStats};
+use crate::fs_objects::{FileStats, SymLinkStats};
+use crate::report::ignore_report_or_fail;
 use crate::{EResult, Error, UNEXPECTED};
 use chrono::{DateTime, Local};
+use log::*;
 use serde::Serialize;
 use std::convert::TryFrom;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::{fs, time};
+use walkdir::WalkDir;
+
+fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
+    let path = path_arg.as_ref();
+    if let Some(parent_dir_path) = path.parent() {
+        let read_dir = fs::read_dir(&parent_dir_path)?;
+        for entry in read_dir.filter_map(|e| e.ok()) {
+            if entry.path() == path {
+                return Ok(entry);
+            }
+        }
+    }
+    let io_error = io::Error::new(io::ErrorKind::NotFound, format!("{:?}: not found", path));
+    Err(io_error.into())
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct SnapshotPersistentData {
@@ -29,7 +46,7 @@ impl TryFrom<&ArchiveData> for SnapshotPersistentData {
     type Error = Error;
 
     fn try_from(archive_data: &ArchiveData) -> EResult<Self> {
-        let root_dir = DirectoryData::new(Component::RootDir)?;
+        let root_dir = DirectoryData::try_new(Component::RootDir)?;
         let base_dir_path = root_dir.path.clone();
         Ok(Self {
             root_dir,
@@ -57,6 +74,90 @@ impl SnapshotPersistentData {
             .content_mgmt_key
             .open_content_manager(dychatat::Mutability::Mutable)?;
         self.root_dir.release_contents(&content_mgr)
+    }
+
+    fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> EResult<u64> {
+        let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
+        let content_mgr = self
+            .content_mgmt_key
+            .open_content_manager(dychatat::Mutability::Mutable)?;
+        let (file_stats, sym_link_stats, drsz) = dir.populate(exclusions, &content_mgr)?;
+        self.file_stats += file_stats;
+        self.sym_link_stats += sym_link_stats;
+        let mut delta_repo_size = drsz;
+        for entry in WalkDir::new(abs_dir_path)
+            .into_iter()
+            .filter_entry(|e| exclusions.is_non_excluded_dir(e))
+        {
+            match entry {
+                Ok(e_data) => {
+                    let e_path = e_data.path();
+                    match dir.find_or_add_subdir(e_path) {
+                        Ok(sub_dir) => {
+                            let (file_stats, sym_link_stats, drsz) =
+                                sub_dir.populate(exclusions, &content_mgr)?;
+                            self.file_stats += file_stats;
+                            self.sym_link_stats += sym_link_stats;
+                            delta_repo_size += drsz;
+                        }
+                        Err(err) => ignore_report_or_fail(err, &e_path)?,
+                    }
+                }
+                Err(err) => {
+                    let path = err.path().expect(UNEXPECTED).to_path_buf();
+                    ignore_report_or_fail(io::Error::from(err).into(), &path)?;
+                }
+            }
+        }
+        Ok(delta_repo_size)
+    }
+
+    fn add_other(&mut self, abs_file_path: &Path) -> EResult<u64> {
+        let entry = get_entry_for_path(abs_file_path)?;
+        let dir_path = abs_file_path
+            .parent()
+            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
+        let dir = self.root_dir.find_or_add_subdir(&dir_path)?;
+        let mut delta_repo_size: u64 = 0;
+        match entry.file_type() {
+            Ok(e_type) => {
+                if e_type.is_file() {
+                    let content_mgr = self
+                        .content_mgmt_key
+                        .open_content_manager(dychatat::Mutability::Mutable)
+                        .unwrap_or_else(|err| {
+                            panic!(
+                                "{:?}: line {:?}: open content manager: {:?}",
+                                file!(),
+                                line!(),
+                                err
+                            )
+                        });
+                    // let data = dir.add_file(&entry, &content_mgr);
+                    // self.file_stats += data.0;
+                    // delta_repo_size += data.1;
+                } else if e_type.is_symlink() {
+                    // self.sym_link_stats += dir.add_symlink(&entry);
+                }
+            }
+            Err(err) => ignore_report_or_fail(err.into(), abs_file_path)?,
+        };
+        Ok(delta_repo_size)
+    }
+
+    fn add<P: AsRef<Path>>(&mut self, path_arg: P, exclusions: &Exclusions) -> EResult<u64> {
+        if path_arg.as_ref().is_dir() {
+            self.add_dir(path_arg.as_ref(), exclusions)
+        } else {
+            self.add_other(path_arg.as_ref())
+        }
+    }
+
+    fn creation_duration(&self) -> time::Duration {
+        match self.finished_create.duration_since(self.started_create) {
+            Ok(duration) => duration,
+            Err(_) => time::Duration::new(0, 0),
+        }
     }
 
     fn snapshot_name(&self) -> String {
@@ -140,39 +241,41 @@ impl SnapshotGenerator {
         self.snapshot.is_some()
     }
 
-    // fn generate_snapshot(&mut self) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
-    //     if self.snapshot.is_some() {
-    //         // This snapshot is being thrown away so we release its contents
-    //         self.release_snapshot();
-    //     }
-    //     let mut delta_repo_size: u64 = 0;
-    //     let mut snapshot = SnapshotPersistentData::try_from(&self.archive_data)?;
-    //     for abs_path in self.archive_data.includes.iter() {
-    //         if abs_path.is_dir() {
-    //             match snapshot.add_dir(&abs_path, &self.archive_data.exclusions) {
-    //                 Ok(drsz) => delta_repo_size += drsz,
-    //                 Err(err) => match err.kind() {
-    //                     ErrorKind::NotFound => warn!("{:?}: not found", abs_path),
-    //                     _ => ignore_report_or_crash(&err, &abs_path),
-    //                 },
-    //             };
-    //         } else {
-    //             match snapshot.add_other(&abs_path) {
-    //                 Ok(drsz) => delta_repo_size += drsz,
-    //                 Err(err) => match err.kind() {
-    //                     ErrorKind::NotFound => warn!("{:?}: not found", abs_path),
-    //                     _ => ignore_report_or_crash(&err, &abs_path),
-    //                 },
-    //             };
-    //         }
-    //     }
-    //     snapshot.finished_create = time::SystemTime::now();
-    //     let duration = snapshot.creation_duration();
-    //     let file_stats = snapshot.file_stats;
-    //     let sym_link_stats = snapshot.sym_link_stats;
-    //     self.snapshot = Some(snapshot);
-    //     Ok((duration, file_stats, sym_link_stats, delta_repo_size))
-    // }
+    fn generate_snapshot(&mut self) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
+        if self.snapshot.is_some() {
+            // This snapshot is being thrown away so we release its contents
+            self.release_snapshot()?;
+        }
+        let mut delta_repo_size: u64 = 0;
+        let mut snapshot = SnapshotPersistentData::try_from(&self.archive_data)?;
+        for abs_path in self.archive_data.includes.iter() {
+            match snapshot.add(abs_path, &self.archive_data.exclusions) {
+                Ok(drsz) => delta_repo_size += drsz,
+                Err(err) => match err {
+                    Error::IOError(io_err) => match io_err.kind() {
+                        ErrorKind::NotFound | ErrorKind::PermissionDenied => {
+                            // non fatal errors so report and soldier on
+                            warn!("{:?}: {:?}", abs_path, io_err)
+                        }
+                        _ => {
+                            snapshot.release_contents()?;
+                            return Err(io_err.into());
+                        }
+                    },
+                    _ => {
+                        snapshot.release_contents()?;
+                        return Err(err);
+                    }
+                },
+            };
+        }
+        snapshot.finished_create = time::SystemTime::now();
+        let duration = snapshot.creation_duration();
+        let file_stats = snapshot.file_stats;
+        let sym_link_stats = snapshot.sym_link_stats;
+        self.snapshot = Some(snapshot);
+        Ok((duration, file_stats, sym_link_stats, delta_repo_size))
+    }
 
     #[cfg(test)]
     pub fn generation_duration(&self) -> EResult<time::Duration> {
@@ -214,8 +317,7 @@ impl SnapshotGenerator {
             Err(err) => {
                 // The file is mangled so remove it
                 match fs::remove_file(&file_path) {
-                    Ok(_) => Err(err),
-                    Err(_) => Err(err),
+                    _ => Err(err),
                 }
             }
         }
