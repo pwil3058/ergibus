@@ -1,16 +1,16 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::attributes::Attributes;
+use crate::content::ContentManager;
 use crate::{EResult, Error, UNEXPECTED};
 use std::ffi::{OsStr, OsString};
-use std::io;
 use std::path::{Component, Path, PathBuf};
 
 pub trait Key {
     fn key(&self) -> &OsStr;
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct FileData {
     file_name: OsString,
     attributes: Attributes,
@@ -23,7 +23,7 @@ impl Key for FileData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct SymLinkData {
     file_name: OsString,
     attributes: Attributes,
@@ -36,20 +36,30 @@ impl Key for SymLinkData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct DirectoryData {
-    path: PathBuf,
+    pub(crate) path: PathBuf,
     attributes: Attributes,
     file_system_objects: FileSystemObjects,
 }
 
 impl DirectoryData {
-    fn new<P: AsRef<Path>>(root_dir: P) -> io::Result<Self> {
+    pub fn new<P: AsRef<Path>>(root_dir: P) -> EResult<Self> {
         let mut dir_data = Self::default();
         dir_data.path = root_dir.as_ref().canonicalize()?;
         dir_data.attributes = dir_data.path.metadata()?.into();
 
         Ok(dir_data)
+    }
+
+    pub fn release_contents(&self, content_mgr: &ContentManager) -> EResult<()> {
+        for file_data in self.file_system_objects.files() {
+            content_mgr.release_contents(&file_data.content_token)?;
+        }
+        for subdir in self.file_system_objects.subdirs() {
+            subdir.release_contents(content_mgr)?;
+        }
+        Ok(())
     }
 
     pub fn find_or_add_subdir<P>(&mut self, path_arg: P) -> EResult<&mut DirectoryData>
@@ -78,7 +88,7 @@ impl Key for DirectoryData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum FileSystemObject {
     File(FileData),
     SymLink(SymLinkData, bool),
@@ -138,7 +148,7 @@ impl FileSystemObject {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct FileSystemObjects(Vec<FileSystemObject>);
 
 impl FileSystemObjects {
@@ -198,5 +208,9 @@ impl FileSystemObjects {
 
     pub fn dir_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
         self.0.iter().filter_map(|o| o.get_dir_sym_link_data())
+    }
+
+    pub fn subdirs(&self) -> impl Iterator<Item = &DirectoryData> {
+        self.0.iter().filter_map(|o| o.get_dir_data())
     }
 }
