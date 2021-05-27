@@ -62,6 +62,7 @@ pub enum Error {
 
     DuplicateFileSystemObjectName,
     FSOMalformedPath(std::path::PathBuf),
+    FSOBrokenSymLink(std::path::PathBuf, std::path::PathBuf),
 }
 
 impl From<dychatat::RepoError> for Error {

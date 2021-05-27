@@ -2,7 +2,7 @@
 
 use crate::archive::{get_archive_data, ArchiveData, Exclusions};
 use crate::content::ContentMgmtKey;
-use crate::fs_objects::DirectoryData;
+use crate::fs_objects::{DirectoryData, FileData, SymLinkData};
 use crate::fs_objects::{FileStats, SymLinkStats};
 use crate::report::ignore_report_or_fail;
 use crate::{EResult, Error, UNEXPECTED};
@@ -81,72 +81,52 @@ impl SnapshotPersistentData {
         let content_mgr = self
             .content_mgmt_key
             .open_content_manager(dychatat::Mutability::Mutable)?;
-        let (file_stats, sym_link_stats, drsz) = dir.populate(exclusions, &content_mgr)?;
+        let (file_stats, sym_link_stats, delta_repo_size) =
+            dir.populate(exclusions, &content_mgr)?;
         self.file_stats += file_stats;
         self.sym_link_stats += sym_link_stats;
-        let mut delta_repo_size = drsz;
-        for entry in WalkDir::new(abs_dir_path)
-            .into_iter()
-            .filter_entry(|e| exclusions.is_non_excluded_dir(e))
-        {
-            match entry {
-                Ok(e_data) => {
-                    let e_path = e_data.path();
-                    match dir.find_or_add_subdir(e_path) {
-                        Ok(sub_dir) => {
-                            let (file_stats, sym_link_stats, drsz) =
-                                sub_dir.populate(exclusions, &content_mgr)?;
-                            self.file_stats += file_stats;
-                            self.sym_link_stats += sym_link_stats;
-                            delta_repo_size += drsz;
-                        }
-                        Err(err) => ignore_report_or_fail(err, &e_path)?,
-                    }
-                }
-                Err(err) => {
-                    let path = err.path().expect(UNEXPECTED).to_path_buf();
-                    ignore_report_or_fail(io::Error::from(err).into(), &path)?;
-                }
-            }
-        }
         Ok(delta_repo_size)
     }
 
     fn add_other(&mut self, abs_file_path: &Path) -> EResult<u64> {
         let entry = get_entry_for_path(abs_file_path)?;
-        let dir_path = abs_file_path
-            .parent()
-            .unwrap_or_else(|| panic!("{:?}: line {:?}", file!(), line!()));
+        let dir_path = abs_file_path.parent().expect(UNEXPECTED);
         let dir = self.root_dir.find_or_add_subdir(&dir_path)?;
         let mut delta_repo_size: u64 = 0;
         match entry.file_type() {
-            Ok(e_type) => {
-                if e_type.is_file() {
-                    let content_mgr = self
-                        .content_mgmt_key
-                        .open_content_manager(dychatat::Mutability::Mutable)
-                        .unwrap_or_else(|err| {
-                            panic!(
-                                "{:?}: line {:?}: open content manager: {:?}",
-                                file!(),
-                                line!(),
-                                err
-                            )
-                        });
-                    // let data = dir.add_file(&entry, &content_mgr);
-                    // self.file_stats += data.0;
-                    // delta_repo_size += data.1;
-                } else if e_type.is_symlink() {
-                    // self.sym_link_stats += dir.add_symlink(&entry);
+            Ok(e_type) => match dir.index_for(&abs_file_path.file_name().expect(UNEXPECTED)) {
+                Ok(_) => (),
+                Err(index) => {
+                    if e_type.is_file() {
+                        let content_mgr = self
+                            .content_mgmt_key
+                            .open_content_manager(dychatat::Mutability::Mutable)?;
+                        match FileData::file_system_object(abs_file_path, &content_mgr) {
+                            Ok((file_system_object, stats, delta)) => {
+                                self.file_stats += stats;
+                                delta_repo_size = delta;
+                                dir.contents.insert(index, file_system_object);
+                            }
+                            Err(err) => ignore_report_or_fail(err.into(), abs_file_path)?,
+                        }
+                    } else if e_type.is_symlink() {
+                        match SymLinkData::file_system_object(abs_file_path) {
+                            Ok((file_system_object, stats)) => {
+                                self.sym_link_stats += stats;
+                                dir.contents.insert(index, file_system_object);
+                            }
+                            Err(err) => ignore_report_or_fail(err.into(), abs_file_path)?,
+                        }
+                    }
                 }
-            }
+            },
             Err(err) => ignore_report_or_fail(err.into(), abs_file_path)?,
         };
         Ok(delta_repo_size)
     }
 
     fn add<P: AsRef<Path>>(&mut self, path_arg: P, exclusions: &Exclusions) -> EResult<u64> {
-        if path_arg.as_ref().is_dir() {
+        if path_arg.as_ref().symlink_metadata()?.file_type().is_dir() {
             self.add_dir(path_arg.as_ref(), exclusions)
         } else {
             self.add_other(path_arg.as_ref())
@@ -269,6 +249,15 @@ impl SnapshotGenerator {
                 },
             };
         }
+        let mut base_dir = &snapshot.root_dir;
+        while base_dir.contents.len() == 1 {
+            if let Some(subdir) = base_dir.subdirs().next() {
+                base_dir = subdir
+            } else {
+                break;
+            }
+        }
+        snapshot.base_dir_path = base_dir.path.to_path_buf();
         snapshot.finished_create = time::SystemTime::now();
         let duration = snapshot.creation_duration();
         let file_stats = snapshot.file_stats;
@@ -323,3 +312,13 @@ impl SnapshotGenerator {
         }
     }
 }
+
+pub fn generate_snapshot(
+    archive_name: &str,
+) -> EResult<(time::Duration, FileStats, SymLinkStats, u64)> {
+    let mut sg = SnapshotGenerator::new(archive_name)?;
+    let stats = sg.generate_snapshot()?;
+    sg.write_snapshot()?;
+    Ok(stats)
+}
+

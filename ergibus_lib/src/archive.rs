@@ -13,6 +13,7 @@ use walkdir;
 use path_ext::expand_home_dir;
 use path_ext::{absolute_path_buf, PathType};
 
+use crate::report::{ignore_report_or_crash, ignore_report_or_fail};
 use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
@@ -61,6 +62,40 @@ impl Exclusions {
             }
         } else {
             false
+        }
+    }
+
+    pub fn is_excluded(&self, dir_entry: &fs::DirEntry) -> EResult<bool> {
+        match dir_entry.file_type() {
+            Ok(file_type) => {
+                if file_type.is_dir() {
+                    if self.dir_globset.is_empty() {
+                        Ok(false)
+                    } else if self.dir_globset.is_match(&dir_entry.file_name()) {
+                        Ok(true)
+                    } else if self.dir_globset.is_match(&dir_entry.path()) {
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                } else if file_type.is_file() || file_type.is_symlink() {
+                    if self.file_globset.is_empty() {
+                        Ok(false)
+                    } else if self.file_globset.is_match(&dir_entry.file_name()) {
+                        Ok(true)
+                    } else if self.file_globset.is_match(&dir_entry.path()) {
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                } else {
+                    Ok(true)
+                }
+            }
+            Err(err) => {
+                ignore_report_or_fail(err.into(), &dir_entry.path())?;
+                Ok(false)
+            }
         }
     }
 
