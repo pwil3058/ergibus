@@ -11,7 +11,7 @@ use pw_gix::{
 
 use crypto_hash::{Algorithm, Hasher};
 
-use ergibus_lib::snapshot;
+use ergibus_lib::snapshot_ng;
 
 use crate::g_archive;
 
@@ -39,7 +39,7 @@ impl RowBuffer<Vec<String>> for SnapshotRowBuffer {
         let mut core = self.row_buffer_core.borrow_mut();
         match self.archive_name {
             Some(ref archive_name) => {
-                match snapshot::get_snapshot_names_for_archive(archive_name, true) {
+                match snapshot_ng::get_snapshot_names_for_archive(archive_name, true) {
                     Ok(snapshot_names) => {
                         let hash = generate_digest(&snapshot_names);
                         core.set_raw_data(snapshot_names, hash);

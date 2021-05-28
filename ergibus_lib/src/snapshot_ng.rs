@@ -5,7 +5,7 @@ use crate::content::ContentMgmtKey;
 use crate::fs_objects::{DirectoryData, ExtractionStats, FileData, SymLinkData};
 use crate::fs_objects::{FileStats, SymLinkStats};
 use crate::report::ignore_report_or_fail;
-use crate::{EResult, Error, UNEXPECTED};
+use crate::{archive, EResult, Error, UNEXPECTED};
 use chrono::{DateTime, Local};
 use log::*;
 use path_ext::{absolute_path_buf, PathType};
@@ -435,6 +435,12 @@ pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<
     Ok(snapshot_paths)
 }
 
+pub fn get_snapshot_paths_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<PathBuf>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, reverse)?;
+    Ok(snapshot_paths)
+}
+
 pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<String>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_names = Vec::new();
@@ -444,5 +450,11 @@ pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<
     if reverse {
         snapshot_names.reverse();
     };
+    Ok(snapshot_names)
+}
+
+pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
     Ok(snapshot_names)
 }
