@@ -571,6 +571,7 @@ impl DirectoryData {
     where
         W: std::io::Write,
     {
+        // TODO: Add hard link retention to copying of directories
         let mut stats = ExtractionStats::default();
         clear_way_for_new_dir(to_dir_path, overwrite)?;
         if !to_dir_path.is_dir() {
