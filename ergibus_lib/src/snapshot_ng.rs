@@ -458,3 +458,99 @@ pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> ERes
     let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
     Ok(snapshot_names)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::archive;
+    use crate::content;
+    use fs2::FileExt;
+    use std::env;
+    use std::os::unix::fs::MetadataExt;
+    use tempdir::TempDir;
+
+    #[test]
+    fn test_ssf_regex() {
+        assert!(SS_FILE_NAME_RE.is_match("1027-09-14-20-20-59-1000"));
+        assert!(SS_FILE_NAME_RE.is_match("1027-09-14-20-20-59+1000"));
+    }
+
+    #[test]
+    fn test_write_snapshot() {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open("../test_lock_file")
+            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        if let Err(err) = file.lock_exclusive() {
+            panic!("lock failed: {:?}", err);
+        };
+        let dir =
+            TempDir::new("SS_TEST").unwrap_or_else(|err| panic!("open temp dir failed: {:?}", err));
+        env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
+        let data_dir = dir.path().join("data");
+        let data_dir_str = match data_dir.to_str() {
+            Some(data_dir_str) => data_dir_str,
+            None => panic!("{:?}: line {:?}", file!(), line!()),
+        };
+        if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
+            panic!("new repo: {:?}", err);
+        }
+        let my_file = Path::new("./src/snapshot.rs").canonicalize().unwrap();
+        let cli_dir = Path::new("../ergibus").canonicalize().unwrap();
+        let inclusions = vec![PathBuf::from("~/Documents"), cli_dir, my_file];
+        let dir_exclusions = vec!["lost+found".to_string()];
+        let file_exclusions = vec!["*.iso".to_string()];
+        if let Err(err) = archive::create_new_archive(
+            "test_ss",
+            "test_repo",
+            data_dir_str,
+            &inclusions,
+            &dir_exclusions,
+            &file_exclusions,
+        ) {
+            panic!("new archive: {:?}", err);
+        }
+        {
+            // need this to let sg finish before the temporary directory is destroyed
+            let mut sg = match SnapshotGenerator::new("test_ss") {
+                Ok(snapshot_generator) => snapshot_generator,
+                Err(err) => panic!("new SG: {:?}", err),
+            };
+            println!("Generating for {:?}", "test_ss");
+            assert!(sg.generate_snapshot().is_ok());
+            println!(
+                "Generating for {:?} took {:?}",
+                "test_ss",
+                sg.generation_duration()
+            );
+            assert!(sg.snapshot_available());
+            let result = sg.write_snapshot();
+            assert!(result.is_ok());
+            assert!(!sg.snapshot_available());
+            match result {
+                Ok(ref ss_file_path) => {
+                    match fs::metadata(ss_file_path) {
+                        Ok(metadata) => println!("{:?}: {:?}", ss_file_path, metadata.size()),
+                        Err(err) => {
+                            panic!("Error getting size data: {:?}: {:?}", ss_file_path, err)
+                        }
+                    };
+                    match SnapshotPersistentData::from_file(ss_file_path) {
+                        Ok(ss) => println!(
+                            "{:?}: {:?} {:?}",
+                            ss.archive_name, ss.file_stats, ss.sym_link_stats
+                        ),
+                        Err(err) => panic!("Error reading: {:?}: {:?}", ss_file_path, err),
+                    };
+                }
+                Err(err) => panic!("{:?}", err),
+            }
+        }
+        if let Err(err) = dir.close() {
+            panic!("remove temporary directory failed: {:?}", err)
+        };
+        if let Err(err) = file.unlock() {
+            panic!("unlock failed: {:?}", err);
+        };
+    }
+}

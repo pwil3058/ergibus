@@ -738,3 +738,21 @@ fn clear_way_for_new_dir(new_dir_path: &Path, overwrite: bool) -> EResult<()> {
     };
     Ok(())
 }
+
+#[cfg(test)]
+mod fs_objects_tests {
+    use super::DirectoryData;
+    use std::path::{Component, PathBuf};
+
+    #[test]
+    fn find_or_add_subdir_works() {
+        let mut sd = DirectoryData::try_new(Component::RootDir).unwrap();
+        let p = PathBuf::from("../TEST").canonicalize().unwrap();
+        assert_eq!(sd.find_or_add_subdir(&p).unwrap().path, p.as_path());
+        assert_eq!(sd.find_subdir(&p).unwrap().path, p.as_path());
+        let sdp = PathBuf::from("../").canonicalize().unwrap();
+        assert_eq!(sd.find_subdir(&sdp).unwrap().path, sdp.as_path());
+        let sdp1 = PathBuf::from("../TEST/config").canonicalize().unwrap();
+        assert!(sd.find_subdir(&sdp1).is_err());
+    }
+}
