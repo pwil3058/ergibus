@@ -13,11 +13,12 @@ use walkdir;
 use path_ext::expand_home_dir;
 use path_ext::{absolute_path_buf, PathType};
 
-use crate::report::{ignore_report_or_crash, ignore_report_or_fail};
+use crate::report::ignore_report_or_fail;
 use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
-    snapshot::{self, ExtractionStats, SnapshotPersistentData},
+    fs_objects::ExtractionStats,
+    snapshot_ng::{self, SnapshotPersistentData},
     EResult, Error,
 };
 
@@ -375,18 +376,18 @@ impl Snapshots {
         let snapshot_paths = self.get_snapshot_paths(false)?;
         // NB: this necessary to free all the references to content data
         for snapshot_path in snapshot_paths.iter() {
-            snapshot::delete_snapshot_file(snapshot_path)?;
+            snapshot_ng::delete_snapshot_file(snapshot_path)?;
         }
         fs::remove_dir(&self.dir_path)?;
         Ok(())
     }
 
     pub fn get_snapshot_paths(&self, reverse: bool) -> EResult<Vec<PathBuf>> {
-        snapshot::get_snapshot_paths_in_dir(&self.dir_path, reverse)
+        snapshot_ng::get_snapshot_paths_in_dir(&self.dir_path, reverse)
     }
 
     pub fn get_snapshot_names(&self, reverse: bool) -> EResult<Vec<String>> {
-        snapshot::get_snapshot_names_in_dir(&self.dir_path, reverse)
+        snapshot_ng::get_snapshot_names_in_dir(&self.dir_path, reverse)
     }
 
     pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
@@ -424,7 +425,7 @@ impl Snapshots {
         }
         let last_index = snapshot_paths.len() - newest_count;
         for snapshot_path in snapshot_paths[0..last_index].iter() {
-            snapshot::delete_snapshot_file(snapshot_path)?;
+            snapshot_ng::delete_snapshot_file(snapshot_path)?;
             deleted_count += 1;
         }
         Ok(deleted_count)
@@ -446,7 +447,7 @@ impl Snapshots {
         if !clear_fell && snapshot_paths.len() == 1 {
             return Err(Error::LastSnapshot(self.id()));
         }
-        snapshot::delete_snapshot_file(&snapshot_paths[index])?;
+        snapshot_ng::delete_snapshot_file(&snapshot_paths[index])?;
         Ok(1)
     }
 

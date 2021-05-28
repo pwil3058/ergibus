@@ -2,19 +2,19 @@
 
 use crate::archive::{get_archive_data, ArchiveData, Exclusions};
 use crate::content::ContentMgmtKey;
-use crate::fs_objects::{DirectoryData, FileData, SymLinkData};
+use crate::fs_objects::{DirectoryData, ExtractionStats, FileData, SymLinkData};
 use crate::fs_objects::{FileStats, SymLinkStats};
 use crate::report::ignore_report_or_fail;
 use crate::{EResult, Error, UNEXPECTED};
 use chrono::{DateTime, Local};
 use log::*;
+use path_ext::{absolute_path_buf, PathType};
 use serde::Serialize;
 use std::convert::TryFrom;
-use std::fs::File;
+use std::fs::{DirEntry, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::{fs, time};
-use walkdir::WalkDir;
 
 fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
     let path = path_arg.as_ref();
@@ -165,6 +165,36 @@ lazy_static! {
         regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
 }
 
+fn entry_is_ss_file(entry: &DirEntry) -> bool {
+    let path = entry.path();
+    if path.is_file() {
+        if let Some(file_name) = path.file_name() {
+            if let Some(file_name) = file_name.to_str() {
+                return SS_FILE_NAME_RE.is_match(file_name);
+            }
+        }
+    }
+    false
+}
+
+fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
+    let dir_entries = fs::read_dir(dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+    let mut ss_entries = Vec::new();
+    for entry_or_err in dir_entries {
+        match entry_or_err {
+            Ok(entry) => {
+                if entry_is_ss_file(&entry) {
+                    ss_entries.push(entry);
+                }
+            }
+            Err(_) => (),
+        }
+    }
+    ss_entries.sort_by_key(|e| e.path());
+    Ok(ss_entries)
+}
+
 impl SnapshotPersistentData {
     // Interrogation/extraction/restoration methods
 
@@ -188,6 +218,68 @@ impl SnapshotPersistentData {
             }
             Err(err) => Err(Error::SnapshotReadIOError(err, file_path.to_path_buf())),
         }
+    }
+
+    pub fn archive_name(&self) -> &str {
+        &self.archive_name
+    }
+
+    pub fn find_subdir<P: AsRef<Path>>(&self, dir_path_arg: P) -> EResult<&DirectoryData> {
+        let dir_path = dir_path_arg.as_ref();
+        match PathType::of(dir_path) {
+            PathType::Absolute => self.root_dir.find_subdir(dir_path),
+            PathType::RelativeCurDirImplicit => self
+                .root_dir
+                .find_subdir(&self.base_dir_path.join(dir_path)),
+            PathType::Empty => self.root_dir.find_subdir(&self.base_dir_path),
+            _ => self.root_dir.find_subdir(
+                absolute_path_buf(dir_path)
+                    .map_err(|_| Error::SnapshotUnknownDirectory(dir_path.to_path_buf()))?,
+            ),
+        }
+    }
+
+    pub fn find_file<P: AsRef<Path>>(&self, file_path_arg: P) -> EResult<&FileData> {
+        let file_path = file_path_arg.as_ref();
+        match PathType::of(file_path) {
+            PathType::Absolute => self.root_dir.find_file(file_path),
+            PathType::RelativeCurDirImplicit => {
+                self.root_dir.find_file(&self.base_dir_path.join(file_path))
+            }
+            PathType::Empty => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
+            _ => self.root_dir.find_file(
+                absolute_path_buf(file_path)
+                    .map_err(|_| Error::SnapshotUnknownFile(file_path.to_path_buf()))?,
+            ),
+        }
+    }
+
+    pub fn copy_file_to(
+        &self,
+        fm_file_path: &Path,
+        to_file_path: &Path,
+        overwrite: bool,
+    ) -> EResult<u64> {
+        let file_data = self.find_file(fm_file_path)?;
+        let c_mgr = self
+            .content_mgmt_key
+            .open_content_manager(dychatat::Mutability::Immutable)?;
+        Ok(file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?)
+    }
+
+    pub fn copy_dir_to<W>(
+        &self,
+        fm_dir_path: &Path,
+        to_dir_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<ExtractionStats>
+    where
+        W: std::io::Write,
+    {
+        let fm_subdir = self.find_subdir(fm_dir_path)?;
+        let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite, op_errf)?;
+        Ok(stats)
     }
 }
 
@@ -322,3 +414,35 @@ pub fn generate_snapshot(
     Ok(stats)
 }
 
+pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
+    let snapshot = SnapshotPersistentData::from_file(ss_file_path)?;
+    fs::remove_file(ss_file_path)
+        .map_err(|err| Error::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
+    snapshot.release_contents()?;
+    Ok(())
+}
+
+pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {
+    let entries = get_ss_entries_in_dir(dir_path)?;
+    let mut snapshot_paths = Vec::new();
+    for entry in entries {
+        let e_path = dir_path.join(entry.path());
+        snapshot_paths.push(e_path);
+    }
+    if reverse {
+        snapshot_paths.reverse();
+    };
+    Ok(snapshot_paths)
+}
+
+pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<String>> {
+    let entries = get_ss_entries_in_dir(dir_path)?;
+    let mut snapshot_names = Vec::new();
+    for entry in entries {
+        snapshot_names.push(String::from(entry.file_name().to_string_lossy().to_owned()));
+    }
+    if reverse {
+        snapshot_names.reverse();
+    };
+    Ok(snapshot_names)
+}

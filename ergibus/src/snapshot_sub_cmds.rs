@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use structopt::{clap::ArgGroup, StructOpt};
 
-use ergibus_lib::{archive::Snapshots, snapshot, EResult, Error};
+use ergibus_lib::{archive::Snapshots, snapshot_ng, EResult, Error};
 use std::env;
 
 #[derive(Debug, StructOpt)]
@@ -215,13 +215,10 @@ impl SnapshotContents {
                     // TODO: be smarter about target path for listing
                     snapshot_persistent_data.find_subdir(dir_path)?
                 } else {
-                    snapshot_persistent_data.base_dir()
+                    snapshot_persistent_data.find_subdir(&PathBuf::new())?
                 };
-                for subdir in dir.subdir_names().chain(dir.subdir_link_names()) {
-                    println!("{}/", subdir.to_string_lossy())
-                }
-                for file in dir.file_names().chain(dir.file_link_names()) {
-                    println!("{}", file.to_string_lossy())
+                for fso in dir.contents() {
+                    println!("{}", fso)
                 }
                 Ok(())
             }
@@ -256,7 +253,7 @@ impl BackUp {
             );
         };
         for archive in self.archives.iter() {
-            match snapshot::generate_snapshot(&archive) {
+            match snapshot_ng::generate_snapshot(&archive) {
                 Ok(stats) => {
                     if self.show_stats {
                         let time_taken = format!("{:?}", stats.0);

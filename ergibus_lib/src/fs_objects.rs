@@ -2,15 +2,18 @@
 
 use crate::archive::Exclusions;
 use crate::attributes::{Attributes, AttributesIfce};
-use crate::content::ContentManager;
-use crate::report::{ignore_report_or_crash, ignore_report_or_fail};
+use crate::content::{ContentManager, ContentMgmtKey};
+use crate::path_buf_ext::RealPathBufType;
+use crate::report::ignore_report_or_fail;
 use crate::{EResult, Error, UNEXPECTED};
+use chrono::{DateTime, Local};
 use std::ffi::{OsStr, OsString};
-use std::fs;
-use std::fs::File;
+use std::fmt;
+use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::ops::AddAssign;
 use std::path::{Component, Path, PathBuf};
+use std::time;
 
 pub trait Name {
     fn name(&self) -> &OsStr;
@@ -59,6 +62,35 @@ impl FileData {
             file_stats,
             delta_repo_size,
         ))
+    }
+
+    // Interrogation/extraction/restoration methods
+    pub fn copy_contents_to(
+        &self,
+        to_file_path: &Path,
+        c_mgr: &ContentManager,
+        overwrite: bool,
+    ) -> EResult<u64> {
+        if to_file_path.exists() {
+            if to_file_path.is_real_file() {
+                let mut file = File::open(to_file_path)
+                    .map_err(|err| Error::SnapshotReadIOError(err, to_file_path.to_path_buf()))?;
+                let content_is_same = c_mgr.check_content_token(&mut file, &self.content_token)?;
+                if content_is_same {
+                    // nothing to do
+                    return Ok(self.attributes.size());
+                }
+            }
+            if !overwrite {
+                let new_path = move_aside_file_path(to_file_path);
+                fs::rename(to_file_path, &new_path).map_err(|err| {
+                    Error::SnapshotMoveAsideFailed(to_file_path.to_path_buf(), err)
+                })?;
+            }
+        }
+        let mut file = File::create(to_file_path).unwrap();
+        let bytes = c_mgr.write_contents_for_token(&self.content_token, &mut file)?;
+        Ok(bytes)
     }
 }
 
@@ -122,6 +154,42 @@ impl SymLinkData {
             FileSystemObject::SymLink(sym_link_data, is_file),
             sym_link_stats,
         ))
+    }
+}
+
+impl SymLinkData {
+    // Interrogation/extraction/restoration methods
+    fn copy_link_as<W>(
+        &self,
+        as_path: &Path,
+        overwrite: bool,
+        _op_errf: &mut Option<&mut W>,
+    ) -> EResult<()>
+    where
+        W: std::io::Write,
+    {
+        if as_path.exists() {
+            if as_path.is_symlink() {
+                if let Ok(link_target) = as_path.read_link() {
+                    if self.link_target == link_target {
+                        return Ok(());
+                    }
+                }
+            }
+            if !overwrite {
+                let new_path = move_aside_file_path(as_path);
+                fs::rename(as_path, &new_path)
+                    .map_err(|err| Error::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+            }
+        }
+        if cfg!(target_family = "unix") {
+            use std::os::unix::fs::symlink;
+            symlink(&self.link_target, as_path)
+                .map_err(|err| Error::SnapshotMoveAsideFailed(as_path.to_path_buf(), err))?;
+        } else {
+            panic!("not implemented for this os")
+        }
+        Ok(())
     }
 }
 
@@ -314,6 +382,259 @@ impl Name for DirectoryData {
     }
 }
 
+struct SubdirIter<'a> {
+    contents: &'a Vec<FileSystemObject>,
+    index: usize,
+    subdir_iters: Vec<SubdirIter<'a>>,
+    current_subdir_iter: Box<Option<SubdirIter<'a>>>,
+}
+
+impl<'a> Iterator for SubdirIter<'a> {
+    type Item = &'a DirectoryData;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < self.contents.len() {
+            if let Some(dir_data) = self.contents[self.index].get_dir_data() {
+                self.index += 1;
+                return Some(dir_data);
+            } else {
+                self.index += 1;
+            }
+        }
+        loop {
+            if let Some(ref mut sub_iter) = *self.current_subdir_iter {
+                if let Some(item) = sub_iter.next() {
+                    return Some(item);
+                }
+            } else {
+                break;
+            };
+            self.current_subdir_iter = Box::new(self.subdir_iters.pop())
+        }
+        None
+    }
+}
+
+#[derive(PartialEq, Debug, Default, Copy, Clone)]
+pub struct ExtractionStats {
+    pub dir_count: u64,
+    pub file_count: u64,
+    pub bytes_count: u64,
+    pub dir_sym_link_count: u64,
+    pub file_sym_link_count: u64,
+}
+
+impl DirectoryData {
+    // Interrogation/extraction/restoration methods
+    pub fn contents(&self) -> impl Iterator<Item = &FileSystemObject> {
+        self.contents.iter()
+    }
+
+    pub fn dir_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
+        self.contents
+            .iter()
+            .filter_map(|o| o.get_dir_sym_link_data())
+    }
+
+    pub fn file_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
+        self.contents
+            .iter()
+            .filter_map(|o| o.get_file_sym_link_data())
+    }
+
+    pub fn get_directory(&self, name: &OsStr) -> Option<&DirectoryData> {
+        match self.index_for(name) {
+            Ok(index) => self.contents[index].get_dir_data(),
+            Err(_) => None,
+        }
+    }
+
+    pub fn get_file(&self, name: &OsStr) -> Option<&FileData> {
+        match self.index_for(name) {
+            Ok(index) => self.contents[index].get_file_data(),
+            Err(_) => None,
+        }
+    }
+
+    fn subdir_iter<'a>(&'a self, recursive: bool) -> SubdirIter<'a> {
+        let contents = &self.contents;
+        let mut subdir_iters: Vec<SubdirIter<'a>> = if recursive {
+            self.subdirs().map(|s| s.subdir_iter(true)).collect()
+        } else {
+            Vec::new()
+        };
+        let current_subdir_iter = Box::new(subdir_iters.pop());
+        SubdirIter {
+            contents,
+            index: 0,
+            subdir_iters,
+            current_subdir_iter,
+        }
+    }
+
+    pub fn find_subdir<P: AsRef<Path>>(&self, path_arg: P) -> EResult<&Self> {
+        let subdir_path = path_arg.as_ref();
+        debug_assert!(subdir_path.is_absolute());
+        let rel_path = subdir_path
+            .strip_prefix(&self.path)
+            .map_err(|_| Error::SnapshotUnknownDirectory(subdir_path.to_path_buf()))?;
+        match rel_path.components().next() {
+            None => Ok(self),
+            Some(Component::Normal(first_name)) => match self.get_directory(&first_name) {
+                Some(sd) => sd.find_subdir(path_arg),
+                None => Err(Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())),
+            },
+            _ => Err(Error::FSOMalformedPath(rel_path.to_path_buf())),
+        }
+    }
+
+    pub fn find_file<P: AsRef<Path>>(&self, file_path_arg: P) -> EResult<&FileData> {
+        let file_path = file_path_arg.as_ref();
+        match file_path.file_name() {
+            Some(file_name) => {
+                if let Some(dir_path) = file_path.parent() {
+                    let subdir = self.find_subdir(dir_path)?;
+                    match subdir.get_file(file_name) {
+                        Some(file_data) => Ok(file_data),
+                        None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
+                    }
+                } else {
+                    match self.get_file(file_name) {
+                        Some(file_data) => Ok(file_data),
+                        None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
+                    }
+                }
+            }
+            None => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
+        }
+    }
+
+    fn copy_files_into(
+        &self,
+        into_dir_path: &Path,
+        c_mgr: &ContentManager,
+        overwrite: bool,
+    ) -> EResult<(u64, u64)> {
+        let mut count = 0;
+        let mut bytes = 0;
+        for file in self.files() {
+            let new_path = into_dir_path.join(&file.file_name);
+            bytes += file.copy_contents_to(&new_path, c_mgr, overwrite)?;
+            count += 1;
+        }
+        Ok((count, bytes))
+    }
+
+    fn copy_dir_links_into<W>(
+        &self,
+        into_dir_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
+    {
+        let mut count = 0;
+        for subdir_link in self.dir_sym_links() {
+            let new_link_path = into_dir_path.join(&subdir_link.file_name);
+            subdir_link.copy_link_as(&new_link_path, overwrite, op_errf)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    fn copy_file_links_into<W>(
+        &self,
+        into_dir_path: &Path,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<u64>
+    where
+        W: std::io::Write,
+    {
+        let mut count = 0;
+        for file_link in self.file_sym_links() {
+            let new_link_path = into_dir_path.join(&file_link.file_name);
+            file_link.copy_link_as(&new_link_path, overwrite, op_errf)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    pub fn copy_to<W>(
+        &self,
+        to_dir_path: &Path,
+        c_mgt_key: &ContentMgmtKey,
+        overwrite: bool,
+        op_errf: &mut Option<&mut W>,
+    ) -> EResult<ExtractionStats>
+    where
+        W: std::io::Write,
+    {
+        let mut stats = ExtractionStats::default();
+        clear_way_for_new_dir(to_dir_path, overwrite)?;
+        if !to_dir_path.is_dir() {
+            fs::create_dir_all(to_dir_path)
+                .map_err(|err| Error::SnapshotDirIOError(err, to_dir_path.to_path_buf()))?;
+            if let Ok(to_dir) = self.find_subdir(to_dir_path) {
+                to_dir
+                    .attributes
+                    .set_file_attributes(to_dir_path, op_errf)
+                    .map_err(|err| Error::ContentCopyIOError(err))?;
+            }
+        }
+        stats.dir_count += 1;
+        // First create all of the sub directories
+        for subdir in self.subdir_iter(true) {
+            let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+            let new_dir_path = to_dir_path.join(path_tail);
+            clear_way_for_new_dir(&new_dir_path, overwrite)?;
+            if !new_dir_path.is_dir() {
+                fs::create_dir_all(&new_dir_path)
+                    .map_err(|err| Error::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
+                subdir
+                    .attributes
+                    .set_file_attributes(&new_dir_path, op_errf)
+                    .map_err(|err| Error::ContentCopyIOError(err))?;
+            }
+            stats.dir_count += 1;
+        }
+        // then do links to subdirs
+        stats.dir_sym_link_count += self.copy_dir_links_into(&to_dir_path, overwrite, op_errf)?;
+        for subdir in self.subdir_iter(true) {
+            let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+            let new_dir_path = to_dir_path.join(path_tail);
+            stats.dir_sym_link_count +=
+                subdir.copy_dir_links_into(&new_dir_path, overwrite, op_errf)?;
+        }
+        // then do all the files (holding lock as little as needed)
+        match c_mgt_key.open_content_manager(dychatat::Mutability::Immutable) {
+            Ok(ref c_mgr) => {
+                let (count, bytes) = self.copy_files_into(&to_dir_path, c_mgr, overwrite)?;
+                stats.file_count += count;
+                stats.bytes_count += bytes;
+                for subdir in self.subdir_iter(true) {
+                    let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+                    let new_dir_path = to_dir_path.join(path_tail);
+                    let (count, bytes) = subdir.copy_files_into(&new_dir_path, c_mgr, overwrite)?;
+                    stats.file_count += count;
+                    stats.bytes_count += bytes;
+                }
+            }
+            Err(err) => return Err(err.into()),
+        }
+        // then do links to file
+        stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite, op_errf)?;
+        for subdir in self.subdir_iter(true) {
+            let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+            let new_dir_path = to_dir_path.join(path_tail);
+            stats.file_sym_link_count +=
+                subdir.copy_file_links_into(&new_dir_path, overwrite, op_errf)?;
+        }
+        Ok(stats)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum FileSystemObject {
     File(FileData),
@@ -332,16 +653,23 @@ impl Name for FileSystemObject {
     }
 }
 
-impl FileSystemObject {
-    // pub fn new(entry: &fs::DirEntry, content_manager: &ContentManager) -> EResult<Self> {
-    //     let path_buf = entry.path();
-    //     let file_type = entry.file_type()?;
-    //     //if file_type.is_dir() {
-    //     let file_system_object = DirectoryData::file_system_object(&path_buf)?;
-    //     Ok(file_system_object)
-    //     //}
-    // }
+impl fmt::Display for FileSystemObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use FileSystemObject::*;
+        match self {
+            File(file_data) => write!(f, "{}", file_data.name().to_string_lossy()),
+            Directory(dir_data) => write!(f, "{}/", dir_data.name().to_string_lossy()),
+            SymLink(link_data, _) => write!(
+                f,
+                "{} -> {}",
+                link_data.name().to_string_lossy(),
+                link_data.link_target.to_string_lossy()
+            ),
+        }
+    }
+}
 
+impl FileSystemObject {
     pub fn get_dir_data(&self) -> Option<&DirectoryData> {
         use FileSystemObject::*;
         match self {
@@ -383,69 +711,29 @@ impl FileSystemObject {
     }
 }
 
-// #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
-// pub struct FileSystemObjects(Vec<FileSystemObject>);
-//
-// impl FileSystemObjects {
-//     #[inline]
-//     fn key_index(&self, key: &OsStr) -> Result<usize, usize> {
-//         self.0.binary_search_by_key(&key, |o| o.name())
-//     }
-//
-//     pub fn insert(&mut self, fs_obj: FileSystemObject) -> EResult<()> {
-//         match self.key_index(fs_obj.name()) {
-//             Ok(_) => Err(Error::DuplicateFileSystemObjectName),
-//             Err(index) => {
-//                 self.0.insert(index, fs_obj);
-//                 Ok(())
-//             }
-//         }
-//     }
-//
-//     pub fn get_or_insert_dir<P>(&mut self, key: &OsStr, parent: P) -> EResult<&mut DirectoryData>
-//     where
-//         P: AsRef<Path>,
-//     {
-//         match self.key_index(key) {
-//             Ok(index) => match self.0[index].get_dir_data_mut() {
-//                 Some(file_data) => Ok(file_data),
-//                 None => Err(Error::DuplicateFileSystemObjectName),
-//             },
-//             Err(index) => {
-//                 let dir_data = DirectoryData::file_system_object(&parent.as_ref().join(key))?;
-//                 self.0.insert(index, FileSystemObject::Directory(dir_data));
-//                 Ok(self.0[index].get_dir_data_mut().expect(UNEXPECTED))
-//             }
-//         }
-//     }
-//
-//     pub fn get(&self, key: &OsStr) -> Option<&FileSystemObject> {
-//         match self.key_index(key) {
-//             Ok(index) => Some(&self.0[index]),
-//             Err(_) => None,
-//         }
-//     }
-//
-//     pub fn get_directory(&self, key: &OsStr) -> Option<&DirectoryData> {
-//         match self.key_index(key) {
-//             Ok(index) => self.0[index].get_dir_data(),
-//             Err(_) => None,
-//         }
-//     }
-//
-//     pub fn files(&self) -> impl Iterator<Item = &FileData> {
-//         self.0.iter().filter_map(|o| o.get_file_data())
-//     }
-//
-//     pub fn file_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
-//         self.0.iter().filter_map(|o| o.get_file_sym_link_data())
-//     }
-//
-//     pub fn dir_sym_links(&self) -> impl Iterator<Item = &SymLinkData> {
-//         self.0.iter().filter_map(|o| o.get_dir_sym_link_data())
-//     }
-//
-//     pub fn subdirs(&self) -> impl Iterator<Item = &DirectoryData> {
-//         self.0.iter().filter_map(|o| o.get_dir_data())
-//     }
-// }
+fn move_aside_file_path(path: &Path) -> PathBuf {
+    let dt = DateTime::<Local>::from(time::SystemTime::now());
+    let suffix = format!("{}", dt.format("ema-%Y-%m-%d-%H-%M-%S"));
+    let new_suffix = if let Some(current_suffix) = path.extension() {
+        format!("{:?}-{}", current_suffix, suffix)
+    } else {
+        suffix
+    };
+    path.with_extension(&new_suffix)
+}
+
+fn clear_way_for_new_dir(new_dir_path: &Path, overwrite: bool) -> EResult<()> {
+    if new_dir_path.exists() && !new_dir_path.is_dir() {
+        // Real dir or link to dir
+        if overwrite {
+            // Remove the file system object to make way for the directory
+            fs::remove_file(new_dir_path)
+                .map_err(|err| Error::SnapshotDeleteIOError(err, new_dir_path.to_path_buf()))?;
+        } else {
+            let new_path = move_aside_file_path(new_dir_path);
+            fs::rename(new_dir_path, &new_path)
+                .map_err(|err| Error::SnapshotMoveAsideFailed(new_dir_path.to_path_buf(), err))?;
+        }
+    };
+    Ok(())
+}
