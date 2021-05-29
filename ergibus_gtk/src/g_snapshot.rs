@@ -14,6 +14,8 @@ use crypto_hash::{Algorithm, Hasher};
 use ergibus_lib::snapshot;
 
 use crate::g_archive;
+use pw_gix::gtkx::menu_ng::{ManagedMenu, ManagedMenuBuilder};
+use pw_gix::sav_state::WidgetStatesControlled;
 
 struct SnapshotRowBuffer {
     archive_name: Option<String>,
@@ -111,8 +113,10 @@ impl SnapshotNameListStore {
 
 #[derive(PWO, Wrapper)]
 pub struct SnapshotNameTable {
+    scrolled_window: gtk::ScrolledWindow,
     pub view: gtk::TreeView,
     list_store: RefCell<SnapshotNameListStore>,
+    popup_menu: ManagedMenu,
 }
 
 impl SnapshotNameTable {
@@ -141,7 +145,23 @@ impl SnapshotNameTable {
         view.append_column(&col);
         view.show_all();
 
-        Rc::new(SnapshotNameTable { view, list_store })
+        let popup_menu = ManagedMenuBuilder::new()
+            .widget_states_controlled(WidgetStatesControlled::Sensitivity)
+            .selection(&view.get_selection())
+            .build();
+
+        let scrolled_window = gtk::ScrolledWindow::new(
+            Option::<&gtk::Adjustment>::None,
+            Option::<&gtk::Adjustment>::None,
+        );
+        scrolled_window.add(&view);
+
+        Rc::new(SnapshotNameTable {
+            scrolled_window,
+            view,
+            list_store,
+            popup_menu,
+        })
     }
 
     pub fn set_archive(&self, archive_name: Option<String>) {
@@ -163,7 +183,7 @@ impl SnapshotSelector {
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
         let snapshot_name_table =
             SnapshotNameTable::new_rc(archive_selector.get_selected_archive());
-        vbox.pack_start(&snapshot_name_table.pwo(), false, false, 0);
+        vbox.pack_start(&snapshot_name_table.pwo(), true, true, 0);
         vbox.show_all();
         let snapshot_selector = Rc::new(SnapshotSelector {
             vbox,
