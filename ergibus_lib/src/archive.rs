@@ -144,7 +144,6 @@ fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
-    println!("READ ARCHIVE SPEC Path: {:?}", spec_file_path);
     let spec_file = File::open(&spec_file_path).map_err(|err| match err.kind() {
         ErrorKind::NotFound => Error::ArchiveUnknown(archive_name.to_string()),
         _ => Error::ArchiveReadError(err, spec_file_path.clone()),
@@ -160,7 +159,6 @@ fn write_archive_spec(
     overwrite: bool,
 ) -> EResult<()> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
-    println!("WRITE ARCHIVE SPEC Path: {:?}", spec_file_path);
     if !overwrite && spec_file_path.exists() {
         return Err(Error::ArchiveExists(archive_name.to_string()));
     }
