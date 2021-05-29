@@ -12,7 +12,7 @@ pub mod content;
 pub mod fs_objects;
 mod path_buf_ext;
 mod report;
-pub mod snapshot_ng;
+pub mod snapshot;
 
 use crate::archive::ArchiveNameOrDirPath;
 

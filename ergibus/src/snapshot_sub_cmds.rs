@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use structopt::{clap::ArgGroup, StructOpt};
 
-use ergibus_lib::{archive::Snapshots, snapshot_ng, EResult, Error};
+use ergibus_lib::{archive::Snapshots, snapshot, EResult, Error};
 use std::env;
 
 #[derive(Debug, StructOpt)]
@@ -253,7 +253,7 @@ impl BackUp {
             );
         };
         for archive in self.archives.iter() {
-            match snapshot_ng::generate_snapshot(&archive) {
+            match snapshot::generate_snapshot(&archive) {
                 Ok(stats) => {
                     if self.show_stats {
                         let time_taken = format!("{:?}", stats.0);

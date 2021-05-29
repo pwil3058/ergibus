@@ -495,7 +495,7 @@ mod tests {
         if let Err(err) = content::create_new_repo("test_repo", data_dir_str, "Sha1") {
             panic!("new repo: {:?}", err);
         }
-        let my_file = Path::new("./src/snapshot_ng.rs").canonicalize().unwrap();
+        let my_file = Path::new("./src/snapshot.rs").canonicalize().unwrap();
         let cli_dir = Path::new("../ergibus").canonicalize().unwrap();
         let inclusions = vec![PathBuf::from("~/Documents"), cli_dir, my_file];
         let dir_exclusions = vec!["lost+found".to_string()];

@@ -18,7 +18,7 @@ use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
     fs_objects::ExtractionStats,
-    snapshot_ng::{self, SnapshotPersistentData},
+    snapshot::{self, SnapshotPersistentData},
     EResult, Error,
 };
 
@@ -144,6 +144,7 @@ fn get_archive_spec_file_path(archive_name: &str) -> PathBuf {
 
 fn read_archive_spec(archive_name: &str) -> EResult<ArchiveSpec> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
+    println!("READ ARCHIVE SPEC Path: {:?}", spec_file_path);
     let spec_file = File::open(&spec_file_path).map_err(|err| match err.kind() {
         ErrorKind::NotFound => Error::ArchiveUnknown(archive_name.to_string()),
         _ => Error::ArchiveReadError(err, spec_file_path.clone()),
@@ -159,6 +160,7 @@ fn write_archive_spec(
     overwrite: bool,
 ) -> EResult<()> {
     let spec_file_path = get_archive_spec_file_path(archive_name);
+    println!("WRITE ARCHIVE SPEC Path: {:?}", spec_file_path);
     if !overwrite && spec_file_path.exists() {
         return Err(Error::ArchiveExists(archive_name.to_string()));
     }
@@ -376,18 +378,18 @@ impl Snapshots {
         let snapshot_paths = self.get_snapshot_paths(false)?;
         // NB: this necessary to free all the references to content data
         for snapshot_path in snapshot_paths.iter() {
-            snapshot_ng::delete_snapshot_file(snapshot_path)?;
+            snapshot::delete_snapshot_file(snapshot_path)?;
         }
         fs::remove_dir(&self.dir_path)?;
         Ok(())
     }
 
     pub fn get_snapshot_paths(&self, reverse: bool) -> EResult<Vec<PathBuf>> {
-        snapshot_ng::get_snapshot_paths_in_dir(&self.dir_path, reverse)
+        snapshot::get_snapshot_paths_in_dir(&self.dir_path, reverse)
     }
 
     pub fn get_snapshot_names(&self, reverse: bool) -> EResult<Vec<String>> {
-        snapshot_ng::get_snapshot_names_in_dir(&self.dir_path, reverse)
+        snapshot::get_snapshot_names_in_dir(&self.dir_path, reverse)
     }
 
     pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
@@ -425,7 +427,7 @@ impl Snapshots {
         }
         let last_index = snapshot_paths.len() - newest_count;
         for snapshot_path in snapshot_paths[0..last_index].iter() {
-            snapshot_ng::delete_snapshot_file(snapshot_path)?;
+            snapshot::delete_snapshot_file(snapshot_path)?;
             deleted_count += 1;
         }
         Ok(deleted_count)
@@ -447,7 +449,7 @@ impl Snapshots {
         if !clear_fell && snapshot_paths.len() == 1 {
             return Err(Error::LastSnapshot(self.id()));
         }
-        snapshot_ng::delete_snapshot_file(&snapshot_paths[index])?;
+        snapshot::delete_snapshot_file(&snapshot_paths[index])?;
         Ok(1)
     }
 
@@ -526,7 +528,7 @@ impl Snapshots {
 }
 
 #[cfg(test)]
-mod tests {
+mod archive_tests {
     // TODO: fix tests to use temporary directories.
     use super::*;
     use std::env;
@@ -592,8 +594,7 @@ file_exclusions:\n
    - \"*.[oa]\"\n
    - \"*.py[co]\"\n
 ";
-        let spec: ArchiveSpec = serde_yaml::from_str(&yaml_str)
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        let spec: ArchiveSpec = serde_yaml::from_str(&yaml_str).unwrap();
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,
@@ -613,8 +614,7 @@ file_exclusions:\n
     #[test]
     fn test_read_write_archive_spec() {
         env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
-        let spec: ArchiveSpec = read_archive_spec("dummy")
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+        let spec: ArchiveSpec = read_archive_spec("dummy").unwrap();
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(
             spec.snapshot_dir_path,

@@ -112,7 +112,7 @@ pub fn prune_repository(repo_name: &str) -> EResult<UnreferencedContentData> {
 }
 
 #[cfg(test)]
-mod tests {
+mod content_tests {
     use super::*;
     use dychatat::Mutability;
     use fs2::FileExt;
@@ -125,21 +125,15 @@ mod tests {
         let file = OpenOptions::new()
             .write(true)
             .open("../test_lock_file")
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
-        if let Err(err) = file.lock_exclusive() {
-            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        };
-        let temp_dir = TempDir::new("REPO_TEST")
-            .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
+            .unwrap();
+        assert!(file.lock_exclusive().is_ok());
+
+        let temp_dir = TempDir::new("REPO_TEST").unwrap();
+
         env::set_var("ERGIBUS_CONFIG_DIR", temp_dir.path().join("config"));
         let data_dir = temp_dir.path().join("data");
-        let data_dir_str = match data_dir.to_str() {
-            Some(data_dir_str) => data_dir_str,
-            None => panic!("{:?}: line {:?}", file!(), line!()),
-        };
-        if let Err(err) = create_new_repo("test_repo", data_dir_str, "Sha1") {
-            panic!("new repo: {:?}", err);
-        }
+        let data_dir_str = data_dir.to_str().unwrap();
+        assert!(create_new_repo("test_repo", data_dir_str, "Sha1").is_ok());
         assert!(temp_dir
             .path()
             .join("config")
@@ -154,58 +148,28 @@ mod tests {
             .join("test_repo")
             .join("ref_count")
             .exists());
-        let key = match get_content_mgmt_key("test_repo") {
-            Ok(cmk) => cmk,
-            Err(err) => panic!("get key: {:?}", err),
-        };
+        let key = get_content_mgmt_key("test_repo").unwrap();
         {
-            let cm = match key.open_content_manager(Mutability::Mutable) {
-                Ok(content_manager) => content_manager,
-                Err(err) => panic!("open cm: {:?}", err),
-            };
+            let cm = key.open_content_manager(Mutability::Mutable).unwrap();
             for i in 1..5 {
                 let mut file = File::open("./src/content.rs").unwrap();
-                let token = match cm.store_contents(&mut file) {
-                    Ok((tkn, _, _)) => tkn,
-                    Err(err) => panic!("sfc: {:?}", err),
-                };
-                match cm.ref_count_for_token(&token) {
-                    Ok(count) => assert!(count == i),
-                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err),
-                };
+                let (token, _, _) = cm.store_contents(&mut file).unwrap();
+                assert_eq!(cm.ref_count_for_token(&token).unwrap(), i);
             }
             for i in 1..5 {
-                let mut file = File::open("./src/snapshot_ng.rs").unwrap();
-                let token = match cm.store_contents(&mut file) {
-                    Ok((tkn, _, _)) => tkn,
-                    Err(err) => panic!("sfc: {:?}", err),
-                };
-                match cm.ref_count_for_token(&token) {
-                    Ok(count) => assert!(count == i),
-                    Err(err) => panic!("get ref count #{:?}: {:?}", i, err),
-                };
+                let mut file = File::open("./src/snapshot.rs").unwrap();
+                let (token, _, _) = cm.store_contents(&mut file).unwrap();
+                assert_eq!(cm.ref_count_for_token(&token).unwrap(), i);
             }
         }
         {
-            if let Err(err) = key.open_content_manager(Mutability::Mutable) {
-                panic!("reread: {:?}", err);
-            };
+            assert!(key.open_content_manager(Mutability::Mutable).is_ok())
         }
         {
-            let _cm1 = match key.open_content_manager(Mutability::Immutable) {
-                Ok(content_manager) => content_manager,
-                Err(err) => panic!("open cm non exclusive: {:?}", err),
-            };
-            let _cm2 = match key.open_content_manager(Mutability::Immutable) {
-                Ok(content_manager) => content_manager,
-                Err(err) => panic!("open second cm non exclusive: {:?}", err),
-            };
+            let _cm1 = key.open_content_manager(Mutability::Immutable).unwrap();
+            let _cm2 = key.open_content_manager(Mutability::Immutable).unwrap();
         }
-        if let Err(err) = temp_dir.close() {
-            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        };
-        if let Err(err) = file.unlock() {
-            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        };
+        assert!(temp_dir.close().is_ok());
+        assert!(file.unlock().is_ok());
     }
 }
