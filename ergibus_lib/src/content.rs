@@ -175,7 +175,7 @@ mod tests {
                 };
             }
             for i in 1..5 {
-                let mut file = File::open("./src/snapshot.rs").unwrap();
+                let mut file = File::open("./src/snapshot_ng.rs").unwrap();
                 let token = match cm.store_contents(&mut file) {
                     Ok((tkn, _, _)) => tkn,
                     Err(err) => panic!("sfc: {:?}", err),
