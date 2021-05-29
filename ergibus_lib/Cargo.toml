@@ -27,6 +27,6 @@ tempdir = "0.3"
 users = "0.5.0"
 walkdir = "2.3.2"
 
-dychatat = { git = "https://github.com/pwil3058/dychatat.git" }
+dychatat = { path = "../dychatat" }
 path_ext = { path = "../path_ext"}
 ordered_map = { path = "../ordered_map"}
