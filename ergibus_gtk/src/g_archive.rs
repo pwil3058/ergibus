@@ -1,10 +1,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use pw_gix::{
+use pw_gtk_ext::{
     gtk::{self, prelude::*},
-    gtkx::combo_box_text::SortedUnique,
+    gtkx::{
+        combo_box_text::SortedUnique,
+        dialog_user::{DialogUser, TopGtkWindow},
+    },
     wrapper::*,
+    UNEXPECTED,
 };
 
 use ergibus_lib::archive;
@@ -55,7 +59,7 @@ impl ArchiveSelector {
     }
 
     pub fn set_selected_archive(&self, archive_name: &str) {
-        self.combo.set_active_text(archive_name)
+        self.combo.set_active_text(archive_name).expect(UNEXPECTED)
     }
 
     pub fn update_available_archives(&self) {

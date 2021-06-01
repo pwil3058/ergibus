@@ -1,8 +1,8 @@
-use pw_gix::{
+use pw_gtk_ext::{
     gdkx::format_geometry,
     gio::{self, prelude::ApplicationExtManual, ApplicationExt},
     gtk::{self, prelude::*},
-    recollections,
+    pw_recollect::recollections,
     wrapper::*,
 };
 
