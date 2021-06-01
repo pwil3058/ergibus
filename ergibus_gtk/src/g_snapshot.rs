@@ -102,7 +102,7 @@ fn generate_digest(list: &Vec<String>) -> Vec<u8> {
 #[derive(PWO, Wrapper)]
 pub struct SnapshotSelector {
     vbox: gtk::Box,
-    archive_selector: Rc<g_archive::ArchiveSelector>,
+    archive_selector: g_archive::ArchiveSelector,
     snapshot_name_table: BufferedListView<SnapshotRowData>,
     snapshot_row_data: SnapshotRowData,
 }
@@ -110,7 +110,7 @@ pub struct SnapshotSelector {
 impl SnapshotSelector {
     pub fn new_rc() -> Rc<SnapshotSelector> {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let archive_selector = g_archive::ArchiveSelector::new_rc();
+        let archive_selector = g_archive::ArchiveSelector::new();
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
         let snapshot_row_data = SnapshotRowData::new();
         let snapshot_name_table = BufferedListViewBuilder::new()
