@@ -99,21 +99,24 @@ fn generate_digest(list: &Vec<String>) -> Vec<u8> {
     hasher.finish()
 }
 
-#[derive(PWO, Wrapper)]
-pub struct SnapshotSelector {
+#[derive(PWO)]
+pub struct SnapshotListViewCore {
     vbox: gtk::Box,
     archive_selector: g_archive::ArchiveSelector,
-    snapshot_name_table: BufferedListView<SnapshotRowData>,
+    buffered_list_view: BufferedListView<SnapshotRowData>,
     snapshot_row_data: SnapshotRowData,
 }
 
-impl SnapshotSelector {
-    pub fn new_rc() -> Rc<SnapshotSelector> {
+#[derive(PWO, Wrapper, WClone)]
+pub struct SnapshotListView(Rc<SnapshotListViewCore>);
+
+impl SnapshotListView {
+    pub fn new_rc() -> SnapshotListView {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let archive_selector = g_archive::ArchiveSelector::new();
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
         let snapshot_row_data = SnapshotRowData::new();
-        let snapshot_name_table = BufferedListViewBuilder::new()
+        let buffered_list_view = BufferedListViewBuilder::new()
             //.archive_name(archive_selector.get_selected_archive())
             .menu_item((
                 "open",
@@ -125,24 +128,27 @@ impl SnapshotSelector {
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
         );
-        scrolled_window.add(&snapshot_name_table.pwo());
+        scrolled_window.add(&buffered_list_view.pwo());
         vbox.pack_start(&scrolled_window, true, true, 0);
         vbox.show_all();
-        let snapshot_selector = Rc::new(SnapshotSelector {
+        let snapshot_list_view = SnapshotListView(Rc::new(SnapshotListViewCore {
             vbox,
             archive_selector,
-            snapshot_name_table,
+            buffered_list_view,
             snapshot_row_data,
-        });
+        }));
 
-        let sst_c = snapshot_selector.clone();
-        snapshot_selector
+        let sst_c = snapshot_list_view.clone();
+        snapshot_list_view
+            .0
             .archive_selector
-            .connect_changed(move |new_archive_name| {
-                sst_c.snapshot_row_data.set_archive_name(new_archive_name);
-                sst_c.snapshot_name_table.repopulate()
-            });
+            .connect_changed(move |new_archive_name| sst_c.set_archive_name(new_archive_name));
 
-        snapshot_selector
+        snapshot_list_view
+    }
+
+    pub fn set_archive_name(&self, new_archive_name: Option<String>) {
+        self.0.snapshot_row_data.set_archive_name(new_archive_name);
+        self.0.buffered_list_view.repopulate();
     }
 }
