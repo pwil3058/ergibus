@@ -3,9 +3,7 @@ use std::io::Write;
 use std::rc::Rc;
 
 use pw_gtk_ext::{
-    glib,
     gtk::{self, prelude::*},
-    sav_state::SAV_SELN_UNIQUE_OR_HOVER_OK,
     wrapper::*,
     UNEXPECTED,
 };
@@ -15,10 +13,11 @@ use crypto_hash::{Algorithm, Hasher};
 use ergibus_lib::snapshot;
 
 use crate::g_archive;
-use pw_gtk_ext::glib::Value;
+use pw_gtk_ext::glib::{Type, Value};
 use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
 use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
+use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 
 #[derive(Default)]
 struct SnapshotRowDataCore {
@@ -41,8 +40,8 @@ impl SnapshotRowData {
 }
 
 impl RowDataSource for SnapshotRowData {
-    fn column_types(&self) -> Vec<glib::Type> {
-        vec![glib::Type::String]
+    fn column_types(&self) -> Vec<Type> {
+        vec![Type::String]
     }
 
     fn columns(&self) -> Vec<gtk::TreeViewColumn> {
@@ -111,18 +110,74 @@ pub struct SnapshotListViewCore {
 pub struct SnapshotListView(Rc<SnapshotListViewCore>);
 
 impl SnapshotListView {
-    pub fn new_rc() -> SnapshotListView {
+    pub fn set_archive_name(&self, new_archive_name: Option<String>) {
+        self.0.snapshot_row_data.set_archive_name(new_archive_name);
+        self.0.buffered_list_view.repopulate();
+    }
+
+    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Option<Vec<Value>>) + 'static>(
+        &self,
+        name: &str,
+        callback: F,
+    ) {
+        self.0
+            .buffered_list_view
+            .connect_popup_menu_item(name, callback)
+    }
+}
+
+pub struct SnapshotListViewBuilder {
+    menu_items: Vec<(&'static str, MenuItemSpec, u64)>,
+    id_field: i32,
+    selection_mode: gtk::SelectionMode,
+}
+
+impl Default for SnapshotListViewBuilder {
+    fn default() -> Self {
+        Self {
+            menu_items: vec![],
+            id_field: 0,
+            selection_mode: gtk::SelectionMode::Single,
+        }
+    }
+}
+
+impl SnapshotListViewBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn menu_item(&mut self, menu_item: (&'static str, MenuItemSpec, u64)) -> &mut Self {
+        self.menu_items.push(menu_item);
+        self
+    }
+
+    pub fn menu_items(&mut self, menu_items: Vec<(&'static str, MenuItemSpec, u64)>) -> &mut Self {
+        for menu_item in menu_items.iter() {
+            self.menu_items.push(menu_item.clone());
+        }
+        self
+    }
+
+    pub fn id_field(&mut self, id_field: i32) -> &mut Self {
+        self.id_field = id_field;
+        self
+    }
+
+    pub fn selection_mode(&mut self, selection_mode: gtk::SelectionMode) -> &mut Self {
+        self.selection_mode = selection_mode;
+        self
+    }
+
+    pub fn build(&self) -> SnapshotListView {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let archive_selector = g_archive::ArchiveSelector::new();
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
         let snapshot_row_data = SnapshotRowData::new();
         let buffered_list_view = BufferedListViewBuilder::new()
-            //.archive_name(archive_selector.get_selected_archive())
-            .menu_item((
-                "open",
-                ("Open", None, Some("Open the selected snapshot")).into(),
-                SAV_SELN_UNIQUE_OR_HOVER_OK,
-            ))
+            .id_field(self.id_field)
+            .selection_mode(self.selection_mode)
+            .menu_items(&self.menu_items)
             .build(snapshot_row_data.clone());
         let scrolled_window = gtk::ScrolledWindow::new(
             Option::<&gtk::Adjustment>::None,
@@ -145,10 +200,5 @@ impl SnapshotListView {
             .connect_changed(move |new_archive_name| sst_c.set_archive_name(new_archive_name));
 
         snapshot_list_view
-    }
-
-    pub fn set_archive_name(&self, new_archive_name: Option<String>) {
-        self.0.snapshot_row_data.set_archive_name(new_archive_name);
-        self.0.buffered_list_view.repopulate();
     }
 }
