@@ -218,6 +218,7 @@ pub struct SnapshotsManagerCore {
     paned: gtk::Paned,
     snapshot_list_view: SnapshotListView,
     notebook: gtk::Notebook,
+    open_snapshots: RefCell<Vec<(String, SnapshotManager)>>,
 }
 
 #[derive(PWO, WClone)]
@@ -248,6 +249,7 @@ impl SnapshotsManager {
             paned,
             snapshot_list_view,
             notebook,
+            open_snapshots: RefCell::new(vec![]),
         }));
 
         let snapshot_mgr_clone = snapshot_mgr.clone();
@@ -270,20 +272,52 @@ impl SnapshotsManager {
     }
 
     fn open_snapshot(&self, snapshot_name: &str) {
-        let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
-        let label_text = format!("{}: {}", archive_name, snapshot_name);
-        let tab_label = TabRemoveLabelBuilder::new().label_text(&label_text).build();
-        let menu_label = gtk::Label::new(Some(&label_text));
-        let dummy_label = gtk::Label::new(Some("file data goes here"));
-        let dummy_page = gtk::BoxBuilder::new()
+        let mut open_snapshots = self.0.open_snapshots.borrow_mut();
+        match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_str()) {
+            Ok(index) => {
+                // already open so just make it the current page
+                let (_, ref page) = open_snapshots[index];
+                let page_no = self.0.notebook.page_num(&page.pwo());
+                self.0.notebook.set_current_page(page_no);
+            }
+            Err(index) => {
+                let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
+                let page = SnapshotManager::new(&archive_name, snapshot_name);
+                let tab_label = TabRemoveLabelBuilder::new()
+                    .label_text(snapshot_name)
+                    .build();
+                let menu_label = gtk::Label::new(Some(snapshot_name));
+                let page_no = self.0.notebook.insert_page_menu(
+                    &page.pwo(),
+                    Some(&tab_label.pwo()),
+                    Some(&menu_label),
+                    Some(index as u32),
+                );
+                open_snapshots.insert(index, (snapshot_name.to_string(), page));
+                self.0.notebook.set_current_page(Some(page_no));
+                self.0.notebook.show_all();
+            }
+        }
+    }
+}
+
+#[derive(PWO)]
+pub struct SnapshotManagerCore {
+    h_box: gtk::Box,
+}
+
+#[derive(PWO, WClone)]
+pub struct SnapshotManager(Rc<SnapshotManagerCore>);
+
+impl SnapshotManager {
+    fn new(archive_name: &str, snapshot_name: &str) -> Self {
+        let h_box = gtk::BoxBuilder::new()
             .orientation(gtk::Orientation::Horizontal)
             .build();
-        dummy_page.pack_start(&dummy_label, true, true, 0);
-        let _page_no = self.0.notebook.append_page_menu(
-            &dummy_page,
-            Some(&tab_label.pwo()),
-            Some(&menu_label),
-        );
-        self.0.notebook.show_all();
+        let label_text = format!("{}: {}\nFile data goes here", archive_name, snapshot_name);
+        let label = gtk::Label::new(Some(&label_text));
+        h_box.pack_start(&label, true, true, 0);
+        h_box.show_all();
+        Self(Rc::new(SnapshotManagerCore { h_box }))
     }
 }
