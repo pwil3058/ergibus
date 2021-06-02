@@ -18,6 +18,9 @@ use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
 use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
+use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
+use pw_gtk_ext::gtkx::paned::RememberPosition;
+use pw_gtk_ext::sav_state::SAV_SELN_UNIQUE_OR_HOVER_OK;
 
 #[derive(Default)]
 struct SnapshotRowDataCore {
@@ -45,16 +48,18 @@ impl RowDataSource for SnapshotRowData {
     }
 
     fn columns(&self) -> Vec<gtk::TreeViewColumn> {
-        let col = gtk::TreeViewColumn::new();
-        col.set_title("Snapshot Time"); // I18N need here
-        col.set_expand(false);
-        col.set_resizable(false);
+        let col = gtk::TreeViewColumnBuilder::new()
+            .title("Snapshot Time")
+            .expand(false)
+            .resizable(false)
+            .build();
 
-        let cell = gtk::CellRendererText::new();
-        cell.set_property_editable(false);
-        cell.set_property_max_width_chars(29);
-        cell.set_property_width_chars(29);
-        cell.set_property_xalign(0.0);
+        let cell = gtk::CellRendererTextBuilder::new()
+            .editable(false)
+            .max_width_chars(29)
+            .width_chars(29)
+            .xalign(0.0)
+            .build();
 
         col.pack_start(&cell, false);
         col.add_attribute(&cell, "text", 0);
@@ -110,12 +115,16 @@ pub struct SnapshotListViewCore {
 pub struct SnapshotListView(Rc<SnapshotListViewCore>);
 
 impl SnapshotListView {
+    pub fn archive_name(&self) -> Option<String> {
+        self.0.snapshot_row_data.0.archive_name.borrow().clone()
+    }
+
     pub fn set_archive_name(&self, new_archive_name: Option<String>) {
         self.0.snapshot_row_data.set_archive_name(new_archive_name);
         self.0.buffered_list_view.repopulate();
     }
 
-    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Option<Vec<Value>>) + 'static>(
+    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
         &self,
         name: &str,
         callback: F,
@@ -178,6 +187,7 @@ impl SnapshotListViewBuilder {
             .id_field(self.id_field)
             .selection_mode(self.selection_mode)
             .menu_items(&self.menu_items)
+            .hover_expand(true)
             .build(snapshot_row_data.clone());
         let scrolled_window = gtk::ScrolledWindow::new(
             Option::<&gtk::Adjustment>::None,
@@ -200,5 +210,80 @@ impl SnapshotListViewBuilder {
             .connect_changed(move |new_archive_name| sst_c.set_archive_name(new_archive_name));
 
         snapshot_list_view
+    }
+}
+
+#[derive(PWO)]
+pub struct SnapshotsManagerCore {
+    paned: gtk::Paned,
+    snapshot_list_view: SnapshotListView,
+    notebook: gtk::Notebook,
+}
+
+#[derive(PWO, WClone)]
+pub struct SnapshotsManager(Rc<SnapshotsManagerCore>);
+
+impl SnapshotsManager {
+    pub fn new() -> Self {
+        let paned = gtk::PanedBuilder::new()
+            .orientation(gtk::Orientation::Horizontal)
+            .name("Snapshot Files")
+            .build();
+        paned.set_position_from_recollections("snapshot_manager", 168);
+        let snapshot_list_view = SnapshotListViewBuilder::new()
+            .selection_mode(gtk::SelectionMode::Multiple)
+            .menu_item((
+                "open",
+                ("Open", None, Some("Open indicated/selected snapshot.")).into(),
+                SAV_SELN_UNIQUE_OR_HOVER_OK,
+            ))
+            .build();
+        paned.add1(&snapshot_list_view.pwo());
+        let notebook = gtk::NotebookBuilder::new()
+            .scrollable(true)
+            .enable_popup(true)
+            .build();
+        paned.add2(&notebook);
+        let snapshot_mgr = Self(Rc::new(SnapshotsManagerCore {
+            paned,
+            snapshot_list_view,
+            notebook,
+        }));
+
+        let snapshot_mgr_clone = snapshot_mgr.clone();
+        snapshot_mgr.0.snapshot_list_view.connect_popup_menu_item(
+            "open",
+            move |hovered, selected| {
+                let snapshot_name = match selected.first() {
+                    Some(value) => value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED),
+                    None => hovered
+                        .expect(UNEXPECTED)
+                        .get::<String>()
+                        .expect(UNEXPECTED)
+                        .expect(UNEXPECTED),
+                };
+                snapshot_mgr_clone.open_snapshot(&snapshot_name);
+            },
+        );
+
+        snapshot_mgr
+    }
+
+    fn open_snapshot(&self, snapshot_name: &str) {
+        let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
+        let label_text = format!("{}: {}", archive_name, snapshot_name);
+        let tab_label = TabRemoveLabelBuilder::new().label_text(&label_text).build();
+        let menu_label = gtk::Label::new(Some(&label_text));
+        let dummy_label = gtk::Label::new(Some("file data goes here"));
+        let dummy_page = gtk::BoxBuilder::new()
+            .orientation(gtk::Orientation::Horizontal)
+            .build();
+        dummy_page.pack_start(&dummy_label, true, true, 0);
+        let _page_no = self.0.notebook.append_page_menu(
+            &dummy_page,
+            Some(&tab_label.pwo()),
+            Some(&menu_label),
+        );
+        self.0.notebook.show_all();
     }
 }

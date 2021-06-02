@@ -9,8 +9,8 @@ use pw_gtk_ext::{
 //use ergibus_clap::gui::g_archive;
 //use crate::g_snapshot;
 
+use crate::g_snapshot::SnapshotsManager;
 use ergibus_lib::config;
-use pw_gtk_ext::sav_state::SAV_SELN_UNIQUE_OR_HOVER_OK;
 
 pub mod g_archive;
 pub mod g_snapshot;
@@ -28,18 +28,8 @@ fn activate(app: &gtk::Application) {
         false
     });
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let snapshot_list_view = g_snapshot::SnapshotListViewBuilder::new()
-        .selection_mode(gtk::SelectionMode::Multiple)
-        .menu_item((
-            "open",
-            ("Open", None, Some("Open the selected snapshot")).into(),
-            SAV_SELN_UNIQUE_OR_HOVER_OK,
-        ))
-        .build();
-    snapshot_list_view.connect_popup_menu_item("open", |hovered, selected| {
-        println!("HOVERED: {:?} SELECTED: {:?}", hovered, selected)
-    });
-    vbox.pack_start(&snapshot_list_view.pwo(), true, true, 0);
+    let snapshots_manager = SnapshotsManager::new();
+    vbox.pack_start(&snapshots_manager.pwo(), true, true, 0);
     let label = gtk::Label::new(Some("GUI is under construction"));
     vbox.pack_start(&label, false, false, 0);
     window.add(&vbox);
