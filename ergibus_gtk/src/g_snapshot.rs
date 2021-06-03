@@ -286,6 +286,9 @@ impl SnapshotsManager {
                 let tab_label = TabRemoveLabelBuilder::new()
                     .label_text(snapshot_name)
                     .build();
+                let self_clone = self.clone();
+                let sn_string = snapshot_name.to_string();
+                tab_label.connect_remove_page(move || self_clone.close_snapshot(&sn_string, false));
                 let menu_label = gtk::Label::new(Some(snapshot_name));
                 let page_no = self.0.notebook.insert_page_menu(
                     &page.pwo(),
@@ -296,6 +299,28 @@ impl SnapshotsManager {
                 open_snapshots.insert(index, (snapshot_name.to_string(), page));
                 self.0.notebook.set_current_page(Some(page_no));
                 self.0.notebook.show_all();
+            }
+        }
+    }
+
+    fn close_snapshot(&self, snapshot_name: &str, conditional: bool) {
+        let mut open_snapshots = self.0.open_snapshots.borrow_mut();
+        match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_str()) {
+            Ok(index) => {
+                let (_, ref page) = open_snapshots[index];
+                let page_no = self.0.notebook.page_num(&page.pwo());
+                self.0.notebook.remove_page(page_no);
+                open_snapshots.remove(index);
+            }
+            Err(_) => {
+                if !conditional {
+                    let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
+                    log::error!(
+                        "Close \"{}:{}\" failed.  Not open",
+                        archive_name,
+                        snapshot_name
+                    )
+                }
             }
         }
     }
