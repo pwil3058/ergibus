@@ -156,6 +156,10 @@ impl SnapshotListView {
             .borrow_mut()
             .push(Box::new(callback));
     }
+
+    pub fn connect_double_click<F: Fn(&Value) + 'static>(&self, callback: F) {
+        self.0.buffered_list_view.connect_double_click(callback)
+    }
 }
 
 pub struct SnapshotListViewBuilder {
@@ -296,6 +300,15 @@ impl SnapshotsManager {
                 snapshots_mgr_clone.open_snapshot(&snapshot_name);
             },
         );
+
+        let snapshots_mgr_clone = snapshots_mgr.clone();
+        snapshots_mgr
+            .0
+            .snapshot_list_view
+            .connect_double_click(move |value| {
+                let snapshot_name = value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED);
+                snapshots_mgr_clone.open_snapshot(&snapshot_name);
+            });
 
         let snapshots_mgr_clone = snapshots_mgr.clone();
         snapshots_mgr
