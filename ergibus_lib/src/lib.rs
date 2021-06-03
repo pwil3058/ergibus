@@ -76,3 +76,9 @@ impl From<std::io::Error> for Error {
 }
 
 pub type EResult<T> = Result<T, Error>;
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Ergibus library error: {:?}", self)
+    }
+}

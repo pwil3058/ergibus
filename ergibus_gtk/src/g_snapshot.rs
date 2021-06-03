@@ -20,7 +20,7 @@ use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
 use pw_gtk_ext::gtkx::paned::RememberPosition;
-use pw_gtk_ext::sav_state::SAV_SELN_UNIQUE_OR_HOVER_OK;
+use pw_gtk_ext::sav_state::{SAV_SELN_MADE, SAV_SELN_UNIQUE_OR_HOVER_OK};
 
 #[derive(Default)]
 struct SnapshotRowDataCore {
@@ -132,6 +132,14 @@ impl SnapshotListView {
         }
     }
 
+    pub fn repopulate(&self) {
+        self.0.buffered_list_view.repopulate()
+    }
+
+    pub fn update(&self) {
+        self.0.buffered_list_view.update()
+    }
+
     pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
         &self,
         name: &str,
@@ -237,7 +245,7 @@ pub struct SnapshotsManagerCore {
     open_snapshots: RefCell<Vec<(String, SnapshotManager)>>,
 }
 
-#[derive(PWO, WClone)]
+#[derive(PWO, WClone, Wrapper)]
 pub struct SnapshotsManager(Rc<SnapshotsManagerCore>);
 
 impl SnapshotsManager {
@@ -253,6 +261,11 @@ impl SnapshotsManager {
                 "open",
                 ("Open", None, Some("Open indicated/selected snapshot.")).into(),
                 SAV_SELN_UNIQUE_OR_HOVER_OK,
+            ))
+            .menu_item((
+                "delete",
+                ("Delete", None, Some("Delete the selected snapshot(s).")).into(),
+                SAV_SELN_MADE,
             ))
             .build();
         paned.add1(&snapshot_list_view.pwo());
@@ -283,6 +296,18 @@ impl SnapshotsManager {
                 snapshots_mgr_clone.open_snapshot(&snapshot_name);
             },
         );
+
+        let snapshots_mgr_clone = snapshots_mgr.clone();
+        snapshots_mgr
+            .0
+            .snapshot_list_view
+            .connect_popup_menu_item("delete", move |_, selected| {
+                let snapshot_names: Vec<String> = selected
+                    .iter()
+                    .map(|value| value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED))
+                    .collect();
+                snapshots_mgr_clone.delete_snapshots(&snapshot_names);
+            });
 
         let snapshots_mgr_clone = snapshots_mgr.clone();
         snapshots_mgr
@@ -352,6 +377,44 @@ impl SnapshotsManager {
             self.0.notebook.remove_page(Some(page_no))
         }
         self.0.open_snapshots.borrow_mut().clear();
+    }
+
+    fn delete_snapshots(&self, snapshot_names: &[String]) {
+        let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
+        let mut question = "Delete the following snapshots:\n".to_string();
+        for snapshot_name in snapshot_names.iter() {
+            question += format!("\t{}\n", snapshot_name).as_str();
+        }
+        question += format!("belonging to the \"{}\" archive?", archive_name).as_str();
+        let dialog_builder = self.new_message_dialog_builder();
+        let dialog = dialog_builder
+            .buttons(gtk::ButtonsType::OkCancel)
+            .message_type(gtk::MessageType::Question)
+            .modal(true)
+            .text(&question)
+            .build();
+        if dialog.run() == gtk::ResponseType::Ok {
+            let cursor = self.show_busy();
+            if let Err(err) = snapshot::delete_named_snapshots(&archive_name, snapshot_names) {
+                let dialog = self
+                    .new_message_dialog_builder()
+                    .buttons(gtk::ButtonsType::Ok)
+                    .message_type(gtk::MessageType::Error)
+                    .modal(true)
+                    .text("Delete operation failed")
+                    .secondary_text(&err.to_string())
+                    .build();
+                dialog.run();
+                dialog.close();
+            } else {
+                for snapshot_name in snapshot_names.iter() {
+                    self.close_snapshot(snapshot_name, true)
+                }
+            }
+            self.unshow_busy(cursor);
+        }
+        dialog.close();
+        self.0.snapshot_list_view.update();
     }
 }
 

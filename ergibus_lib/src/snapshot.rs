@@ -459,6 +459,16 @@ pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> ERes
     Ok(snapshot_names)
 }
 
+// GUI interface functions
+pub fn delete_named_snapshots(archive_name: &str, snapshot_names: &[String]) -> EResult<()> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    for snapshot_name in snapshot_names.iter() {
+        let snapshot_file_path = snapshot_dir_path.join(snapshot_name);
+        delete_snapshot_file(&snapshot_file_path)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
