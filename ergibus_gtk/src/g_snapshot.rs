@@ -109,6 +109,7 @@ pub struct SnapshotListViewCore {
     archive_selector: g_archive::ArchiveSelector,
     buffered_list_view: BufferedListView<SnapshotRowData>,
     snapshot_row_data: SnapshotRowData,
+    changed_archive_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
 }
 
 #[derive(PWO, Wrapper, WClone)]
@@ -119,9 +120,16 @@ impl SnapshotListView {
         self.0.snapshot_row_data.0.archive_name.borrow().clone()
     }
 
-    pub fn set_archive_name(&self, new_archive_name: Option<String>) {
-        self.0.snapshot_row_data.set_archive_name(new_archive_name);
-        self.0.buffered_list_view.repopulate();
+    pub fn set_archive_name(&self, archive_name: Option<String>) {
+        if archive_name != self.archive_name() {
+            self.0
+                .snapshot_row_data
+                .set_archive_name(archive_name.clone());
+            self.0.buffered_list_view.repopulate();
+            for callback in self.0.changed_archive_callbacks.borrow().iter() {
+                callback(archive_name.clone())
+            }
+        }
     }
 
     pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
@@ -132,6 +140,13 @@ impl SnapshotListView {
         self.0
             .buffered_list_view
             .connect_popup_menu_item(name, callback)
+    }
+
+    pub fn connect_archive_change<F: Fn(Option<String>) + 'static>(&self, callback: F) {
+        self.0
+            .changed_archive_callbacks
+            .borrow_mut()
+            .push(Box::new(callback));
     }
 }
 
@@ -201,13 +216,14 @@ impl SnapshotListViewBuilder {
             archive_selector,
             buffered_list_view,
             snapshot_row_data,
+            changed_archive_callbacks: RefCell::new(vec![]),
         }));
 
         let sst_c = snapshot_list_view.clone();
         snapshot_list_view
             .0
             .archive_selector
-            .connect_changed(move |new_archive_name| sst_c.set_archive_name(new_archive_name));
+            .connect_changed(move |archive_name| sst_c.set_archive_name(archive_name));
 
         snapshot_list_view
     }
@@ -245,15 +261,15 @@ impl SnapshotsManager {
             .enable_popup(true)
             .build();
         paned.add2(&notebook);
-        let snapshot_mgr = Self(Rc::new(SnapshotsManagerCore {
+        let snapshots_mgr = Self(Rc::new(SnapshotsManagerCore {
             paned,
             snapshot_list_view,
             notebook,
             open_snapshots: RefCell::new(vec![]),
         }));
 
-        let snapshot_mgr_clone = snapshot_mgr.clone();
-        snapshot_mgr.0.snapshot_list_view.connect_popup_menu_item(
+        let snapshots_mgr_clone = snapshots_mgr.clone();
+        snapshots_mgr.0.snapshot_list_view.connect_popup_menu_item(
             "open",
             move |hovered, selected| {
                 let snapshot_name = match selected.first() {
@@ -264,11 +280,17 @@ impl SnapshotsManager {
                         .expect(UNEXPECTED)
                         .expect(UNEXPECTED),
                 };
-                snapshot_mgr_clone.open_snapshot(&snapshot_name);
+                snapshots_mgr_clone.open_snapshot(&snapshot_name);
             },
         );
 
-        snapshot_mgr
+        let snapshots_mgr_clone = snapshots_mgr.clone();
+        snapshots_mgr
+            .0
+            .snapshot_list_view
+            .connect_archive_change(move |_| snapshots_mgr_clone.close_all_snapshots());
+
+        snapshots_mgr
     }
 
     fn open_snapshot(&self, snapshot_name: &str) {
@@ -323,6 +345,13 @@ impl SnapshotsManager {
                 }
             }
         }
+    }
+
+    fn close_all_snapshots(&self) {
+        while let Some(page_no) = self.0.notebook.get_current_page() {
+            self.0.notebook.remove_page(Some(page_no))
+        }
+        self.0.open_snapshots.borrow_mut().clear();
     }
 }
 
