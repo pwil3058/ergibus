@@ -469,6 +469,15 @@ pub fn delete_named_snapshots(archive_name: &str, snapshot_names: &[String]) -> 
     Ok(())
 }
 
+pub fn get_named_snapshot(
+    archive_name: &str,
+    snapshot_name: &str,
+) -> EResult<SnapshotPersistentData> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let snapshot_file_path = snapshot_dir_path.join(snapshot_name);
+    SnapshotPersistentData::from_file(&snapshot_file_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

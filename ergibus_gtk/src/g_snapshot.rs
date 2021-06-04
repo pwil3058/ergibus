@@ -13,14 +13,18 @@ use crypto_hash::{Algorithm, Hasher};
 use ergibus_lib::snapshot;
 
 use crate::g_archive;
+use ergibus_lib::fs_objects::Name;
+use ergibus_lib::snapshot::SnapshotPersistentData;
 use pw_gtk_ext::glib::{Type, Value};
 use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
 use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
+use pw_gtk_ext::gtkx::list_view::{ListView, ListViewBuilder, ListViewSpec};
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
 use pw_gtk_ext::gtkx::paned::RememberPosition;
 use pw_gtk_ext::sav_state::{SAV_SELN_MADE, SAV_SELN_UNIQUE_OR_HOVER_OK};
+use std::path::{Path, PathBuf};
 
 #[derive(Default)]
 struct SnapshotRowDataCore {
@@ -433,21 +437,73 @@ impl SnapshotsManager {
 
 #[derive(PWO)]
 pub struct SnapshotManagerCore {
-    h_box: gtk::Box,
+    v_box: gtk::Box,
+    list_view: ListView,
+    snapshot: SnapshotPersistentData,
 }
 
 #[derive(PWO, WClone)]
 pub struct SnapshotManager(Rc<SnapshotManagerCore>);
 
+#[derive(Default)]
+struct SnapshotManagerSpec;
+
+impl ListViewSpec for SnapshotManagerSpec {
+    fn column_types(&self) -> Vec<Type> {
+        vec![Type::String]
+    }
+
+    fn columns(&self) -> Vec<gtk::TreeViewColumn> {
+        let col = gtk::TreeViewColumnBuilder::new()
+            //.title("Snapshot Time")
+            .expand(false)
+            .resizable(false)
+            .build();
+
+        let cell = gtk::CellRendererTextBuilder::new()
+            .editable(false)
+            .max_width_chars(29)
+            .width_chars(29)
+            .xalign(0.0)
+            .build();
+
+        col.pack_start(&cell, false);
+        col.add_attribute(&cell, "text", 0);
+        vec![col]
+    }
+}
+
 impl SnapshotManager {
     fn new(archive_name: &str, snapshot_name: &str) -> Self {
-        let h_box = gtk::BoxBuilder::new()
-            .orientation(gtk::Orientation::Horizontal)
+        let v_box = gtk::BoxBuilder::new()
+            .orientation(gtk::Orientation::Vertical)
             .build();
         let label_text = format!("{}: {}\nFile data goes here", archive_name, snapshot_name);
         let label = gtk::Label::new(Some(&label_text));
-        h_box.pack_start(&label, true, true, 0);
-        h_box.show_all();
-        Self(Rc::new(SnapshotManagerCore { h_box }))
+        v_box.pack_start(&label, false, false, 0);
+        let list_view = ListViewBuilder::new()
+            .enable_grid_lines(gtk::TreeViewGridLines::Horizontal)
+            .width_request(640)
+            .build(&SnapshotManagerSpec::default());
+        let scrolled_window = gtk::ScrolledWindow::new(
+            Option::<&gtk::Adjustment>::None,
+            Option::<&gtk::Adjustment>::None,
+        );
+        scrolled_window.add(&list_view.pwo());
+        v_box.pack_start(&scrolled_window, true, true, 0);
+        v_box.show_all();
+        let snapshot = snapshot::get_named_snapshot(archive_name, snapshot_name).expect(UNEXPECTED);
+        let rows: Vec<Vec<Value>> = snapshot
+            .find_subdir(&PathBuf::new())
+            .unwrap()
+            .contents()
+            .map(|s| vec![s.name().to_string_lossy().to_value()])
+            .collect();
+        list_view.repopulate_with(&rows);
+        Self(Rc::new(SnapshotManagerCore {
+            v_box,
+            list_view,
+            snapshot,
+        }))
     }
 }
