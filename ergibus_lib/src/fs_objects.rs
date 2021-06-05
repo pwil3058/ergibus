@@ -11,7 +11,7 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{self, File};
 use std::io::ErrorKind;
-use std::ops::AddAssign;
+use std::ops::{AddAssign, Index};
 use std::path::{Component, Path, PathBuf};
 use std::time;
 
@@ -426,6 +426,10 @@ pub struct ExtractionStats {
 
 impl DirectoryData {
     // Interrogation/extraction/restoration methods
+    pub fn path(&self) -> &Path {
+        self.path.as_path()
+    }
+
     pub fn contents(&self) -> impl Iterator<Item = &FileSystemObject> {
         self.contents.iter()
     }
@@ -633,6 +637,14 @@ impl DirectoryData {
                 subdir.copy_file_links_into(&new_dir_path, overwrite, op_errf)?;
         }
         Ok(stats)
+    }
+}
+
+impl Index<usize> for DirectoryData {
+    type Output = FileSystemObject;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.contents.index(index)
     }
 }
 

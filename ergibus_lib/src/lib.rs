@@ -82,3 +82,5 @@ impl std::fmt::Display for Error {
         write!(f, "Ergibus library error: {:?}", self)
     }
 }
+
+impl std::error::Error for Error {}

@@ -10,12 +10,13 @@ use pw_gtk_ext::{
 
 use crypto_hash::{Algorithm, Hasher};
 
-use ergibus_lib::snapshot;
+use ergibus_lib::{snapshot, EResult};
 
-use crate::g_archive;
-use ergibus_lib::fs_objects::Name;
+use crate::{g_archive, icons};
+use ergibus_lib::fs_objects::{DirectoryData, FileSystemObject, Name};
 use ergibus_lib::snapshot::SnapshotPersistentData;
 use pw_gtk_ext::glib::{Type, Value};
+use pw_gtk_ext::gtk::ButtonBuilder;
 use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
 use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
@@ -346,23 +347,35 @@ impl SnapshotsManager {
             }
             Err(index) => {
                 let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
-                let page = SnapshotManager::new(&archive_name, snapshot_name);
-                let tab_label = TabRemoveLabelBuilder::new()
-                    .label_text(snapshot_name)
-                    .build();
-                let self_clone = self.clone();
-                let sn_string = snapshot_name.to_string();
-                tab_label.connect_remove_page(move || self_clone.close_snapshot(&sn_string, false));
-                let menu_label = gtk::Label::new(Some(snapshot_name));
-                let page_no = self.0.notebook.insert_page_menu(
-                    &page.pwo(),
-                    Some(&tab_label.pwo()),
-                    Some(&menu_label),
-                    Some(index as u32),
-                );
-                open_snapshots.insert(index, (snapshot_name.to_string(), page));
-                self.0.notebook.set_current_page(Some(page_no));
-                self.0.notebook.show_all();
+                match SnapshotManager::new(&archive_name, snapshot_name) {
+                    Ok(page) => {
+                        let tab_label = TabRemoveLabelBuilder::new()
+                            .label_text(snapshot_name)
+                            .build();
+                        let self_clone = self.clone();
+                        let sn_string = snapshot_name.to_string();
+                        tab_label.connect_remove_page(move || {
+                            self_clone.close_snapshot(&sn_string, false)
+                        });
+                        let menu_label = gtk::Label::new(Some(snapshot_name));
+                        let page_no = self.0.notebook.insert_page_menu(
+                            &page.pwo(),
+                            Some(&tab_label.pwo()),
+                            Some(&menu_label),
+                            Some(index as u32),
+                        );
+                        open_snapshots.insert(index, (snapshot_name.to_string(), page));
+                        self.0.notebook.set_current_page(Some(page_no));
+                        self.0.notebook.show_all();
+                    }
+                    Err(err) => self.report_error(
+                        &format!(
+                            "Error opening \"{}\" snapshot \"{}\"",
+                            archive_name, snapshot_name
+                        ),
+                        &err,
+                    ),
+                }
             }
         }
     }
@@ -436,10 +449,63 @@ impl SnapshotsManager {
 }
 
 #[derive(PWO)]
+pub struct CurrentDirectoryManagerCore {
+    h_box: gtk::Box,
+    button: gtk::Button,
+    label: gtk::Label,
+}
+
+#[derive(PWO, WClone)]
+pub struct CurrentDirectoryManager(Rc<CurrentDirectoryManagerCore>);
+
+impl CurrentDirectoryManager {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        let h_box = gtk::BoxBuilder::new()
+            .orientation(gtk::Orientation::Horizontal)
+            .build();
+        let button = ButtonBuilder::new()
+            .tooltip_text("Change directory up one level")
+            .image(&icons::up_dir::sized_image_or(16).upcast::<gtk::Widget>())
+            .sensitive(false)
+            .build();
+        let label = gtk::LabelBuilder::new()
+            .halign(gtk::Align::Start)
+            .xalign(0.0)
+            .build();
+        h_box.pack_start(&button, false, false, 0);
+        h_box.pack_start(&label, true, true, 0);
+        let cdm = Self(Rc::new(CurrentDirectoryManagerCore {
+            h_box,
+            button,
+            label,
+        }));
+        cdm.set_curr_dir_path(path);
+
+        cdm
+    }
+
+    pub fn set_curr_dir_path<P: AsRef<Path>>(&self, path: P) {
+        self.0
+            .label
+            .set_text(&format!("{}", path.as_ref().display()))
+    }
+
+    pub fn set_sensitive(&self, sensitive: bool) {
+        self.0.button.set_sensitive(sensitive)
+    }
+
+    pub fn connect_button_clicked<F: Fn(&gtk::Button) + 'static>(&self, f: F) {
+        self.0.button.connect_clicked(f);
+    }
+}
+
+#[derive(PWO)]
 pub struct SnapshotManagerCore {
     v_box: gtk::Box,
     list_view: ListView,
     snapshot: SnapshotPersistentData,
+    current_directory_manager: CurrentDirectoryManager,
+    curr_dir_path: RefCell<PathBuf>,
 }
 
 #[derive(PWO, WClone)]
@@ -450,37 +516,36 @@ struct SnapshotManagerSpec;
 
 impl ListViewSpec for SnapshotManagerSpec {
     fn column_types(&self) -> Vec<Type> {
-        vec![Type::String]
+        vec![Type::U32, Type::String]
     }
 
     fn columns(&self) -> Vec<gtk::TreeViewColumn> {
         let col = gtk::TreeViewColumnBuilder::new()
-            //.title("Snapshot Time")
+            .title("Name")
             .expand(false)
             .resizable(false)
             .build();
 
         let cell = gtk::CellRendererTextBuilder::new()
             .editable(false)
-            .max_width_chars(29)
-            .width_chars(29)
             .xalign(0.0)
             .build();
 
         col.pack_start(&cell, false);
-        col.add_attribute(&cell, "text", 0);
+        col.add_attribute(&cell, "text", 1);
         vec![col]
     }
 }
 
 impl SnapshotManager {
-    fn new(archive_name: &str, snapshot_name: &str) -> Self {
+    fn new(archive_name: &str, snapshot_name: &str) -> EResult<Self> {
+        let snapshot = snapshot::get_named_snapshot(archive_name, snapshot_name)?;
+        let base_dir_path = snapshot.base_dir_path().to_path_buf();
+        let current_directory_manager = CurrentDirectoryManager::new(&base_dir_path);
         let v_box = gtk::BoxBuilder::new()
             .orientation(gtk::Orientation::Vertical)
             .build();
-        let label_text = format!("{}: {}\nFile data goes here", archive_name, snapshot_name);
-        let label = gtk::Label::new(Some(&label_text));
-        v_box.pack_start(&label, false, false, 0);
+        v_box.pack_start(&current_directory_manager.pwo(), false, false, 0);
         let list_view = ListViewBuilder::new()
             .enable_grid_lines(gtk::TreeViewGridLines::Horizontal)
             .width_request(640)
@@ -492,18 +557,78 @@ impl SnapshotManager {
         scrolled_window.add(&list_view.pwo());
         v_box.pack_start(&scrolled_window, true, true, 0);
         v_box.show_all();
-        let snapshot = snapshot::get_named_snapshot(archive_name, snapshot_name).expect(UNEXPECTED);
-        let rows: Vec<Vec<Value>> = snapshot
-            .find_subdir(&PathBuf::new())
-            .unwrap()
-            .contents()
-            .map(|s| vec![s.name().to_string_lossy().to_value()])
-            .collect();
-        list_view.repopulate_with(&rows);
-        Self(Rc::new(SnapshotManagerCore {
+        let snapshot_manager = Self(Rc::new(SnapshotManagerCore {
             v_box,
             list_view,
             snapshot,
-        }))
+            curr_dir_path: RefCell::new(base_dir_path),
+            current_directory_manager,
+        }));
+        snapshot_manager.repopulate();
+
+        let snapshot_manager_clone = snapshot_manager.clone();
+        snapshot_manager.0.list_view.connect_double_click(move |v| {
+            snapshot_manager_clone.process_double_click(v);
+        });
+
+        let snapshot_manager_clone = snapshot_manager.clone();
+        snapshot_manager
+            .0
+            .current_directory_manager
+            .connect_button_clicked(move |_| snapshot_manager_clone.change_dir_to_parent());
+
+        Ok(snapshot_manager)
+    }
+
+    pub fn repopulate(&self) {
+        let curr_dir_path = self.0.curr_dir_path.borrow();
+        let curr_dir = self
+            .0
+            .snapshot
+            .find_subdir(&*curr_dir_path)
+            .expect(UNEXPECTED);
+        let rows: Vec<Vec<Value>> = curr_dir
+            .contents()
+            .enumerate()
+            .map(|(u, s)| vec![(u as u32).to_value(), s.name().to_string_lossy().to_value()])
+            .collect();
+        self.0.list_view.repopulate_with(&rows);
+    }
+
+    fn curr_dir(&self) -> &DirectoryData {
+        let curr_dir_path = self.0.curr_dir_path.borrow();
+        self.0
+            .snapshot
+            .find_subdir(&*curr_dir_path)
+            .expect(UNEXPECTED)
+    }
+
+    fn set_curr_dir_path<P: AsRef<Path>>(&self, path: P) {
+        let mut curr_dir_path = self.0.curr_dir_path.borrow_mut();
+        *curr_dir_path = path.as_ref().to_path_buf();
+        self.0.current_directory_manager.set_curr_dir_path(path);
+        self.0
+            .current_directory_manager
+            .set_sensitive(*curr_dir_path != self.0.snapshot.base_dir_path());
+    }
+
+    fn change_dir_to_parent(&self) {
+        let curr_dir_path = self.0.curr_dir_path.borrow().to_owned();
+        if let Some(parent_dir_path) = curr_dir_path.parent() {
+            self.set_curr_dir_path(parent_dir_path);
+            self.repopulate();
+        }
+    }
+
+    pub fn process_double_click(&self, value: &Value) {
+        let index = value.get::<u32>().expect(UNEXPECTED).expect(UNEXPECTED) as usize;
+        let curr_dir = self.curr_dir();
+        match curr_dir[index] {
+            FileSystemObject::Directory(ref dir_data) => {
+                self.set_curr_dir_path(dir_data.path());
+                self.repopulate();
+            }
+            _ => (),
+        }
     }
 }

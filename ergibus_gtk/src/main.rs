@@ -14,6 +14,7 @@ use ergibus_lib::config;
 
 pub mod g_archive;
 pub mod g_snapshot;
+mod icons;
 
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
