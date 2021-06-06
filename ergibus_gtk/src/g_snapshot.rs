@@ -561,9 +561,10 @@ impl SnapshotManager {
             v_box,
             list_view,
             snapshot,
-            curr_dir_path: RefCell::new(base_dir_path),
+            curr_dir_path: RefCell::new(base_dir_path.clone()),
             current_directory_manager,
         }));
+        snapshot_manager.set_curr_dir_path(&base_dir_path);
         snapshot_manager.repopulate();
 
         let snapshot_manager_clone = snapshot_manager.clone();
@@ -609,7 +610,7 @@ impl SnapshotManager {
         self.0.current_directory_manager.set_curr_dir_path(path);
         self.0
             .current_directory_manager
-            .set_sensitive(*curr_dir_path != self.0.snapshot.base_dir_path());
+            .set_sensitive(*curr_dir_path != self.0.snapshot.root_dir_path());
     }
 
     fn change_dir_to_parent(&self) {

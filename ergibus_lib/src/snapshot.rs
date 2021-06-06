@@ -228,6 +228,10 @@ impl SnapshotPersistentData {
         self.base_dir_path.as_path()
     }
 
+    pub fn root_dir_path(&self) -> &Path {
+        self.root_dir.path()
+    }
+
     pub fn find_subdir<P: AsRef<Path>>(&self, dir_path_arg: P) -> EResult<&DirectoryData> {
         let dir_path = dir_path_arg.as_ref();
         match PathType::of(dir_path) {
