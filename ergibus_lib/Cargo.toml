@@ -29,4 +29,3 @@ walkdir = "2.3.2"
 
 dychatat = { path = "../dychatat" }
 path_ext = { path = "../path_ext"}
-ordered_map = { path = "../ordered_map"}
