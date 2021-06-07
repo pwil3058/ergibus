@@ -20,7 +20,8 @@ use pw_gtk_ext::gtk::ButtonBuilder;
 use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
 use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
-use pw_gtk_ext::gtkx::list_view::{ListView, ListViewBuilder, ListViewSpec};
+use pw_gtk_ext::gtkx::list_store::ListViewSpec;
+use pw_gtk_ext::gtkx::list_view::{ListView, ListViewBuilder};
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
 use pw_gtk_ext::gtkx::paned::RememberPosition;
@@ -47,7 +48,7 @@ impl SnapshotRowData {
     }
 }
 
-impl RowDataSource for SnapshotRowData {
+impl ListViewSpec for SnapshotRowData {
     fn column_types() -> Vec<Type> {
         vec![Type::String]
     }
@@ -70,7 +71,9 @@ impl RowDataSource for SnapshotRowData {
         col.add_attribute(&cell, "text", 0);
         vec![col]
     }
+}
 
+impl RowDataSource for SnapshotRowData {
     fn generate_rows(&self) -> Vec<Vec<Value>> {
         let mut rows = vec![];
         let raw_row_data = self.0.raw_row_data.borrow();
