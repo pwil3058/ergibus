@@ -48,11 +48,11 @@ impl SnapshotRowData {
 }
 
 impl RowDataSource for SnapshotRowData {
-    fn column_types(&self) -> Vec<Type> {
+    fn column_types() -> Vec<Type> {
         vec![Type::String]
     }
 
-    fn columns(&self) -> Vec<gtk::TreeViewColumn> {
+    fn columns() -> Vec<gtk::TreeViewColumn> {
         let col = gtk::TreeViewColumnBuilder::new()
             .title("Snapshot Time")
             .expand(false)
@@ -515,11 +515,11 @@ pub struct SnapshotManager(Rc<SnapshotManagerCore>);
 struct SnapshotManagerSpec;
 
 impl ListViewSpec for SnapshotManagerSpec {
-    fn column_types(&self) -> Vec<Type> {
+    fn column_types() -> Vec<Type> {
         vec![Type::U32, Type::String]
     }
 
-    fn columns(&self) -> Vec<gtk::TreeViewColumn> {
+    fn columns() -> Vec<gtk::TreeViewColumn> {
         let col = gtk::TreeViewColumnBuilder::new()
             .title("Name")
             .expand(false)
@@ -549,7 +549,7 @@ impl SnapshotManager {
         let list_view = ListViewBuilder::new()
             .enable_grid_lines(gtk::TreeViewGridLines::Horizontal)
             .width_request(640)
-            .build(&SnapshotManagerSpec::default());
+            .build::<SnapshotManagerSpec>();
         let scrolled_window = gtk::ScrolledWindow::new(
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
