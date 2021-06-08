@@ -20,11 +20,12 @@ use pw_gtk_ext::gtk::ButtonBuilder;
 use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
 use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
-use pw_gtk_ext::gtkx::list_store::ListViewSpec;
+use pw_gtk_ext::gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore};
 use pw_gtk_ext::gtkx::list_view::{ListView, ListViewBuilder};
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
 use pw_gtk_ext::gtkx::paned::RememberPosition;
+use pw_gtk_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
 use pw_gtk_ext::sav_state::{SAV_SELN_MADE, SAV_SELN_UNIQUE_OR_HOVER_OK};
 use std::path::{Path, PathBuf};
 
@@ -505,7 +506,8 @@ impl CurrentDirectoryManager {
 #[derive(PWO)]
 pub struct SnapshotManagerCore {
     v_box: gtk::Box,
-    list_view: ListView,
+    list_view: TreeViewWithPopup,
+    list_store: WrappedListStore<SnapshotManagerSpec>,
     snapshot: SnapshotPersistentData,
     current_directory_manager: CurrentDirectoryManager,
     curr_dir_path: RefCell<PathBuf>,
@@ -549,10 +551,11 @@ impl SnapshotManager {
             .orientation(gtk::Orientation::Vertical)
             .build();
         v_box.pack_start(&current_directory_manager.pwo(), false, false, 0);
-        let list_view = ListViewBuilder::new()
+        let list_store = WrappedListStore::<SnapshotManagerSpec>::new();
+        let list_view = TreeViewWithPopupBuilder::new()
             .enable_grid_lines(gtk::TreeViewGridLines::Horizontal)
             .width_request(640)
-            .build::<SnapshotManagerSpec>();
+            .build(&list_store);
         let scrolled_window = gtk::ScrolledWindow::new(
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
@@ -563,6 +566,7 @@ impl SnapshotManager {
         let snapshot_manager = Self(Rc::new(SnapshotManagerCore {
             v_box,
             list_view,
+            list_store,
             snapshot,
             curr_dir_path: RefCell::new(base_dir_path.clone()),
             current_directory_manager,
@@ -596,7 +600,7 @@ impl SnapshotManager {
             .enumerate()
             .map(|(u, s)| vec![(u as u32).to_value(), s.name().to_string_lossy().to_value()])
             .collect();
-        self.0.list_view.repopulate_with(&rows);
+        self.0.list_store.repopulate_with(&rows);
     }
 
     fn curr_dir(&self) -> &DirectoryData {
