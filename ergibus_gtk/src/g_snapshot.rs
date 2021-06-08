@@ -17,11 +17,9 @@ use ergibus_lib::fs_objects::{DirectoryData, FileSystemObject, Name};
 use ergibus_lib::snapshot::SnapshotPersistentData;
 use pw_gtk_ext::glib::{Type, Value};
 use pw_gtk_ext::gtk::ButtonBuilder;
-use pw_gtk_ext::gtkx::buffered_list_store::RowDataSource;
-use pw_gtk_ext::gtkx::buffered_list_view::{BufferedListView, BufferedListViewBuilder};
+use pw_gtk_ext::gtkx::buffered_list_store::{BufferedListStore, RowDataSource};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
 use pw_gtk_ext::gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore};
-use pw_gtk_ext::gtkx::list_view::{ListView, ListViewBuilder};
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
 use pw_gtk_ext::gtkx::paned::RememberPosition;
@@ -41,6 +39,10 @@ struct SnapshotRowData(Rc<SnapshotRowDataCore>);
 impl SnapshotRowData {
     fn new() -> Self {
         Self::default()
+    }
+
+    fn archive_name(&self) -> Option<String> {
+        self.0.archive_name.borrow().clone()
     }
 
     fn set_archive_name(&self, new_archive_name: Option<String>) {
@@ -116,8 +118,8 @@ fn generate_digest(list: &Vec<String>) -> Vec<u8> {
 pub struct SnapshotListViewCore {
     vbox: gtk::Box,
     archive_selector: g_archive::ArchiveSelector,
-    buffered_list_view: BufferedListView<SnapshotRowData>,
-    snapshot_row_data: SnapshotRowData,
+    buffered_list_view: TreeViewWithPopup,
+    buffered_list_store: BufferedListStore<SnapshotRowData>,
     changed_archive_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
 }
 
@@ -126,15 +128,16 @@ pub struct SnapshotListView(Rc<SnapshotListViewCore>);
 
 impl SnapshotListView {
     pub fn archive_name(&self) -> Option<String> {
-        self.0.snapshot_row_data.0.archive_name.borrow().clone()
+        self.0.buffered_list_store.row_data_source().archive_name()
     }
 
     pub fn set_archive_name(&self, archive_name: Option<String>) {
         if archive_name != self.archive_name() {
             self.0
-                .snapshot_row_data
+                .buffered_list_store
+                .row_data_source()
                 .set_archive_name(archive_name.clone());
-            self.0.buffered_list_view.repopulate();
+            self.0.buffered_list_store.repopulate();
             for callback in self.0.changed_archive_callbacks.borrow().iter() {
                 callback(archive_name.clone())
             }
@@ -142,11 +145,11 @@ impl SnapshotListView {
     }
 
     pub fn repopulate(&self) {
-        self.0.buffered_list_view.repopulate()
+        self.0.buffered_list_store.repopulate()
     }
 
     pub fn update(&self) {
-        self.0.buffered_list_view.update()
+        self.0.buffered_list_store.update()
     }
 
     pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
@@ -219,12 +222,13 @@ impl SnapshotListViewBuilder {
         let archive_selector = g_archive::ArchiveSelector::new();
         vbox.pack_start(&archive_selector.pwo(), false, false, 0);
         let snapshot_row_data = SnapshotRowData::new();
-        let buffered_list_view = BufferedListViewBuilder::new()
+        let buffered_list_store = BufferedListStore::new(snapshot_row_data.clone());
+        let buffered_list_view = TreeViewWithPopupBuilder::new()
             .id_field(self.id_field)
             .selection_mode(self.selection_mode)
             .menu_items(&self.menu_items)
             .hover_expand(true)
-            .build(snapshot_row_data.clone());
+            .build(&buffered_list_store);
         let scrolled_window = gtk::ScrolledWindow::new(
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
@@ -236,7 +240,7 @@ impl SnapshotListViewBuilder {
             vbox,
             archive_selector,
             buffered_list_view,
-            snapshot_row_data,
+            buffered_list_store,
             changed_archive_callbacks: RefCell::new(vec![]),
         }));
 
