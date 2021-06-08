@@ -6,14 +6,12 @@ use pw_gtk_ext::{
     wrapper::*,
 };
 
-//use ergibus_clap::gui::g_archive;
-//use crate::g_snapshot;
-
-use crate::g_snapshot::SnapshotsManager;
+use crate::g_snapshots::SnapshotsManager;
 use ergibus_lib::config;
 
 pub mod g_archive;
 pub mod g_snapshot;
+pub mod g_snapshots;
 mod icons;
 
 fn activate(app: &gtk::Application) {
