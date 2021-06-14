@@ -279,18 +279,14 @@ impl SnapshotPersistentData {
         Ok(file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?)
     }
 
-    pub fn copy_dir_to<W>(
+    pub fn copy_dir_to(
         &self,
         fm_dir_path: &Path,
         to_dir_path: &Path,
         overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<ExtractionStats>
-    where
-        W: std::io::Write,
-    {
+    ) -> EResult<ExtractionStats> {
         let fm_subdir = self.find_subdir(fm_dir_path)?;
-        let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite, op_errf)?;
+        let stats = fm_subdir.copy_to(to_dir_path, &self.content_mgmt_key, overwrite)?;
         Ok(stats)
     }
 }

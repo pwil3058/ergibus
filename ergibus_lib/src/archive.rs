@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 use std::fs::{self, File};
-use std::io::{stderr, ErrorKind};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time;
 
@@ -509,12 +509,7 @@ impl Snapshots {
                 .map_err(|e| Error::ArchiveIncludePathError(e, dir_path.to_path_buf()))?,
         };
         let spd = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-        let stats = spd.copy_dir_to(
-            &src_dir_path,
-            &target_path,
-            overwrite,
-            &mut Some(&mut stderr()),
-        )?;
+        let stats = spd.copy_dir_to(&src_dir_path, &target_path, overwrite)?;
 
         let finished_at = time::SystemTime::now();
         let duration = match finished_at.duration_since(started_at) {

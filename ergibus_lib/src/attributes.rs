@@ -8,17 +8,13 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
+use log;
+
 use libc;
 
 pub trait AttributesIfce: From<Metadata> {
     fn size(&self) -> u64;
-    fn set_file_attributes<W>(
-        &self,
-        file_path: &Path,
-        op_errf: &mut Option<&mut W>,
-    ) -> Result<(), io::Error>
-    where
-        W: std::io::Write;
+    fn set_file_attributes(&self, file_path: &Path) -> Result<(), io::Error>;
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy, Default)]
@@ -112,32 +108,18 @@ impl AttributesIfce for Attributes {
         self.st_size
     }
 
-    fn set_file_attributes<W>(
-        &self,
-        file_path: &Path,
-        op_errf: &mut Option<&mut W>,
-    ) -> Result<(), io::Error>
-    where
-        W: std::io::Write,
-    {
+    fn set_file_attributes(&self, file_path: &Path) -> Result<(), io::Error> {
         if let Err(err) = self.chmod_file(file_path) {
-            match op_errf {
-                Some(ref mut errf) => writeln!(errf, "{:?}: {}", file_path, err).unwrap(),
-                None => return Err(err),
-            };
+            log::error!("{:?}: {}", file_path, err);
+            Err(err)
+        } else if let Err(err) = self.utime_file(file_path) {
+            log::error!("{:?}: {}", file_path, err);
+            Err(err)
+        } else if let Err(err) = self.chown_file(file_path) {
+            log::error!("{:?}: {}", file_path, err);
+            Err(err)
+        } else {
+            Ok(())
         }
-        if let Err(err) = self.utime_file(file_path) {
-            match op_errf {
-                Some(ref mut errf) => writeln!(errf, "{:?}: {}", file_path, err).unwrap(),
-                None => return Err(err),
-            };
-        }
-        if let Err(err) = self.chown_file(file_path) {
-            match op_errf {
-                Some(ref mut errf) => writeln!(errf, "{:?}: {}", file_path, err).unwrap(),
-                None => return Err(err),
-            };
-        }
-        Ok(())
     }
 }

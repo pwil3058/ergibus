@@ -19,7 +19,6 @@ use pw_gtk_ext::gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore};
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
 use pw_gtk_ext::sav_state::SAV_SELN_MADE;
-use std::io::stderr;
 use std::path::{Path, PathBuf};
 
 #[derive(PWO)]
@@ -252,7 +251,6 @@ impl SnapshotManager {
                                 &dir_name.join(dir_data.name()),
                                 content_mgmt_key,
                                 false,
-                                &mut Some(&mut stderr()),
                             ) {
                                 Ok(stats) => println!("stats: {:?}", stats),
                                 Err(err) => self.report_error("error", &err),
@@ -271,12 +269,8 @@ impl SnapshotManager {
                                 Err(err) => self.report_error("error", &err),
                             }
                         }
-                        FileSystemObject::SymLink(link_data, is_dir) => {
-                            match link_data.copy_link_as(
-                                &dir_name.join(link_data.name()),
-                                false,
-                                &mut Some(&mut stderr()),
-                            ) {
+                        FileSystemObject::SymLink(link_data, _is_dir) => {
+                            match link_data.copy_link_as(&dir_name.join(link_data.name()), false) {
                                 Ok(_) => (),
                                 Err(err) => self.report_error("error", &err),
                             }

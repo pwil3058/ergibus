@@ -159,15 +159,7 @@ impl SymLinkData {
 
 impl SymLinkData {
     // Interrogation/extraction/restoration methods
-    pub fn copy_link_as<W>(
-        &self,
-        as_path: &Path,
-        overwrite: bool,
-        _op_errf: &mut Option<&mut W>,
-    ) -> EResult<()>
-    where
-        W: std::io::Write,
-    {
+    pub fn copy_link_as(&self, as_path: &Path, overwrite: bool) -> EResult<()> {
         if as_path.exists() {
             if as_path.is_symlink() {
                 if let Ok(link_target) = as_path.read_link() {
@@ -529,52 +521,32 @@ impl DirectoryData {
         Ok((count, bytes))
     }
 
-    fn copy_dir_links_into<W>(
-        &self,
-        into_dir_path: &Path,
-        overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<u64>
-    where
-        W: std::io::Write,
-    {
+    fn copy_dir_links_into(&self, into_dir_path: &Path, overwrite: bool) -> EResult<u64> {
         let mut count = 0;
         for subdir_link in self.dir_sym_links() {
             let new_link_path = into_dir_path.join(&subdir_link.file_name);
-            subdir_link.copy_link_as(&new_link_path, overwrite, op_errf)?;
+            subdir_link.copy_link_as(&new_link_path, overwrite)?;
             count += 1;
         }
         Ok(count)
     }
 
-    fn copy_file_links_into<W>(
-        &self,
-        into_dir_path: &Path,
-        overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<u64>
-    where
-        W: std::io::Write,
-    {
+    fn copy_file_links_into(&self, into_dir_path: &Path, overwrite: bool) -> EResult<u64> {
         let mut count = 0;
         for file_link in self.file_sym_links() {
             let new_link_path = into_dir_path.join(&file_link.file_name);
-            file_link.copy_link_as(&new_link_path, overwrite, op_errf)?;
+            file_link.copy_link_as(&new_link_path, overwrite)?;
             count += 1;
         }
         Ok(count)
     }
 
-    pub fn copy_to<W>(
+    pub fn copy_to(
         &self,
         to_dir_path: &Path,
         c_mgt_key: &ContentMgmtKey,
         overwrite: bool,
-        op_errf: &mut Option<&mut W>,
-    ) -> EResult<ExtractionStats>
-    where
-        W: std::io::Write,
-    {
+    ) -> EResult<ExtractionStats> {
         // TODO: Add hard link retention to copying of directories
         let mut stats = ExtractionStats::default();
         clear_way_for_new_dir(to_dir_path, overwrite)?;
@@ -584,7 +556,7 @@ impl DirectoryData {
             if let Ok(to_dir) = self.find_subdir(to_dir_path) {
                 to_dir
                     .attributes
-                    .set_file_attributes(to_dir_path, op_errf)
+                    .set_file_attributes(to_dir_path)
                     .map_err(|err| Error::ContentCopyIOError(err))?;
             }
         }
@@ -599,18 +571,17 @@ impl DirectoryData {
                     .map_err(|err| Error::SnapshotDirIOError(err, new_dir_path.to_path_buf()))?;
                 subdir
                     .attributes
-                    .set_file_attributes(&new_dir_path, op_errf)
+                    .set_file_attributes(&new_dir_path)
                     .map_err(|err| Error::ContentCopyIOError(err))?;
             }
             stats.dir_count += 1;
         }
         // then do links to subdirs
-        stats.dir_sym_link_count += self.copy_dir_links_into(&to_dir_path, overwrite, op_errf)?;
+        stats.dir_sym_link_count += self.copy_dir_links_into(&to_dir_path, overwrite)?;
         for subdir in self.subdir_iter(true) {
             let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
             let new_dir_path = to_dir_path.join(path_tail);
-            stats.dir_sym_link_count +=
-                subdir.copy_dir_links_into(&new_dir_path, overwrite, op_errf)?;
+            stats.dir_sym_link_count += subdir.copy_dir_links_into(&new_dir_path, overwrite)?;
         }
         // then do all the files (holding lock as little as needed)
         match c_mgt_key.open_content_manager(dychatat::Mutability::Immutable) {
@@ -629,12 +600,11 @@ impl DirectoryData {
             Err(err) => return Err(err.into()),
         }
         // then do links to file
-        stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite, op_errf)?;
+        stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite)?;
         for subdir in self.subdir_iter(true) {
             let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
             let new_dir_path = to_dir_path.join(path_tail);
-            stats.file_sym_link_count +=
-                subdir.copy_file_links_into(&new_dir_path, overwrite, op_errf)?;
+            stats.file_sym_link_count += subdir.copy_file_links_into(&new_dir_path, overwrite)?;
         }
         Ok(stats)
     }
