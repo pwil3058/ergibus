@@ -159,7 +159,7 @@ impl SymLinkData {
 
 impl SymLinkData {
     // Interrogation/extraction/restoration methods
-    fn copy_link_as<W>(
+    pub fn copy_link_as<W>(
         &self,
         as_path: &Path,
         overwrite: bool,

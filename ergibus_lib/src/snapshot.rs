@@ -232,6 +232,10 @@ impl SnapshotPersistentData {
         self.root_dir.path()
     }
 
+    pub fn content_mgmt_key(&self) -> &ContentMgmtKey {
+        &self.content_mgmt_key
+    }
+
     pub fn find_subdir<P: AsRef<Path>>(&self, dir_path_arg: P) -> EResult<&DirectoryData> {
         let dir_path = dir_path_arg.as_ref();
         match PathType::of(dir_path) {

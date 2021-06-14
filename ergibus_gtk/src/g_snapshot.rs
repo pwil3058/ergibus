@@ -10,12 +10,16 @@ use pw_gtk_ext::{
 use ergibus_lib::{snapshot, EResult};
 
 use crate::icons;
+use ergibus_lib::content::Mutability;
 use ergibus_lib::fs_objects::{DirectoryData, FileSystemObject, Name};
 use ergibus_lib::snapshot::SnapshotPersistentData;
 use pw_gtk_ext::glib::{Type, Value};
 use pw_gtk_ext::gtk::ButtonBuilder;
 use pw_gtk_ext::gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore};
+use pw_gtk_ext::gtkx::menu::MenuItemSpec;
 use pw_gtk_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
+use pw_gtk_ext::sav_state::SAV_SELN_MADE;
+use std::io::stderr;
 use std::path::{Path, PathBuf};
 
 #[derive(PWO)]
@@ -79,7 +83,7 @@ pub struct SnapshotManagerCore {
     curr_dir_path: RefCell<PathBuf>,
 }
 
-#[derive(PWO, WClone)]
+#[derive(PWO, WClone, Wrapper)]
 pub struct SnapshotManager(Rc<SnapshotManagerCore>);
 
 #[derive(Default)]
@@ -121,6 +125,16 @@ impl SnapshotManager {
         let list_view = TreeViewWithPopupBuilder::new()
             .enable_grid_lines(gtk::TreeViewGridLines::Horizontal)
             .width_request(640)
+            .selection_mode(gtk::SelectionMode::Multiple)
+            .menu_item((
+                "extract_to",
+                MenuItemSpec(
+                    "Extract To",
+                    None,
+                    Some("Extract selected items to nominated directory."),
+                ),
+                SAV_SELN_MADE,
+            ))
             .build(&list_store);
         let scrolled_window = gtk::ScrolledWindow::new(
             Option::<&gtk::Adjustment>::None,
@@ -150,6 +164,14 @@ impl SnapshotManager {
             .0
             .current_directory_manager
             .connect_button_clicked(move |_| snapshot_manager_clone.change_dir_to_parent());
+
+        let snapshot_manager_clone = snapshot_manager.clone();
+        snapshot_manager
+            .0
+            .list_view
+            .connect_popup_menu_item("extract_to", move |_, selection| {
+                snapshot_manager_clone.extract_to(&selection)
+            });
 
         Ok(snapshot_manager)
     }
@@ -194,7 +216,7 @@ impl SnapshotManager {
         }
     }
 
-    pub fn process_double_click(&self, value: &Value) {
+    fn process_double_click(&self, value: &Value) {
         let index = value.get::<u32>().expect(UNEXPECTED).expect(UNEXPECTED) as usize;
         let curr_dir = self.curr_dir();
         match curr_dir[index] {
@@ -204,5 +226,65 @@ impl SnapshotManager {
             }
             _ => (),
         }
+    }
+
+    fn extract_to(&self, values: &[Value]) {
+        let dialog = self
+            .new_file_chooser_dialog_builder()
+            .title("Target Directory")
+            .action(gtk::FileChooserAction::CreateFolder)
+            .build();
+        for button in &Self::CANCEL_OK_BUTTONS {
+            dialog.add_button(button.0, button.1);
+        }
+        if dialog.run() == gtk::ResponseType::Ok {
+            dialog.hide();
+            if let Some(dir_name) = dialog.get_filename() {
+                let content_mgmt_key = self.0.snapshot.content_mgmt_key();
+                let curr_dir = self.curr_dir();
+                for index in values
+                    .iter()
+                    .map(|v| v.get::<u32>().expect(UNEXPECTED).expect(UNEXPECTED) as usize)
+                {
+                    match &curr_dir[index] {
+                        FileSystemObject::Directory(dir_data) => {
+                            match dir_data.copy_to(
+                                &dir_name.join(dir_data.name()),
+                                content_mgmt_key,
+                                false,
+                                &mut Some(&mut stderr()),
+                            ) {
+                                Ok(stats) => println!("stats: {:?}", stats),
+                                Err(err) => self.report_error("error", &err),
+                            }
+                        }
+                        FileSystemObject::File(file_data) => {
+                            match content_mgmt_key.open_content_manager(Mutability::Immutable) {
+                                Ok(content_mgr) => match file_data.copy_contents_to(
+                                    &dir_name.join(file_data.name()),
+                                    &content_mgr,
+                                    false,
+                                ) {
+                                    Ok(bytes) => println!("bytes: {}", bytes),
+                                    Err(err) => self.report_error("error", &err),
+                                },
+                                Err(err) => self.report_error("error", &err),
+                            }
+                        }
+                        FileSystemObject::SymLink(link_data, is_dir) => {
+                            match link_data.copy_link_as(
+                                &dir_name.join(link_data.name()),
+                                false,
+                                &mut Some(&mut stderr()),
+                            ) {
+                                Ok(_) => (),
+                                Err(err) => self.report_error("error", &err),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        dialog.close();
     }
 }
