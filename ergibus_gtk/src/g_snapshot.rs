@@ -314,10 +314,14 @@ impl ExtractionOptions {
         v_box.pack_start(&overwrite, false, false, 0);
         let file_chooser_button = gtk::FileChooserButtonBuilder::new()
             .create_folders(true)
-            .title("Target Directory:")
+            .action(gtk::FileChooserAction::SelectFolder)
             .build();
-        file_chooser_button.set_action(gtk::FileChooserAction::SelectFolder);
-        v_box.pack_start(&file_chooser_button, false, false, 0);
+        let h_box = gtk::BoxBuilder::new()
+            .orientation(gtk::Orientation::Horizontal)
+            .build();
+        h_box.pack_start(&gtk::Label::new(Some("Target Directory:")), false, false, 0);
+        h_box.pack_start(&file_chooser_button, true, true, 0);
+        v_box.pack_start(&h_box, false, false, 0);
         v_box.show_all();
         Self(Rc::new(ExtractionOptionsCore {
             v_box,
