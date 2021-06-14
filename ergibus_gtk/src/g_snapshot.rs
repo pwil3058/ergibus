@@ -228,17 +228,22 @@ impl SnapshotManager {
     }
 
     fn extract_to(&self, values: &[Value]) {
+        let extraction_options = ExtractionOptions::new();
         let dialog = self
-            .new_file_chooser_dialog_builder()
-            .title("Target Directory")
-            .action(gtk::FileChooserAction::CreateFolder)
+            .new_dialog_builder()
+            .window_position(gtk::WindowPosition::Mouse)
             .build();
+        dialog
+            .get_content_area()
+            .pack_start(&extraction_options.pwo(), false, false, 0);
         for button in &Self::CANCEL_OK_BUTTONS {
             dialog.add_button(button.0, button.1);
         }
+        dialog.show_all();
         if dialog.run() == gtk::ResponseType::Ok {
-            dialog.hide();
-            if let Some(dir_name) = dialog.get_filename() {
+            dialog.close();
+            if let Some(target_dir_path) = extraction_options.target_dir_path() {
+                let overwrite = extraction_options.overwrite();
                 let content_mgmt_key = self.0.snapshot.content_mgmt_key();
                 let curr_dir = self.curr_dir();
                 for index in values
@@ -248,9 +253,9 @@ impl SnapshotManager {
                     match &curr_dir[index] {
                         FileSystemObject::Directory(dir_data) => {
                             match dir_data.copy_to(
-                                &dir_name.join(dir_data.name()),
+                                &target_dir_path.join(dir_data.name()),
                                 content_mgmt_key,
-                                false,
+                                overwrite,
                             ) {
                                 Ok(stats) => println!("stats: {:?}", stats),
                                 Err(err) => self.report_error("error", &err),
@@ -259,9 +264,9 @@ impl SnapshotManager {
                         FileSystemObject::File(file_data) => {
                             match content_mgmt_key.open_content_manager(Mutability::Immutable) {
                                 Ok(content_mgr) => match file_data.copy_contents_to(
-                                    &dir_name.join(file_data.name()),
+                                    &target_dir_path.join(file_data.name()),
                                     &content_mgr,
-                                    false,
+                                    overwrite,
                                 ) {
                                     Ok(bytes) => println!("bytes: {}", bytes),
                                     Err(err) => self.report_error("error", &err),
@@ -270,7 +275,9 @@ impl SnapshotManager {
                             }
                         }
                         FileSystemObject::SymLink(link_data, _is_dir) => {
-                            match link_data.copy_link_as(&dir_name.join(link_data.name()), false) {
+                            match link_data
+                                .copy_link_as(&target_dir_path.join(link_data.name()), overwrite)
+                            {
                                 Ok(_) => (),
                                 Err(err) => self.report_error("error", &err),
                             }
@@ -278,7 +285,52 @@ impl SnapshotManager {
                     }
                 }
             }
+        } else {
+            dialog.close();
         }
-        dialog.close();
+    }
+}
+
+#[derive(PWO)]
+struct ExtractionOptionsCore {
+    v_box: gtk::Box,
+    overwrite: gtk::CheckButton,
+    file_chooser_button: gtk::FileChooserButton,
+}
+
+#[derive(PWO, WClone)]
+struct ExtractionOptions(Rc<ExtractionOptionsCore>);
+
+impl ExtractionOptions {
+    fn new() -> Self {
+        let v_box = gtk::BoxBuilder::new()
+            .orientation(gtk::Orientation::Vertical)
+            .build();
+        let overwrite = gtk::CheckButtonBuilder::new()
+            .label("overwrite")
+            .tooltip_text("Overwrite existing files?")
+            .active(false)
+            .build();
+        v_box.pack_start(&overwrite, false, false, 0);
+        let file_chooser_button = gtk::FileChooserButtonBuilder::new()
+            .create_folders(true)
+            .title("Target Directory:")
+            .build();
+        file_chooser_button.set_action(gtk::FileChooserAction::SelectFolder);
+        v_box.pack_start(&file_chooser_button, false, false, 0);
+        v_box.show_all();
+        Self(Rc::new(ExtractionOptionsCore {
+            v_box,
+            overwrite,
+            file_chooser_button,
+        }))
+    }
+
+    fn overwrite(&self) -> bool {
+        self.0.overwrite.get_active()
+    }
+
+    fn target_dir_path(&self) -> Option<PathBuf> {
+        self.0.file_chooser_button.get_filename()
     }
 }
