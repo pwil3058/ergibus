@@ -229,19 +229,7 @@ impl SnapshotManager {
 
     fn extract_to(&self, values: &[Value]) {
         let extraction_options = ExtractionOptions::new();
-        let dialog = self
-            .new_dialog_builder()
-            .window_position(gtk::WindowPosition::Mouse)
-            .build();
-        dialog
-            .get_content_area()
-            .pack_start(&extraction_options.pwo(), false, false, 0);
-        for button in &Self::CANCEL_OK_BUTTONS {
-            dialog.add_button(button.0, button.1);
-        }
-        dialog.show_all();
-        if dialog.run() == gtk::ResponseType::Ok {
-            dialog.close();
+        if self.present_widget_cancel_or_ok(&extraction_options.pwo()) == gtk::ResponseType::Ok {
             if let Some(target_dir_path) = extraction_options.target_dir_path() {
                 let overwrite = extraction_options.overwrite();
                 let content_mgmt_key = self.0.snapshot.content_mgmt_key();
@@ -285,8 +273,8 @@ impl SnapshotManager {
                     }
                 }
             }
-        } else {
-            dialog.close();
+            // } else {
+            //     dialog.close();
         }
     }
 }
