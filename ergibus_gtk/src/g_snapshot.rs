@@ -282,10 +282,23 @@ impl SnapshotManager {
                         }
                     }
                 }
-                println!("Extraction stats: {:?}", extraction_stats);
+                self.inform_user(
+                    "Extraction complete.",
+                    Some(&format_for_inform(&extraction_stats)),
+                );
             }
         }
     }
+}
+
+fn format_for_inform(extraction_stats: &ExtractionStats) -> String {
+    format!("{:16} Directories\n{:16} Files\n{:16} Bytes\n{:16} Directory Sym Links\n{:16} File Sym Links\n",
+            extraction_stats.dir_count,
+            extraction_stats.file_count,
+            extraction_stats.bytes_count,
+            extraction_stats.dir_sym_link_count,
+            extraction_stats.file_sym_link_count
+    )
 }
 
 #[derive(PWO)]
