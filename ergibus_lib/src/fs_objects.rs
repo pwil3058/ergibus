@@ -416,6 +416,16 @@ pub struct ExtractionStats {
     pub file_sym_link_count: u64,
 }
 
+impl AddAssign for ExtractionStats {
+    fn add_assign(&mut self, rhs: Self) {
+        self.dir_count += rhs.dir_count;
+        self.file_count += rhs.file_count;
+        self.bytes_count += rhs.bytes_count;
+        self.dir_sym_link_count += rhs.dir_sym_link_count;
+        self.file_sym_link_count += rhs.file_sym_link_count;
+    }
+}
+
 impl DirectoryData {
     // Interrogation/extraction/restoration methods
     pub fn path(&self) -> &Path {

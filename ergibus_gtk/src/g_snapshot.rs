@@ -11,7 +11,7 @@ use ergibus_lib::{snapshot, EResult};
 
 use crate::icons;
 use ergibus_lib::content::Mutability;
-use ergibus_lib::fs_objects::{DirectoryData, FileSystemObject, Name};
+use ergibus_lib::fs_objects::{DirectoryData, ExtractionStats, FileSystemObject, Name};
 use ergibus_lib::snapshot::SnapshotPersistentData;
 use pw_gtk_ext::glib::{Type, Value};
 use pw_gtk_ext::gtk::ButtonBuilder;
@@ -216,7 +216,7 @@ impl SnapshotManager {
     }
 
     fn process_double_click(&self, value: &Value) {
-        let index = value.get::<u32>().expect(UNEXPECTED).expect(UNEXPECTED) as usize;
+        let index = value.get_some::<u32>().expect(UNEXPECTED) as usize;
         let curr_dir = self.curr_dir();
         match curr_dir[index] {
             FileSystemObject::Directory(ref dir_data) => {
@@ -234,9 +234,10 @@ impl SnapshotManager {
                 let overwrite = extraction_options.overwrite();
                 let content_mgmt_key = self.0.snapshot.content_mgmt_key();
                 let curr_dir = self.curr_dir();
+                let mut extraction_stats = ExtractionStats::default();
                 for index in values
                     .iter()
-                    .map(|v| v.get::<u32>().expect(UNEXPECTED).expect(UNEXPECTED) as usize)
+                    .map(|v| v.get_some::<u32>().expect(UNEXPECTED) as usize)
                 {
                     match &curr_dir[index] {
                         FileSystemObject::Directory(dir_data) => {
@@ -245,7 +246,7 @@ impl SnapshotManager {
                                 content_mgmt_key,
                                 overwrite,
                             ) {
-                                Ok(stats) => println!("stats: {:?}", stats),
+                                Ok(stats) => extraction_stats += stats,
                                 Err(err) => self.report_error("error", &err),
                             }
                         }
@@ -256,25 +257,33 @@ impl SnapshotManager {
                                     &content_mgr,
                                     overwrite,
                                 ) {
-                                    Ok(bytes) => println!("bytes: {}", bytes),
+                                    Ok(bytes) => {
+                                        extraction_stats.file_count += 1;
+                                        extraction_stats.bytes_count += bytes;
+                                    }
                                     Err(err) => self.report_error("error", &err),
                                 },
                                 Err(err) => self.report_error("error", &err),
                             }
                         }
-                        FileSystemObject::SymLink(link_data, _is_dir) => {
+                        FileSystemObject::SymLink(link_data, is_dir) => {
                             match link_data
                                 .copy_link_as(&target_dir_path.join(link_data.name()), overwrite)
                             {
-                                Ok(_) => (),
+                                Ok(_) => {
+                                    if *is_dir {
+                                        extraction_stats.dir_sym_link_count += 1
+                                    } else {
+                                        extraction_stats.file_sym_link_count += 1
+                                    }
+                                }
                                 Err(err) => self.report_error("error", &err),
                             }
                         }
                     }
                 }
+                println!("Extraction stats: {:?}", extraction_stats);
             }
-            // } else {
-            //     dialog.close();
         }
     }
 }
