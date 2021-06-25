@@ -119,7 +119,7 @@ impl SnapshotManager {
         let v_box = gtk::BoxBuilder::new()
             .orientation(gtk::Orientation::Vertical)
             .build();
-        v_box.pack_start(&current_directory_manager.pwo(), false, false, 0);
+        v_box.pack_start(current_directory_manager.pwo(), false, false, 0);
         let list_store = WrappedListStore::<SnapshotManagerSpec>::new();
         let list_view = TreeViewWithPopupBuilder::new()
             .enable_grid_lines(gtk::TreeViewGridLines::Horizontal)
@@ -139,7 +139,7 @@ impl SnapshotManager {
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
         );
-        scrolled_window.add(&list_view.pwo());
+        scrolled_window.add(list_view.pwo());
         v_box.pack_start(&scrolled_window, true, true, 0);
         v_box.show_all();
         let snapshot_manager = Self(Rc::new(SnapshotManagerCore {
@@ -229,7 +229,7 @@ impl SnapshotManager {
 
     fn extract_to(&self, values: &[Value]) {
         let extraction_options = ExtractionOptions::new();
-        if self.present_widget_cancel_or_ok(&extraction_options.pwo()) == gtk::ResponseType::Ok {
+        if self.present_widget_cancel_or_ok(extraction_options.pwo()) == gtk::ResponseType::Ok {
             if let Some(target_dir_path) = extraction_options.target_dir_path() {
                 let overwrite = extraction_options.overwrite();
                 let content_mgmt_key = self.0.snapshot.content_mgmt_key();

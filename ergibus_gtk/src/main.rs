@@ -28,7 +28,7 @@ fn activate(app: &gtk::Application) {
     });
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let snapshots_manager = SnapshotsManager::new();
-    vbox.pack_start(&snapshots_manager.pwo(), true, true, 0);
+    vbox.pack_start(snapshots_manager.pwo(), true, true, 0);
     let label = gtk::Label::new(Some("GUI is under construction"));
     vbox.pack_start(&label, false, false, 0);
     window.add(&vbox);

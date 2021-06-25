@@ -217,7 +217,7 @@ impl SnapshotListViewBuilder {
     pub fn build(&self) -> SnapshotListView {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let archive_selector = g_archive::ArchiveSelector::new();
-        vbox.pack_start(&archive_selector.pwo(), false, false, 0);
+        vbox.pack_start(archive_selector.pwo(), false, false, 0);
         let snapshot_row_data = SnapshotRowData::new();
         let buffered_list_store = BufferedListStore::new(snapshot_row_data.clone());
         let buffered_list_view = TreeViewWithPopupBuilder::new()
@@ -230,7 +230,7 @@ impl SnapshotListViewBuilder {
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
         );
-        scrolled_window.add(&buffered_list_view.pwo());
+        scrolled_window.add(buffered_list_view.pwo());
         vbox.pack_start(&scrolled_window, true, true, 0);
         vbox.show_all();
         let snapshot_list_view = SnapshotListView(Rc::new(SnapshotListViewCore {
@@ -282,7 +282,7 @@ impl SnapshotsManager {
                 SAV_SELN_MADE,
             ))
             .build();
-        paned.add1(&snapshot_list_view.pwo());
+        paned.add1(snapshot_list_view.pwo());
         let notebook = gtk::NotebookBuilder::new()
             .scrollable(true)
             .enable_popup(true)
@@ -347,7 +347,7 @@ impl SnapshotsManager {
             Ok(index) => {
                 // already open so just make it the current page
                 let (_, ref page) = open_snapshots[index];
-                let page_no = self.0.notebook.page_num(&page.pwo());
+                let page_no = self.0.notebook.page_num(page.pwo());
                 self.0.notebook.set_current_page(page_no);
             }
             Err(index) => {
@@ -364,8 +364,8 @@ impl SnapshotsManager {
                         });
                         let menu_label = gtk::Label::new(Some(snapshot_name));
                         let page_no = self.0.notebook.insert_page_menu(
-                            &page.pwo(),
-                            Some(&tab_label.pwo()),
+                            page.pwo(),
+                            Some(tab_label.pwo()),
                             Some(&menu_label),
                             Some(index as u32),
                         );
@@ -390,7 +390,7 @@ impl SnapshotsManager {
         match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_str()) {
             Ok(index) => {
                 let (_, ref page) = open_snapshots[index];
-                let page_no = self.0.notebook.page_num(&page.pwo());
+                let page_no = self.0.notebook.page_num(page.pwo());
                 self.0.notebook.remove_page(page_no);
                 open_snapshots.remove(index);
             }
