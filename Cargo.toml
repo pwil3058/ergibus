@@ -4,5 +4,6 @@ members = [
     "ergibus",
     "ergibus_lib",
     "ergibus_gtk",
+    "ergibus_orbtk",
     "path_ext",
 ]

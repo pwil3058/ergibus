@@ -1,0 +1,11 @@
+[package]
+name = "ergibus_orbtk"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+orbtk = { git = "https://github.com/redox-os/orbtk.git", branch = "develop" }
+
+ergibus_lib = { path = "../ergibus_lib" }
