@@ -40,13 +40,13 @@ impl ArchiveSelectionState {
         self.change_archive = true
     }
 
-    fn change_available_archives(&mut self) {
+    fn _change_available_archives(&mut self) {
         self._change_available_archives = true
     }
 }
 
 impl State for ArchiveSelectionState {
-    fn update(&mut self, registry: &mut Registry, ctx: &mut Context) {
+    fn update(&mut self, _registry: &mut Registry, ctx: &mut Context) {
         if self.change_archive {
             let index = *ArchiveSelectionView::selected_index_ref(&ctx.widget()) as usize;
             let selected_archive =
