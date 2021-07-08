@@ -6,7 +6,7 @@ mod orbtk_snapshots;
 use orbtk::prelude::*;
 
 use orbtk_archive::ArchiveSelectionView;
-use orbtk_snapshots::SnapshotSelectionView;
+// use orbtk_snapshots::SnapshotSelectionView;
 
 fn main() {
     orbtk::initialize();
@@ -20,7 +20,7 @@ fn main() {
                 .resizeable(true)
                 .child(
                     Stack::new()
-                        .child(SnapshotSelectionView::new().build(ctx))
+                        // .child(SnapshotSelectionView::new().build(ctx))
                         .child(
                             TextBlock::new()
                                 .text("Ergibus OrbTk GUI is under construction")

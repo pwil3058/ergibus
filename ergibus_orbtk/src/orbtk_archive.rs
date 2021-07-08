@@ -21,7 +21,9 @@ impl Template for ArchiveSelectionView {
                     TextBlock::new().v_align("center").text(text).build(bc)
                 })
                 .on_changed("selected_index", move |states, _| {
-                    states.get_mut::<ArchiveSelectionState>(id).change_archive();
+                    states
+                        .get_mut::<ArchiveSelectionState>(id)
+                        .change_selected_archive();
                 })
                 .selected_index(id)
                 .build(ctx),
@@ -31,30 +33,38 @@ impl Template for ArchiveSelectionView {
 
 #[derive(Debug, Default, AsAny)]
 struct ArchiveSelectionState {
-    change_archive: bool,
-    _change_available_archives: bool,
+    change_selected_archive: bool,
+    selected_archive: Option<String>,
 }
 
 impl ArchiveSelectionState {
-    fn change_archive(&mut self) {
-        self.change_archive = true
-    }
-
-    fn _change_available_archives(&mut self) {
-        self._change_available_archives = true
+    fn change_selected_archive(&mut self) {
+        self.change_selected_archive = true
     }
 }
 
 impl State for ArchiveSelectionState {
+    fn init(&mut self, _registry: &mut Registry, ctx: &mut Context) {
+        self.selected_archive = match ArchiveSelectionView::archive_names_ref(&ctx.widget()).len() {
+            0 => None,
+            len_archive_names => {
+                let index = *ArchiveSelectionView::selected_index_ref(&ctx.widget()) as usize;
+                debug_assert!(index < len_archive_names);
+                Some(ArchiveSelectionView::archive_names_ref(&ctx.widget())[index as usize].clone())
+            }
+        };
+        println!("INIT: {:?}", self.selected_archive);
+    }
+
     fn update(&mut self, _registry: &mut Registry, ctx: &mut Context) {
-        if self.change_archive {
+        if self.change_selected_archive {
             let index = *ArchiveSelectionView::selected_index_ref(&ctx.widget()) as usize;
-            let selected_archive =
-                ArchiveSelectionView::archive_names_ref(&ctx.widget())[index].clone();
+            self.selected_archive =
+                Some(ArchiveSelectionView::archive_names_ref(&ctx.widget())[index].clone());
 
-            println!("selected_archive: {}", selected_archive.as_str());
+            println!("UPDATE: {:?}", self.selected_archive);
 
-            self.change_archive = false;
+            self.change_selected_archive = false;
         }
     }
 }
