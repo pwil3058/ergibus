@@ -263,7 +263,7 @@ impl SnapshotManager {
                                     }
                                     Err(err) => self.report_error("error", &err),
                                 },
-                                Err(err) => self.report_error("error", &err),
+                                Err(err) => self.report_failure("error", &err),
                             }
                         }
                         FileSystemObject::SymLink(link_data, is_dir) => {

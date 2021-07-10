@@ -1,46 +1,33 @@
-use std::{convert::From, error, ffi::OsString, fmt, io, path::PathBuf};
+use std::{convert::From, ffi::OsString, io, path::PathBuf};
 
 use crate::ReferencedContentData;
+use failure::*;
 use serde_json;
 use serde_yaml;
 
 /// A wrapper around the various error types than can be encountered
 /// by this crate.
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum RepoError {
-    IOError(io::Error),
-    JsonError(serde_json::Error),
+    #[fail(display = "I/O Error")]
+    IOError(#[cause] io::Error),
+    #[fail(display = "Json Error")]
+    JsonError(#[cause] serde_json::Error),
+    #[fail(display = "Not implemented")]
     NotImplemented,
+    #[fail(display = "{:?}: repository path already exists", _0)]
     RepoDirExists(PathBuf),
+    #[fail(display = "{}: unknown hash algorithm", _0)]
     UnknownHashAlgorithm(String),
+    #[fail(display = "{}: unknown content token", _0)]
     UnknownToken(String),
-    YamlError(serde_yaml::Error),
+    #[fail(display = "Serde Yaml Error")]
+    YamlError(#[cause] serde_yaml::Error),
+    #[fail(display = "{:?}: malformed string", _0)]
     BadOsString(OsString),
-    StillBeingReferenced(ReferencedContentData),
+    #[fail(display = "Still has {} references to {} itemts", _0, _1)]
+    StillBeingReferenced(u128, u64),
 }
-
-impl fmt::Display for RepoError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use RepoError::*;
-        match self {
-            IOError(error) => write!(f, "{}", error),
-            JsonError(error) => write!(f, "{}", error),
-            NotImplemented => write!(f, "Feature not yet implemented"),
-            RepoDirExists(path) => write!(f, "{:?}: repository path already exists", path),
-            UnknownHashAlgorithm(string) => write!(f, "{}: unknown hash algorithm", string),
-            UnknownToken(string) => write!(f, "{}: unknown content token", string),
-            YamlError(error) => write!(f, "{}", error),
-            BadOsString(os_string) => write!(f, "{:?}: malformed string", os_string),
-            StillBeingReferenced(rcd) => write!(
-                f,
-                "Still has {} references to {} itemts",
-                rcd.num_references, rcd.num_items
-            ),
-        }
-    }
-}
-
-impl error::Error for RepoError {}
 
 impl From<io::Error> for RepoError {
     fn from(error: io::Error) -> Self {
@@ -63,5 +50,11 @@ impl From<serde_yaml::Error> for RepoError {
 impl From<OsString> for RepoError {
     fn from(os_string: OsString) -> Self {
         RepoError::BadOsString(os_string)
+    }
+}
+
+impl From<ReferencedContentData> for RepoError {
+    fn from(rcd: ReferencedContentData) -> Self {
+        RepoError::StillBeingReferenced(rcd.num_references, rcd.num_items)
     }
 }

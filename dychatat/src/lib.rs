@@ -742,7 +742,7 @@ impl ContentManager {
         self.prune_contents()?;
         let rcd = self.referenced_content_data();
         if rcd.num_references > 0 {
-            Err(RepoError::StillBeingReferenced(rcd))
+            Err(RepoError::from(rcd))
         } else {
             remove_dir_all(&self.content_mgmt_key.base_dir_path)?;
             Ok(())
