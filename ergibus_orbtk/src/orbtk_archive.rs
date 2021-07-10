@@ -32,7 +32,7 @@ impl Template for ArchiveSelectionView {
 }
 
 #[derive(Debug, Default, AsAny)]
-struct ArchiveSelectionState {
+pub struct ArchiveSelectionState {
     change_selected_archive: bool,
     selected_archive: Option<String>,
 }
