@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 crypto-hash = "0.3.3"
-failure = "0.1.8"
 fs2 = "0.4.3"
 hex = "0.3.2"
 serde = { version = "1.0", features = ["derive"] }
@@ -14,3 +13,4 @@ serde_json = "1.0"
 serde_yaml = "0.8.17"
 snap = "0.2.5"
 tempdir = "0.3.7"
+thiserror = "1.0.26"

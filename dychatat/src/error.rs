@@ -1,50 +1,32 @@
 use std::{convert::From, ffi::OsString, io, path::PathBuf};
 
 use crate::ReferencedContentData;
-use failure::*;
 use serde_json;
 use serde_yaml;
+use thiserror::*;
 
 /// A wrapper around the various error types than can be encountered
 /// by this crate.
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum RepoError {
-    #[fail(display = "I/O Error")]
-    IOError(#[cause] io::Error),
-    #[fail(display = "Json Error")]
-    JsonError(#[cause] serde_json::Error),
-    #[fail(display = "Not implemented")]
+    #[error("I/O Error")]
+    IOError(#[from] io::Error),
+    #[error("Json Error")]
+    JsonError(#[from] serde_json::Error),
+    #[error("Not implemented")]
     NotImplemented,
-    #[fail(display = "{:?}: repository path already exists", _0)]
+    #[error("{0:?}: repository path already exists")]
     RepoDirExists(PathBuf),
-    #[fail(display = "{}: unknown hash algorithm", _0)]
+    #[error("{0}: unknown hash algorithm")]
     UnknownHashAlgorithm(String),
-    #[fail(display = "{}: unknown content token", _0)]
+    #[error("{0}: unknown content token")]
     UnknownToken(String),
-    #[fail(display = "Serde Yaml Error")]
-    YamlError(#[cause] serde_yaml::Error),
-    #[fail(display = "{:?}: malformed string", _0)]
+    #[error("Serde Yaml Error")]
+    YamlError(#[from] serde_yaml::Error),
+    #[error("{0:?}: malformed string")]
     BadOsString(OsString),
-    #[fail(display = "Still has {} references to {} itemts", _0, _1)]
+    #[error("Still has {0} references to {1} items")]
     StillBeingReferenced(u128, u64),
-}
-
-impl From<io::Error> for RepoError {
-    fn from(error: io::Error) -> Self {
-        RepoError::IOError(error)
-    }
-}
-
-impl From<serde_json::Error> for RepoError {
-    fn from(error: serde_json::Error) -> Self {
-        RepoError::JsonError(error)
-    }
-}
-
-impl From<serde_yaml::Error> for RepoError {
-    fn from(error: serde_yaml::Error) -> Self {
-        RepoError::YamlError(error)
-    }
 }
 
 impl From<OsString> for RepoError {
