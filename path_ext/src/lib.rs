@@ -5,26 +5,20 @@ use std::{
 };
 
 use dirs;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("Could not find user's home directory.")]
     CouldNotFindHome,
+    #[error("Could not find current directory's parent.")]
     CouldNotFindParent,
-    IOError(io::Error),
-    StripPrefixError(StripPrefixError),
+    #[error("I/O Error")]
+    IOError(#[from] io::Error),
+    #[error("Error stripping path's prefix")]
+    StripPrefixError(#[from] StripPrefixError),
+    #[error("Unexpected prefix for this operation.")]
     UnexpectedPrefix,
-}
-
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
-        Error::IOError(error)
-    }
-}
-
-impl From<StripPrefixError> for Error {
-    fn from(error: StripPrefixError) -> Self {
-        Error::StripPrefixError(error)
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
