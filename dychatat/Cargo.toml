@@ -2,7 +2,7 @@
 name = "dychatat"
 version = "0.1.0"
 authors = ["Peter Williams <pwil3058@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 crypto-hash = "0.3.3"
