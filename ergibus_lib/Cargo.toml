@@ -24,7 +24,7 @@ serde_json = "1.0"
 serde_yaml = "0.8"
 snap = "0.2"
 tempdir = "0.3"
-users = "0.5.0"
+users = "*"
 walkdir = "2.3.2"
 
 dychatat = { path = "../dychatat" }
