@@ -298,7 +298,7 @@ impl RefCounter {
 
     fn from_file(file: &mut File) -> Result<RefCounter, RepoError> {
         let mut rchp_str = String::new();
-        let mut snappy_rdr = snap::Reader::new(file);
+        let mut snappy_rdr = snap::read::FrameDecoder::new(file);
         snappy_rdr.read_to_string(&mut rchp_str)?;
         let rchp = serde_json::from_str::<RefCounter>(&rchp_str)?;
         Ok(rchp)
@@ -308,7 +308,7 @@ impl RefCounter {
         let json_text = serde_json::to_string(self)?;
         file.seek(SeekFrom::Start(0))?;
         file.set_len(0)?;
-        let mut snappy_wtr = snap::Writer::new(file);
+        let mut snappy_wtr = snap::write::FrameEncoder::new(file);
         snappy_wtr.write_all(json_text.as_bytes())?;
         Ok(())
     }
@@ -560,7 +560,7 @@ impl Storage {
             create_dir_all(content_dir_path)?;
         }
         let content_file = File::create(&content_file_path)?;
-        let mut compressed_content_file = snap::Writer::new(content_file);
+        let mut compressed_content_file = snap::write::FrameEncoder::new(content_file);
         io::copy(file, &mut compressed_content_file)?;
         compressed_content_file.flush()?;
         let metadata = content_file_path.metadata()?;
@@ -579,7 +579,7 @@ impl Storage {
             return Err(RepoError::UnknownToken(content_token.to_string()));
         }
         let content_file = File::open(content_file_path)?;
-        let mut compressed_content_file = snap::Reader::new(content_file);
+        let mut compressed_content_file = snap::read::FrameDecoder::new(content_file);
         let n = io::copy(&mut compressed_content_file, writer)?;
         Ok(n)
     }
