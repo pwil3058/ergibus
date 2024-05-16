@@ -2,9 +2,9 @@ use pw_gtk_ext::{
     gdkx::format_geometry,
     gio::{self, prelude::ApplicationExtManual, ApplicationExt},
     gtk::{self, prelude::*},
-    pw_recollect::recollections,
     wrapper::*,
 };
+use recollections;
 
 use crate::g_snapshots::SnapshotsManager;
 use ergibus_lib::config;
