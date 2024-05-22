@@ -11,7 +11,8 @@ crypto-hash = "0.3.0"
 log = "0.4.14"
 
 #pw_gix = { git = "https://github.com/pwil3058/rs_pw_gix.git" }
-pw_gtk_ext = { git = "https://github.com/pwil3058/rs_pw_gix.git" }
+#pw_gtk_ext = { git = "https://github.com/pwil3058/rs_pw_gix.git" }
 #pw_gtk_ext = { path = "../../../CRATES/rs_pw_gix.git/pw_gtk_ext" }
+pw_gtk_ext = { path = "../pw_gtk_ext" }
 recollections = { git = "https://github.com/pwil3058/recollections.git" }
 ergibus_lib = { path = "../ergibus_lib" }

@@ -6,4 +6,6 @@ members = [
     "ergibus_gtk",
 #    "ergibus_orbtk",
     "path_ext",
+    "pw_gtk_ext",
+    "pw_gtk_ext_derive"
 ]
