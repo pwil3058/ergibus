@@ -115,7 +115,7 @@ fn generate_digest(list: &Vec<String>) -> Vec<u8> {
 pub struct SnapshotListViewCore {
     vbox: gtk::Box,
     archive_selector: g_archive::ArchiveSelector,
-    buffered_list_view: TreeViewWithPopup,
+    buffered_list_view: Rc<TreeViewWithPopup>,
     buffered_list_store: BufferedListStore<SnapshotRowData>,
     changed_archive_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
 }

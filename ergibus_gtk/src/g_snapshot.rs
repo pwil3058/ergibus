@@ -75,7 +75,7 @@ impl CurrentDirectoryManager {
 #[derive(PWO)]
 pub struct SnapshotManagerCore {
     v_box: gtk::Box,
-    list_view: TreeViewWithPopup,
+    list_view: Rc<TreeViewWithPopup>,
     list_store: WrappedListStore<SnapshotManagerSpec>,
     snapshot: SnapshotPersistentData,
     current_directory_manager: CurrentDirectoryManager,

@@ -10,14 +10,13 @@ use crate::sav_state::MaskedCondns;
 use crate::wrapper::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::rc::Rc;
 
 type PopupCallback = Box<dyn Fn(Option<Value>, Vec<Value>)>;
 type DoubleClickCallback = Box<dyn Fn(&Value)>;
 
 #[derive(PWO)]
-pub struct TreeViewWithPopupCore {
+pub struct TreeViewWithPopup {
     tree_view: gtk::TreeView,
     selected_id: RefCell<Option<Value>>,
     popup_menu: ManagedMenu,
@@ -26,28 +25,16 @@ pub struct TreeViewWithPopupCore {
     id_field: i32,
 }
 
-#[derive(PWO, WClone)]
-pub struct TreeViewWithPopup(Rc<TreeViewWithPopupCore>);
-
-impl Deref for TreeViewWithPopup {
-    type Target = gtk::TreeView;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0.tree_view
-    }
-}
-
 impl TreeViewWithPopup {
     fn get_id_value_at(&self, posn: (f64, f64)) -> Option<Value> {
         if let Some(location) = self
-            .0
             .tree_view
             .get_path_at_pos(posn.0 as i32, posn.1 as i32)
         {
             if let Some(path) = location.0 {
-                if let Some(tree_model) = self.0.tree_view.get_model() {
+                if let Some(tree_model) = self.tree_view.get_model() {
                     if let Some(iter) = tree_model.get_iter(&path) {
-                        let value = tree_model.get_value(&iter, self.0.id_field);
+                        let value = tree_model.get_value(&iter, self.id_field);
                         return Some(value);
                     }
                 }
@@ -59,12 +46,12 @@ impl TreeViewWithPopup {
     fn set_selected_id(&self, posn: (f64, f64)) {
         match self.get_id_value_at(posn) {
             Some(value) => {
-                *self.0.selected_id.borrow_mut() = Some(value);
-                self.0.popup_menu.update_hover_condns(true);
+                *self.selected_id.borrow_mut() = Some(value);
+                self.popup_menu.update_hover_condns(true);
             }
             None => {
-                *self.0.selected_id.borrow_mut() = None;
-                self.0.popup_menu.update_hover_condns(false);
+                *self.selected_id.borrow_mut() = None;
+                self.popup_menu.update_hover_condns(false);
             }
         }
     }
@@ -74,7 +61,7 @@ impl TreeViewWithPopup {
         name: &str,
         callback: F,
     ) {
-        self.0
+        self
             .popup_callbacks
             .borrow_mut()
             .get_mut(name)
@@ -83,18 +70,17 @@ impl TreeViewWithPopup {
     }
 
     fn menu_item_selected(&self, name: &str) {
-        let hovered_id = (*self.0.selected_id.borrow()).as_ref().cloned();
-        let selection = self.0.tree_view.get_selection();
+        let hovered_id = (*self.selected_id.borrow()).as_ref().cloned();
+        let selection = self.tree_view.get_selection();
         let (tree_paths, store) = selection.get_selected_rows();
         let mut selected_ids = vec![];
         for tree_path in tree_paths.iter() {
             if let Some(iter) = store.get_iter(tree_path) {
-                selected_ids.push(store.get_value(&iter, self.0.id_field));
+                selected_ids.push(store.get_value(&iter, self.id_field));
             }
         }
         if hovered_id.is_some() || !selected_ids.is_empty() {
             for callback in self
-                .0
                 .popup_callbacks
                 .borrow()
                 .get(name)
@@ -107,7 +93,7 @@ impl TreeViewWithPopup {
     }
 
     pub fn connect_double_click<F: Fn(&Value) + 'static>(&self, callback: F) {
-        self.0
+        self
             .double_click_callbacks
             .borrow_mut()
             .push(Box::new(callback));
@@ -115,14 +101,14 @@ impl TreeViewWithPopup {
 
     fn process_double_click(&self, posn: (f64, f64)) {
         if let Some(value) = self.get_id_value_at(posn) {
-            for callback in self.0.double_click_callbacks.borrow().iter() {
+            for callback in self.double_click_callbacks.borrow().iter() {
                 callback(&value)
             }
         }
     }
 
     pub fn update_popup_condns(&self, changed_condns: MaskedCondns) {
-        self.0.popup_menu.update_condns(changed_condns)
+        self.popup_menu.update_condns(changed_condns)
     }
 }
 
@@ -222,7 +208,7 @@ impl TreeViewWithPopupBuilder {
     impl_builder_option!(vscroll_policy, gtk::ScrollablePolicy);
     impl_builder_option!(width_request, i32);
 
-    pub fn build<M, W>(self, wrapped_tree_model: &W) -> TreeViewWithPopup
+    pub fn build<M, W>(self, wrapped_tree_model: &W) -> Rc<TreeViewWithPopup>
     where
         M: IsA<gtk::TreeModel> + TreeModelRowOps,
         W: WrappedTreeModel<M>,
@@ -239,37 +225,37 @@ impl TreeViewWithPopupBuilder {
             .selection(&tree_view.get_selection())
             .build();
 
-        let blv = TreeViewWithPopup(Rc::new(TreeViewWithPopupCore {
+        let blv = Rc::new(TreeViewWithPopup {
             tree_view,
             selected_id: RefCell::new(None),
             popup_menu,
             popup_callbacks: RefCell::new(HashMap::new()),
             double_click_callbacks: RefCell::new(vec![]),
             id_field: self.id_field,
-        }));
+        });
 
         for (name, menu_item_spec, condns) in self.menu_items.iter() {
             let blv_c = blv.clone();
             let name_c = (*name).to_string();
-            let menu_item = blv.0.popup_menu.append_item(name, menu_item_spec, *condns);
+            let menu_item = blv.popup_menu.append_item(name, menu_item_spec, *condns);
             menu_item.connect_activate(move |_| blv_c.menu_item_selected(&name_c));
-            blv.0.popup_callbacks
+            blv.popup_callbacks
                 .borrow_mut()
                 .insert((*name).to_string(), vec![]);
         }
 
         let blv_c = blv.clone();
-        blv.0
+        blv
             .tree_view
             .connect_button_press_event(move |_, event| match event.get_event_type() {
                 gdk::EventType::ButtonPress => match event.get_button() {
                     2 => {
-                        blv_c.0.tree_view.get_selection().unselect_all();
+                        blv_c.tree_view.get_selection().unselect_all();
                         gtk::Inhibit(true)
                     }
                     3 => {
                         blv_c.set_selected_id(event.get_position());
-                        blv_c.0.popup_menu.popup_at_event(event);
+                        blv_c.popup_menu.popup_at_event(event);
                         gtk::Inhibit(true)
                     }
                     _ => gtk::Inhibit(false),
