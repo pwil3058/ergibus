@@ -31,14 +31,14 @@ pub use sourceview;
 
 pub use recollections;
 
-pub mod gdk_pixbufx;
+// pub mod gdk_pixbufx;
 pub mod gdkx;
 pub mod geometry;
 pub mod glibx;
-#[macro_use]
+// #[macro_use]
 pub mod gtkx;
 pub mod printer;
 pub mod sav_state;
-#[macro_use]
+// #[macro_use]
 pub mod wrapper;
-pub mod sample;
+// pub mod sample;
