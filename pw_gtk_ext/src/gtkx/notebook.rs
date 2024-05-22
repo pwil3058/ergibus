@@ -7,24 +7,21 @@ use std::rc::Rc;
 use crate::wrapper::*;
 
 #[derive(PWO)]
-pub struct TabRemoveLabelCore {
+pub struct TabRemoveLabel {
     h_box: gtk::Box,
     remove_page_callbacks: RefCell<Vec<Box<dyn Fn()>>>,
 }
 
-#[derive(PWO, WClone)]
-pub struct TabRemoveLabel(Rc<TabRemoveLabelCore>);
-
 impl TabRemoveLabel {
     pub fn connect_remove_page<F: 'static + Fn()>(&self, callback: F) {
-        self.0
+        self
             .remove_page_callbacks
             .borrow_mut()
             .push(Box::new(callback))
     }
 
     pub fn inform_remove_page(&self) {
-        for callback in self.0.remove_page_callbacks.borrow().iter() {
+        for callback in self.remove_page_callbacks.borrow().iter() {
             callback();
         }
     }
@@ -51,16 +48,16 @@ impl TabRemoveLabelBuilder {
         self
     }
 
-    pub fn build(&self) -> TabRemoveLabel {
-        let trl = TabRemoveLabel(Rc::new(TabRemoveLabelCore {
+    pub fn build(&self) -> Rc<TabRemoveLabel> {
+        let trl = Rc::new(TabRemoveLabel {
             h_box: gtk::Box::new(gtk::Orientation::Horizontal, 0),
             remove_page_callbacks: RefCell::new(Vec::new()),
-        }));
+        });
         let label = match self.label_text {
             Some(ref text) => gtk::Label::new(Some(text)),
             None => gtk::Label::new(None),
         };
-        trl.0.h_box.pack_start(&label, true, true, 0);
+        trl.h_box.pack_start(&label, true, true, 0);
         let icon = gio::ThemedIcon::with_default_fallbacks("window-close-symbolic");
         let image = gtk::Image::from_gicon(&icon, gtk::IconSize::Menu);
         match self.label_text {
@@ -75,8 +72,8 @@ impl TabRemoveLabelBuilder {
         // NB: this is because rust can't find gtk::ButtonBuilder.focus_on_click()
         button.set_focus_on_click(false);
         //button.set_name("notebook-tab-remove-button");
-        trl.0.h_box.pack_start(&button, false, false, 0);
-        trl.0.h_box.show_all();
+        trl.h_box.pack_start(&button, false, false, 0);
+        trl.h_box.show_all();
         let trl_c = trl.clone();
         button.connect_clicked(move |_| trl_c.inform_remove_page());
 
