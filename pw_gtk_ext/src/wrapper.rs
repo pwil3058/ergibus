@@ -6,8 +6,8 @@ use crate::gdk::WindowExt;
 use crate::gdk_pixbuf::Pixbuf;
 use crate::gtk::prelude::*;
 pub use crate::gtkx::dialog_user::*;
-
 use crate::printer::*;
+
 pub use pw_gtk_ext_derive::*;
 
 pub trait PackableWidgetObject {
@@ -89,7 +89,23 @@ pub trait WidgetWrapper: PackableWidgetObject + DialogUser {
         if let Some(parent) = self.get_toplevel_gtk_window() {
             print_pixbuf(pixbuf, Some(&parent))
         } else {
-            print_pixbuf(pixbuf, Option::<&gtk::Window>::None)
+            print_pixbuf(pixbuf, parent_none())
+        }
+    }
+
+    fn print_text(&self, text: &str) -> PrintResult {
+        if let Some(parent) = self.get_toplevel_gtk_window() {
+            print_text(text, Some(&parent))
+        } else {
+            print_text(text, parent_none())
+        }
+    }
+
+    fn print_markup_chunks(&self, chunks: Vec<String>) -> PrintResult {
+        if let Some(parent) = self.get_toplevel_gtk_window() {
+            print_markup_chunks(chunks, Some(&parent))
+        } else {
+            print_markup_chunks(chunks, parent_none())
         }
     }
 }

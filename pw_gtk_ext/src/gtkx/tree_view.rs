@@ -251,16 +251,11 @@ impl TreeViewWithPopupBuilder {
         for (name, menu_item_spec, condns) in self.menu_items.iter() {
             let blv_c = blv.clone();
             let name_c = (*name).to_string();
-            match blv.0.popup_menu.append_item(name, menu_item_spec, *condns) {
-                Ok(menu_item) => {
-                    menu_item.connect_activate(move |_| blv_c.menu_item_selected(&name_c));
-                    blv.0
-                        .popup_callbacks
-                        .borrow_mut()
-                        .insert((*name).to_string(), vec![]);
-                }
-                Err(err) => panic!("Error building menu item '{}':: {}", name, err),
-            }
+            let menu_item = blv.0.popup_menu.append_item(name, menu_item_spec, *condns);
+            menu_item.connect_activate(move |_| blv_c.menu_item_selected(&name_c));
+            blv.0.popup_callbacks
+                .borrow_mut()
+                .insert((*name).to_string(), vec![]);
         }
 
         let blv_c = blv.clone();

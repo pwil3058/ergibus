@@ -1,10 +1,11 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use std::rc::Rc;
 use crate::gtk::prelude::*;
 
 use crate::{
     sav_state::{
-        self, ChangedCondnsNotifier, ConditionalWidgets, ConditionalWidgetsBuilder, MaskedCondns,
+        ChangedCondnsNotifier, ConditionalWidgets, ConditionalWidgetsBuilder, MaskedCondns,
         WidgetStatesControlled,
     },
     wrapper::*,
@@ -47,7 +48,7 @@ impl From<&MenuItemSpec> for gtk::MenuItem {
 #[derive(PWO)]
 pub struct ManagedMenu {
     menu: gtk::Menu,
-    items: ConditionalWidgets<&'static str, gtk::MenuItem>,
+    items: Rc<ConditionalWidgets<&'static str, gtk::MenuItem>>,
 }
 
 impl ManagedMenu {
@@ -55,7 +56,7 @@ impl ManagedMenu {
         self.menu.clone()
     }
 
-    pub fn menu_item(&self, name: &'static str) -> Result<gtk::MenuItem, sav_state::Error> {
+    pub fn menu_item(&self, name: &'static str) -> Option<gtk::MenuItem> {
         self.items.get_widget(&name)
     }
 
@@ -64,11 +65,10 @@ impl ManagedMenu {
         name: &'static str,
         item: &gtk::MenuItem,
         condns: u64,
-    ) -> Result<(), sav_state::Error> {
-        self.items.add_widget(name, item, condns)?;
+    )  {
+        self.items.add_widget(name, item, condns);
         self.menu.append(item);
         self.menu.show_all();
-        Ok(())
     }
 
     pub fn insert_menu_item(
@@ -77,11 +77,10 @@ impl ManagedMenu {
         item: &gtk::MenuItem,
         condns: u64,
         position: i32,
-    ) -> Result<(), sav_state::Error> {
-        self.items.add_widget(name, item, condns)?;
+    ) {
+        self.items.add_widget(name, item, condns);
         self.menu.insert(item, position);
         self.menu.show_all();
-        Ok(())
     }
 
     pub fn prepend_menu_item(
@@ -89,11 +88,10 @@ impl ManagedMenu {
         name: &'static str,
         item: &gtk::MenuItem,
         condns: u64,
-    ) -> Result<(), sav_state::Error> {
-        self.items.add_widget(name, item, condns)?;
+    ) {
+        self.items.add_widget(name, item, condns);
         self.menu.prepend(item);
         self.menu.show_all();
-        Ok(())
     }
 
     pub fn append_item(
@@ -101,11 +99,11 @@ impl ManagedMenu {
         name: &'static str,
         menu_item_spec: &MenuItemSpec,
         condns: u64,
-    ) -> Result<gtk::MenuItem, sav_state::Error> {
+    ) -> gtk::MenuItem {
         let item = menu_item_spec.into();
-        self.append_menu_item(name, &item, condns)?;
+        self.append_menu_item(name, &item, condns);
 
-        Ok(item)
+        item
     }
 
     pub fn insert_item(
@@ -114,11 +112,11 @@ impl ManagedMenu {
         menu_item_spec: &MenuItemSpec,
         condns: u64,
         position: i32,
-    ) -> Result<gtk::MenuItem, sav_state::Error> {
+    ) -> gtk::MenuItem {
         let item = menu_item_spec.into();
-        self.insert_menu_item(name, &item, condns, position)?;
+        self.insert_menu_item(name, &item, condns, position);
 
-        Ok(item)
+        item
     }
 
     pub fn prepend_item(
@@ -126,11 +124,11 @@ impl ManagedMenu {
         name: &'static str,
         menu_item_spec: &MenuItemSpec,
         condns: u64,
-    ) -> Result<gtk::MenuItem, sav_state::Error> {
+    ) -> gtk::MenuItem {
         let item = menu_item_spec.into();
-        self.prepend_menu_item(name, &item, condns)?;
+        self.prepend_menu_item(name, &item, condns);
 
-        Ok(item)
+        item
     }
 
     pub fn append_separator(&self) {
@@ -188,7 +186,7 @@ impl ManagedMenuBuilder {
         self
     }
 
-    pub fn change_notifier(&mut self, change_notifier: &ChangedCondnsNotifier) -> &mut Self {
+    pub fn change_notifier(&mut self, change_notifier: &Rc<ChangedCondnsNotifier>) -> &mut Self {
         self.conditional_widgets_builder
             .change_notifier(change_notifier);
         self
@@ -206,9 +204,7 @@ impl ManagedMenuBuilder {
             .build::<&'static str, gtk::MenuItem>();
         let mm = ManagedMenu { menu, items };
         for (name, menu_item_spec, condns) in self.items.iter() {
-            if let Err(err) = mm.append_item(name, menu_item_spec, *condns) {
-                panic!("Error adding item '{}' to menu: {}", name, err);
-            };
+            mm.append_item(name, menu_item_spec, *condns);
         }
         mm.menu.show_all();
 

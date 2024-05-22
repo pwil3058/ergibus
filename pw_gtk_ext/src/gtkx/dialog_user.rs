@@ -60,6 +60,11 @@ implement_tgw_for_widget!(FontChooserDialog);
 implement_tgw_for_widget!(MessageDialog);
 implement_tgw_for_widget!(RecentChooserDialog);
 
+pub fn parent_none() -> Option<&'static gtk::Window> {
+    let none: Option<&gtk::Window> = None;
+    none
+}
+
 pub trait DialogUser: TopGtkWindow {
     // Necessary because not all dialog builders have a buttons() method
     const CLOSE_BUTTONS: [(&'static str, gtk::ResponseType); 1] =
