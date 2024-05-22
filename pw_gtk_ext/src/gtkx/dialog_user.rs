@@ -4,10 +4,13 @@ use glib::Cast;
 use gtk::prelude::WidgetExtManual;
 use gtk::{ButtonExt, EntryExt, FileChooserExt, WidgetExt};
 use std::error::Error;
+use std::io;
 use std::path::PathBuf;
+use std::process;
 
 use crate::gdk::prelude::IsA;
-use crate::gtk::{BoxExt, MessageDialogExt};
+use crate::glib::markup_escape_text;
+use crate::gtk::{BoxExt};
 use crate::gtkx::entry::PathCompletion;
 use crate::sourceview::prelude::{DialogExt, GtkWindowExt};
 
@@ -65,14 +68,68 @@ pub fn parent_none() -> Option<&'static gtk::Window> {
     none
 }
 
+pub static CANCEL_OK_BUTTONS: &[(&str, gtk::ResponseType)] = &[
+    ("Cancel", gtk::ResponseType::Cancel),
+    ("Ok", gtk::ResponseType::Ok),
+];
+
+fn markup_cmd_fail(cmd: &str) -> String {
+    format!(
+        "{}: <span foreground=\"red\">FAILED</span>",
+        markup_escape_text(cmd)
+    )
+}
+
+fn markup_cmd_warn(cmd: &str) -> String {
+    format!(
+        "{}: <span foreground=\"orange\">WARNED</span>",
+        markup_escape_text(cmd)
+    )
+}
+
+fn markup_cmd_ok(cmd: &str) -> String {
+    format!(
+        "{}: <span foreground=\"green\">OK</span>",
+        markup_escape_text(cmd)
+    )
+}
+
+fn markup_output(output: &process::Output) -> Option<String> {
+    if !output.stdout.is_empty() {
+        let stdout = markup_escape_text(&String::from_utf8_lossy(&output.stdout));
+        if !output.stderr.is_empty() {
+            let stderr = markup_escape_text(&String::from_utf8_lossy(&output.stderr));
+            Some(format!(
+                "{}\n<span foreground=\"red\">{}</span>",
+                stdout, stderr
+            ))
+        } else {
+            Some(stdout.to_string())
+        }
+    } else if !output.stderr.is_empty() {
+        let stderr = markup_escape_text(&String::from_utf8_lossy(&output.stderr));
+        Some(format!("<span foreground=\"red\">{}</span>", stderr))
+    } else {
+        None
+    }
+}
+
 pub trait DialogUser: TopGtkWindow {
-    // Necessary because not all dialog builders have a buttons() method
     const CLOSE_BUTTONS: [(&'static str, gtk::ResponseType); 1] =
         [("Close", gtk::ResponseType::Close)];
     const CANCEL_OK_BUTTONS: [(&'static str, gtk::ResponseType); 2] = [
         ("Cancel", gtk::ResponseType::Cancel),
         ("Ok", gtk::ResponseType::Ok),
     ];
+
+    fn set_transient_for_and_icon_on<W: GtkWindowExt>(&self, window: &W) {
+        if let Some(tlw) = self.get_toplevel_gtk_window() {
+            window.set_transient_for(Some(&tlw));
+            if let Some(ref icon) = tlw.get_icon() {
+                window.set_icon(Some(icon));
+            }
+        };
+    }
 
     fn new_colour_chooser_dialog_builder(&self) -> gtk::ColorChooserDialogBuilder {
         let mut dialog_builder = gtk::ColorChooserDialogBuilder::new();
@@ -146,30 +203,27 @@ pub trait DialogUser: TopGtkWindow {
         dialog_builder
     }
 
-    fn inform_user(&self, msg: &str, expln: Option<&str>) {
-        let dialog = self
-            .new_message_dialog_builder()
+    fn message_and_explanation(&self, msg: &str, expln: Option<&str>, msg_type: gtk::MessageType) {
+        let mut builder = self.new_message_dialog_builder();
+        if let Some(expln) = expln {
+            builder = builder.secondary_text(expln);
+        };
+        let dialog = builder
             .text(msg)
-            .message_type(gtk::MessageType::Info)
+            .message_type(msg_type)
             .buttons(gtk::ButtonsType::Close)
             .window_position(gtk::WindowPosition::Mouse)
             .build();
-        dialog.set_property_secondary_text(expln);
         dialog.run();
-        dialog.close()
+        dialog.close();
+    }
+
+    fn inform_user(&self, msg: &str, expln: Option<&str>) {
+        self.message_and_explanation(msg, expln, gtk::MessageType::Info)
     }
 
     fn warn_user(&self, msg: &str, expln: Option<&str>) {
-        let dialog = self
-            .new_message_dialog_builder()
-            .text(msg)
-            .message_type(gtk::MessageType::Warning)
-            .buttons(gtk::ButtonsType::Close)
-            .window_position(gtk::WindowPosition::Mouse)
-            .build();
-        dialog.set_property_secondary_text(expln);
-        dialog.run();
-        dialog.close()
+        self.message_and_explanation(msg, expln, gtk::MessageType::Warning)
     }
 
     fn report_error<E: Error>(&self, msg: &str, error: &E) {
@@ -177,16 +231,73 @@ pub trait DialogUser: TopGtkWindow {
         if let Some(source) = error.source() {
             expln += &format!("\nCaused by: {}.", source);
         };
-        let dialog = self
-            .new_message_dialog_builder()
-            .text(msg)
-            .secondary_text(&expln)
-            .message_type(gtk::MessageType::Error)
-            .buttons(gtk::ButtonsType::Close)
-            .window_position(gtk::WindowPosition::Mouse)
-            .build();
-        dialog.run();
-        dialog.close();
+        self.message_and_explanation(msg, Some(&expln), gtk::MessageType::Error)
+    }
+
+    fn report_command_result(&self, cmd: &str, result: &io::Result<process::Output>) {
+        match result {
+            Ok(output) => {
+                let (msg_type, markup) = if !output.status.success() {
+                    (gtk::MessageType::Error, markup_cmd_fail(cmd))
+                } else if !output.stderr.is_empty() {
+                    (gtk::MessageType::Warning, markup_cmd_warn(cmd))
+                } else {
+                    (gtk::MessageType::Info, markup_cmd_ok(cmd))
+                };
+                let mut builder = self.new_message_dialog_builder();
+                if let Some(markup) = markup_output(output) {
+                    builder = builder
+                        .secondary_use_markup(true)
+                        .secondary_text(markup.as_str());
+                }
+                let dialog = builder
+                    .message_type(msg_type)
+                    .buttons(gtk::ButtonsType::Close)
+                    .text(&markup)
+                    .build();
+                dialog.run();
+                dialog.close();
+            }
+            Err(err) => {
+                let msg = format!("{}: blew up!", cmd);
+                self.report_error(&msg, err)
+            }
+        }
+    }
+
+    fn report_any_command_problems(&self, cmd: &str, result: &io::Result<process::Output>) {
+        match result {
+            Ok(output) => {
+                if output.status.success() && output.stderr.is_empty() {
+                    // Nothing to report
+                    return;
+                }
+                let (msg_type, markup) = if !output.status.success() {
+                    (gtk::MessageType::Error, markup_cmd_fail(cmd))
+                } else if !output.stderr.is_empty() {
+                    (gtk::MessageType::Warning, markup_cmd_warn(cmd))
+                } else {
+                    (gtk::MessageType::Info, markup_cmd_ok(cmd))
+                };
+                let mut builder = self.new_message_dialog_builder();
+                if let Some(markup) = markup_output(output) {
+                    builder = builder
+                        .secondary_use_markup(true)
+                        .secondary_text(markup.as_str());
+                }
+                let dialog = builder
+                    .message_type(msg_type)
+                    .buttons(gtk::ButtonsType::Close)
+                    .text(&markup)
+                    .build();
+                dialog.run();
+                dialog.close();
+            }
+            Err(err) => {
+                let msg = format!("{}: blew up!", cmd);
+                self.report_error(&msg, err)
+            }
+        }
     }
 
     fn ask_question(
@@ -215,6 +326,36 @@ pub trait DialogUser: TopGtkWindow {
         self.ask_question(msg, expln, &Self::CANCEL_OK_BUTTONS) == gtk::ResponseType::Ok
     }
 
+    fn ask_string_cancel_or_ok(&self, question: &str) -> (gtk::ResponseType, Option<String>) {
+        let dialog = self.new_dialog_builder().destroy_with_parent(true).build();
+        dialog.set_default_response(gtk::ResponseType::Ok);
+        let h_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        h_box.pack_start(&gtk::Label::new(Some(question)), false, false, 2);
+        let entry = gtk::Entry::new();
+        h_box.pack_start(&entry, true, true, 2);
+        dialog.get_content_area().pack_start(&h_box, true, true, 0);
+        dialog.show_all();
+        entry.set_activates_default(true);
+        let response = dialog.run();
+        dialog.hide();
+        if response == gtk::ResponseType::Ok {
+            let gtext = entry.get_text();
+            (response, Some(gtext.to_string()))
+        } else {
+            (response, None)
+        }
+    }
+
+    fn new_file_chooser_dialog(
+        &self,
+        o_title: Option<&str>,
+        action: gtk::FileChooserAction,
+    ) -> gtk::FileChooserDialog {
+        let dialog = gtk::FileChooserDialog::new(o_title, parent_none(), action);
+        self.set_transient_for_and_icon_on(&dialog);
+        dialog
+    }
+
     fn present_widget_cancel_or_ok<W: IsA<gtk::Widget>>(&self, widget: &W) -> gtk::ResponseType {
         let dialog = self
             .new_dialog_builder()
@@ -232,6 +373,7 @@ pub trait DialogUser: TopGtkWindow {
         crate::yield_to_pending_events!();
         response
     }
+
     fn browse_path(
         &self,
         prompt: Option<&str>,
@@ -245,7 +387,7 @@ pub trait DialogUser: TopGtkWindow {
         }
         let dialog = builder.action(action).build();
         //let dialog = gtk::FileChooserDialog::new(o_prompt, dialog_parent, action);
-        for button in &Self::CANCEL_OK_BUTTONS {
+        for button in CANCEL_OK_BUTTONS {
             dialog.add_button(button.0, button.1);
         }
         dialog.set_default_response(gtk::ResponseType::Ok);
@@ -346,6 +488,68 @@ pub trait DialogUser: TopGtkWindow {
             None
         }
     }
+
+    fn select_dir(
+        &self,
+        o_prompt: Option<&str>,
+        o_suggestion: Option<&str>,
+        existing: bool,
+        absolute: bool,
+    ) -> Option<PathBuf> {
+        if existing {
+            self.browse_path(
+                o_prompt,
+                o_suggestion,
+                gtk::FileChooserAction::SelectFolder,
+                absolute,
+            )
+        } else {
+            self.browse_path(
+                o_prompt,
+                o_suggestion,
+                gtk::FileChooserAction::CreateFolder,
+                absolute,
+            )
+        }
+    }
+
+    fn select_file(
+        &self,
+        o_prompt: Option<&str>,
+        o_suggestion: Option<&str>,
+        existing: bool,
+        absolute: bool,
+    ) -> Option<PathBuf> {
+        if existing {
+            self.browse_path(
+                o_prompt,
+                o_suggestion,
+                gtk::FileChooserAction::Open,
+                absolute,
+            )
+        } else {
+            self.browse_path(
+                o_prompt,
+                o_suggestion,
+                gtk::FileChooserAction::Save,
+                absolute,
+            )
+        }
+    }
+
+    fn ask_dir_path(
+        &self,
+        o_prompt: Option<&str>,
+        o_suggestion: Option<&str>,
+        existing: bool,
+    ) -> Option<PathBuf> {
+        if existing {
+            self.ask_path(o_prompt, o_suggestion, gtk::FileChooserAction::SelectFolder)
+        } else {
+            self.ask_path(o_prompt, o_suggestion, gtk::FileChooserAction::CreateFolder)
+        }
+    }
+
     fn ask_file_path(
         &self,
         o_prompt: Option<&str>,
