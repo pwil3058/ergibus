@@ -8,25 +8,21 @@ use crate::wrapper::*;
 pub type ChangeCallback<T> = Box<dyn Fn(&T)>;
 
 #[derive(PWO)]
-pub struct RadioButtonsCore<T: Clone + Hash> {
+pub struct RadioButtons<T: Clone + Hash> {
     box_: gtk::Box,
     radio_buttons: HashMap<T, gtk::RadioButton>,
     change_callbacks: RefCell<Vec<ChangeCallback<T>>>,
 }
 
-#[derive(PWO, WClone)]
-pub struct RadioButtons<T: Clone + Hash>(Rc<RadioButtonsCore<T>>);
-
 impl<T: Clone + Hash> RadioButtons<T> {
     fn inform_change(&self, selected: &T) {
-        for callback in self.0.change_callbacks.borrow().iter() {
+        for callback in self.change_callbacks.borrow().iter() {
             callback(selected)
         }
     }
 
     pub fn selected(&self) -> &T {
-        self.0
-            .radio_buttons
+        self.radio_buttons
             .iter()
             .filter_map(|(tag, button)| if button.get_active() { Some(tag) } else { None })
             .next()
@@ -35,7 +31,7 @@ impl<T: Clone + Hash> RadioButtons<T> {
 
     pub fn connect_changed<F: Fn(&T) + 'static>(&self, callback: F) {
         let boxed = Box::new(callback);
-        self.0.change_callbacks.borrow_mut().push(boxed);
+        self.change_callbacks.borrow_mut().push(boxed);
     }
 }
 
@@ -81,7 +77,7 @@ impl<T: Clone + Hash + Eq + 'static> RadioButtonsBuilder<T> {
         self
     }
 
-    pub fn build(self) -> RadioButtons<T> {
+    pub fn build(self) -> Rc<RadioButtons<T>> {
         let box_ = gtk::Box::new(self.orientation, self.spacing);
         let mut radio_buttons = HashMap::new();
         let mut group: Option<gtk::RadioButton> = None;
@@ -102,13 +98,13 @@ impl<T: Clone + Hash + Eq + 'static> RadioButtonsBuilder<T> {
         if let Some(default) = self.default {
             radio_buttons.get(&default).unwrap().set_active(true);
         }
-        let radio_buttons = RadioButtons(Rc::new(RadioButtonsCore {
+        let radio_buttons = Rc::new(RadioButtons {
             box_,
             radio_buttons,
             change_callbacks: RefCell::new(vec![]),
-        }));
+        });
 
-        for (tag, radio_button) in radio_buttons.0.radio_buttons.iter() {
+        for (tag, radio_button) in radio_buttons.radio_buttons.iter() {
             let radio_buttons_c = radio_buttons.clone();
             let tag_c = tag.clone();
             radio_button.connect_toggled(move |cb| {
