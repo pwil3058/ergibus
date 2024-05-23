@@ -5,7 +5,6 @@ use pw_gtk_ext::{
     gtk::{self, prelude::*},
     gtkx::combo_box_text::SortedUnique,
     wrapper::*,
-    UNEXPECTED,
 };
 
 use ergibus_lib::archive;
@@ -61,7 +60,6 @@ impl ArchiveSelector {
         self.0
             .combo
             .set_active_text(archive_name)
-            .expect(UNEXPECTED)
     }
 
     pub fn update_available_archives(&self) {
