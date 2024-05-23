@@ -10,7 +10,7 @@ use std::process;
 
 use crate::gdk::prelude::IsA;
 use crate::glib::markup_escape_text;
-use crate::gtk::{BoxExt};
+use crate::gtk::BoxExt;
 use crate::gtkx::entry::PathCompletion;
 use crate::sourceview::prelude::{DialogExt, GtkWindowExt};
 
