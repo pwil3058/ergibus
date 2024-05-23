@@ -31,7 +31,7 @@ fn recall_dialog_last_size(key: &str, default: (i32, i32)) -> (i32, i32) {
             }
         },
         None => {
-            log::error!("{}: dialog no known to recollections", key);
+            log::error!("{}: dialog not known to recollections", key);
             default
         }
     }

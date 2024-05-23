@@ -14,40 +14,37 @@ use crate::wrapper::*;
 pub type ChangeCallback<T> = Box<dyn Fn(Option<&T>)>;
 
 #[derive(PWO)]
-pub struct MutuallyExclusiveCheckButtonsCore<T: Clone + Hash> {
+pub struct MutuallyExclusiveCheckButtons<T: Clone + Hash> {
     box_: gtk::Box,
     check_buttons: HashMap<T, gtk::CheckButton>,
     change_callbacks: RefCell<Vec<ChangeCallback<T>>>,
     suppress_inform: Cell<bool>,
 }
 
-#[derive(PWO, WClone)]
-pub struct MutuallyExclusiveCheckButtons<T: Clone + Hash>(Rc<MutuallyExclusiveCheckButtonsCore<T>>);
-
 impl<T: Clone + Hash + Eq> MutuallyExclusiveCheckButtons<T> {
     fn uncheck_except(&self, except: &T) {
-        self.0.suppress_inform.set(true);
-        for (tag, check_button) in self.0.check_buttons.iter() {
+        self.suppress_inform.set(true);
+        for (tag, check_button) in self.check_buttons.iter() {
             if tag != except {
                 check_button.set_active(false);
             } else {
                 debug_assert!(check_button.get_active());
             }
         }
-        self.0.suppress_inform.set(false);
+        self.suppress_inform.set(false);
         self.inform_change(Some(except))
     }
 
     fn inform_change(&self, selected: Option<&T>) {
-        if !self.0.suppress_inform.get() {
-            for callback in self.0.change_callbacks.borrow().iter() {
+        if !self.suppress_inform.get() {
+            for callback in self.change_callbacks.borrow().iter() {
                 callback(selected)
             }
         }
     }
 
     pub fn selected(&self) -> Option<&T> {
-        for (tag, check_button) in self.0.check_buttons.iter() {
+        for (tag, check_button) in self.check_buttons.iter() {
             if check_button.get_active() {
                 return Some(tag);
             }
@@ -57,7 +54,7 @@ impl<T: Clone + Hash + Eq> MutuallyExclusiveCheckButtons<T> {
 
     pub fn connect_changed<F: Fn(Option<&T>) + 'static>(&self, callback: F) {
         let boxed = Box::new(callback);
-        self.0.change_callbacks.borrow_mut().push(boxed);
+        self.change_callbacks.borrow_mut().push(boxed);
     }
 }
 
@@ -96,7 +93,7 @@ impl<T: Clone + Hash + Eq + 'static> MutuallyExclusiveCheckButtonsBuilder<T> {
         self
     }
 
-    pub fn build(self) -> MutuallyExclusiveCheckButtons<T> {
+    pub fn build(self) -> Rc<MutuallyExclusiveCheckButtons<T>> {
         let box_ = gtk::Box::new(self.orientation, self.spacing);
         let mut check_buttons = HashMap::new();
         for (tag, label_text, tooltip_text) in self.check_buttons {
@@ -108,14 +105,14 @@ impl<T: Clone + Hash + Eq + 'static> MutuallyExclusiveCheckButtonsBuilder<T> {
             let _result = check_buttons.insert(tag, check_button);
             debug_assert!(_result.is_none(), "Duplicate check button tag");
         }
-        let mecb = MutuallyExclusiveCheckButtons(Rc::new(MutuallyExclusiveCheckButtonsCore {
+        let mecb = Rc::new(MutuallyExclusiveCheckButtons {
             box_,
             check_buttons,
             change_callbacks: RefCell::new(vec![]),
             suppress_inform: Cell::new(false),
-        }));
+        });
 
-        for (tag, check_button) in mecb.0.check_buttons.iter() {
+        for (tag, check_button) in mecb.check_buttons.iter() {
             let mecb_c = mecb.clone();
             let except = tag.clone();
             check_button.connect_toggled(move |cb| {
