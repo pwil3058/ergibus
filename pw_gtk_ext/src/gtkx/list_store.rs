@@ -3,10 +3,10 @@
 use std::marker::PhantomData;
 use std::ops::Deref;
 
+pub use super::value::Row;
 use crate::glib;
 pub use crate::gtkx::tree_model::*;
 use crate::{are_eq_values, are_equal_as, get_row_values_from, matches_list_row, UNEXPECTED};
-pub use super::value::Row;
 
 // NB: when done with the returned rows their items need to be unset?
 #[macro_export]

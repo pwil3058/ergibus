@@ -1,8 +1,8 @@
 // Copyright 2017 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use crate::glibx::GlibValueExt;
 use gtk;
 use gtk::prelude::{ComboBoxExt, ComboBoxExtManual, ComboBoxTextExt, TreeModelExt};
-use crate::glibx::GlibValueExt;
 
 pub trait SortedUnique {
     fn get_item_index(&self, item: &str) -> (bool, i32);

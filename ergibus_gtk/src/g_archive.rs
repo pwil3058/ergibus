@@ -57,9 +57,7 @@ impl ArchiveSelector {
     }
 
     pub fn set_selected_archive(&self, archive_name: &str) {
-        self.0
-            .combo
-            .set_active_text(archive_name)
+        self.0.combo.set_active_text(archive_name)
     }
 
     pub fn update_available_archives(&self) {

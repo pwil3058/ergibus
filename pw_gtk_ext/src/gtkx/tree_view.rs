@@ -27,10 +27,7 @@ pub struct TreeViewWithPopup {
 
 impl TreeViewWithPopup {
     fn get_id_value_at(&self, posn: (f64, f64)) -> Option<Value> {
-        if let Some(location) = self
-            .tree_view
-            .get_path_at_pos(posn.0 as i32, posn.1 as i32)
-        {
+        if let Some(location) = self.tree_view.get_path_at_pos(posn.0 as i32, posn.1 as i32) {
             if let Some(path) = location.0 {
                 if let Some(tree_model) = self.tree_view.get_model() {
                     if let Some(iter) = tree_model.get_iter(&path) {
@@ -61,8 +58,7 @@ impl TreeViewWithPopup {
         name: &str,
         callback: F,
     ) {
-        self
-            .popup_callbacks
+        self.popup_callbacks
             .borrow_mut()
             .get_mut(name)
             .expect("invalid name")
@@ -93,8 +89,7 @@ impl TreeViewWithPopup {
     }
 
     pub fn connect_double_click<F: Fn(&Value) + 'static>(&self, callback: F) {
-        self
-            .double_click_callbacks
+        self.double_click_callbacks
             .borrow_mut()
             .push(Box::new(callback));
     }
@@ -245,8 +240,7 @@ impl TreeViewWithPopupBuilder {
         }
 
         let blv_c = blv.clone();
-        blv
-            .tree_view
+        blv.tree_view
             .connect_button_press_event(move |_, event| match event.get_event_type() {
                 gdk::EventType::ButtonPress => match event.get_button() {
                     2 => {

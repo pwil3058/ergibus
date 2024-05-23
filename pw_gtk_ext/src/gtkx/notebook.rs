@@ -14,8 +14,7 @@ pub struct TabRemoveLabel {
 
 impl TabRemoveLabel {
     pub fn connect_remove_page<F: 'static + Fn()>(&self, callback: F) {
-        self
-            .remove_page_callbacks
+        self.remove_page_callbacks
             .borrow_mut()
             .push(Box::new(callback))
     }

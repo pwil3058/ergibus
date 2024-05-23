@@ -1,7 +1,7 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use std::rc::Rc;
 use crate::gtk::prelude::*;
+use std::rc::Rc;
 
 use crate::{
     sav_state::{
@@ -60,12 +60,7 @@ impl ManagedMenu {
         self.items.get_widget(&name)
     }
 
-    pub fn append_menu_item(
-        &self,
-        name: &'static str,
-        item: &gtk::MenuItem,
-        condns: u64,
-    )  {
+    pub fn append_menu_item(&self, name: &'static str, item: &gtk::MenuItem, condns: u64) {
         self.items.add_widget(name, item, condns);
         self.menu.append(item);
         self.menu.show_all();
@@ -83,12 +78,7 @@ impl ManagedMenu {
         self.menu.show_all();
     }
 
-    pub fn prepend_menu_item(
-        &self,
-        name: &'static str,
-        item: &gtk::MenuItem,
-        condns: u64,
-    ) {
+    pub fn prepend_menu_item(&self, name: &'static str, item: &gtk::MenuItem, condns: u64) {
         self.items.add_widget(name, item, condns);
         self.menu.prepend(item);
         self.menu.show_all();
