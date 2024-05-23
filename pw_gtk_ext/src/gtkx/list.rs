@@ -197,19 +197,10 @@ impl ListViewWithPopUpMenuBuilder {
         for (name, menu_item_spec, condns) in self.menu_items.iter() {
             let rgb_l_v_c = Rc::clone(&rgb_l_v);
             let name_c = (*name).to_string();
-            match rgb_l_v
+            rgb_l_v
                 .popup_menu
                 .append_item(name, menu_item_spec, *condns)
-            {
-                Ok(menu_item) => {
-                    menu_item.connect_activate(move |_| rgb_l_v_c.menu_item_selected(&name_c))
-                }
-                Err(err) => panic!("Error building menu item '{}':: {}", name, err),
-            };
-            // rgb_l_v
-            //     .popup_menu
-            //     .append_item(name, menu_item_spec, *condns)
-            //     .connect_activate(move |_| rgb_l_v_c.menu_item_selected(&name_c));
+                .connect_activate(move |_| rgb_l_v_c.menu_item_selected(&name_c));
             rgb_l_v
                 .callbacks
                 .borrow_mut()

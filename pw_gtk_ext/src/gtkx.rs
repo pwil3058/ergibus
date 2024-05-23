@@ -11,7 +11,7 @@ pub mod combo_box_text;
 pub mod dialog_user;
 // pub mod drawing_area;
 pub mod entry;
-// pub mod list;
+pub mod list;
 pub mod menu;
 pub mod notebook;
 pub mod paned;
