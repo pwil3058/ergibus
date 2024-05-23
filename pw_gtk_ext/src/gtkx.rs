@@ -17,5 +17,6 @@ pub mod radio_button;
 pub mod tree_model;
 pub mod tree_store;
 pub mod tree_view;
+pub mod tree_view_column;
 pub mod value;
 pub mod window;
