@@ -27,17 +27,12 @@ use pw_gtk_ext::sav_state::{SAV_SELN_MADE, SAV_SELN_UNIQUE_OR_HOVER_OK};
 #[derive(Default)]
 struct SnapshotRowDataCore {
     archive_name: RefCell<Option<String>>,
-    raw_row_data: RefCell<Vec<String>>,
 }
 
 #[derive(WClone, Default)]
 struct SnapshotRowData(Rc<SnapshotRowDataCore>);
 
 impl SnapshotRowData {
-    fn new() -> Self {
-        Self::default()
-    }
-
     fn archive_name(&self) -> Option<String> {
         self.0.archive_name.borrow().clone()
     }
@@ -75,25 +70,16 @@ impl ListViewSpec for SnapshotRowData {
 
 impl RowDataSource for SnapshotRowData {
     fn generate_rows(&self) -> Vec<Vec<Value>> {
-        let mut rows = vec![];
-        let raw_row_data = self.0.raw_row_data.borrow();
-        for item in raw_row_data.iter() {
-            rows.push(vec![item.to_value()]);
-        }
-        rows
-    }
-
-    fn refresh(&self) -> Vec<u8> {
-        let mut raw_row_data = self.0.raw_row_data.borrow_mut();
-        *raw_row_data = vec![];
         let archive_name = &*self.0.archive_name.borrow();
-        match archive_name {
+        match &archive_name {
             Some(archive_name) => {
-                match snapshot::get_snapshot_names_for_archive(&archive_name, true) {
+                match snapshot::get_snapshot_names_for_archive(archive_name, true) {
                     Ok(snapshot_names) => {
-                        let hash = generate_digest(&snapshot_names);
-                        *raw_row_data = snapshot_names;
-                        hash
+                        let mut rows = vec![];
+                        for item in snapshot_names {
+                            rows.push(vec![item.to_value()])
+                        }
+                        rows
                     }
                     Err(_) => vec![],
                 }
@@ -101,14 +87,25 @@ impl RowDataSource for SnapshotRowData {
             None => vec![],
         }
     }
-}
 
-fn generate_digest(list: &Vec<String>) -> Vec<u8> {
-    let mut hasher = Hasher::new(Algorithm::SHA256);
-    for ref item in list {
-        hasher.write_all(item.as_bytes()).expect(UNEXPECTED);
+    fn refresh(&self) -> Vec<u8> {
+        let archive_name = &*self.0.archive_name.borrow();
+        match &archive_name {
+            Some(archive_name) => {
+                match snapshot::get_snapshot_names_for_archive(archive_name, true) {
+                    Ok(snapshot_names) => {
+                        let mut hasher = Hasher::new(Algorithm::SHA256);
+                        for item in snapshot_names {
+                            hasher.write_all(item.as_bytes()).expect(UNEXPECTED);
+                        }
+                        hasher.finish()
+                    }
+                    Err(_) => vec![],
+                }
+            }
+            None => vec![],
+        }
     }
-    hasher.finish()
 }
 
 #[derive(PWO)]
@@ -218,8 +215,7 @@ impl SnapshotListViewBuilder {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let archive_selector = g_archive::ArchiveSelector::new();
         vbox.pack_start(archive_selector.pwo(), false, false, 0);
-        let snapshot_row_data = SnapshotRowData::new();
-        let buffered_list_store = BufferedListStore::new(snapshot_row_data.clone());
+        let buffered_list_store = BufferedListStore::new(SnapshotRowData::default());
         let buffered_list_view = TreeViewWithPopupBuilder::new()
             .id_field(self.id_field)
             .selection_mode(self.selection_mode)
