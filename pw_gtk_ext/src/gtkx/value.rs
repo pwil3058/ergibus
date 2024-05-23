@@ -29,3 +29,6 @@ macro_rules! are_eq_values {
         }
     }};
 }
+
+pub use crate::glibx::*;
+pub type Row = Vec<glib::Value>;

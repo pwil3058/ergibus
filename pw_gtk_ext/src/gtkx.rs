@@ -1,10 +1,7 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-// #[macro_use]
 pub mod tree_model;
-// #[macro_use]
 pub mod value;
-// #[macro_use]
 pub mod list_store;
 //
 pub mod buffered_list_store;

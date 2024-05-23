@@ -1,10 +1,12 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use std::marker::PhantomData;
+use std::ops::Deref;
+
 use crate::glib;
 pub use crate::gtkx::tree_model::*;
 use crate::{are_eq_values, are_equal_as, get_row_values_from, matches_list_row, UNEXPECTED};
-use std::marker::PhantomData;
-use std::ops::Deref;
+pub use super::value::Row;
 
 // NB: when done with the returned rows their items need to be unset?
 #[macro_export]
@@ -83,7 +85,7 @@ pub trait ListRowOps:
         append_row_to_list!(row, self)
     }
 
-    fn get_rows_values(&self) -> Vec<Vec<glib::Value>> {
+    fn get_rows_values(&self) -> Vec<Row> {
         get_rows_values_from_list!(self)
     }
 
@@ -125,7 +127,7 @@ pub trait ListRowOps:
         }
     }
 
-    fn repopulate_with(&self, rows: &[Vec<glib::Value>]) {
+    fn repopulate_with(&self, rows: &[Row]) {
         self.clear();
         for row in rows.iter() {
             append_row_to_list!(row, self);
@@ -133,7 +135,7 @@ pub trait ListRowOps:
     }
 
     // NB: this function assumes that all rows are unique and that order isn't important
-    fn update_with(&self, rows: &[Vec<glib::Value>]) {
+    fn update_with(&self, rows: &[Row]) {
         // First remove the rows that have gone away
         if let Some(iter) = self.get_iter_first() {
             while self.iter_is_valid(&iter) {
