@@ -14,6 +14,7 @@ use std::convert::TryFrom;
 use std::fs::{DirEntry, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 use std::{fs, time};
 
 fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
@@ -464,6 +465,39 @@ pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<
 pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
+    Ok(snapshot_names)
+}
+
+pub fn get_snapshot_names_and_stats_in_dir(
+    dir_path: &Path,
+    reverse: bool,
+) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
+    let entries = get_ss_entries_in_dir(dir_path)?;
+    let mut snapshot_names_and_stats = Vec::new();
+    for entry in entries {
+        let name = String::from(entry.file_name().to_string_lossy().to_owned());
+        let snapshot_file_path = entry.path();
+        let snapshot = SnapshotPersistentData::from_file(&snapshot_file_path)?;
+        snapshot_names_and_stats.push((
+            name,
+            snapshot.file_stats,
+            snapshot.sym_link_stats,
+            snapshot.started_create,
+            snapshot.finished_create,
+        ));
+    }
+    if reverse {
+        snapshot_names_and_stats.reverse();
+    };
+    Ok(snapshot_names_and_stats)
+}
+
+pub fn get_snapshot_names_and_stats_for_archive(
+    archive_name: &str,
+    reverse: bool,
+) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let snapshot_names = get_snapshot_names_and_stats_in_dir(&snapshot_dir_path, reverse)?;
     Ok(snapshot_names)
 }
 
