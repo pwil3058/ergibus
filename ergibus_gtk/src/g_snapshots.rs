@@ -15,7 +15,7 @@ use ergibus_lib::snapshot;
 use crate::g_archive;
 use crate::g_snapshot::SnapshotManager;
 use pw_gtk_ext::glib::{Type, Value};
-use pw_gtk_ext::gtkx::buffered_list_store::{BufferedListStore, RowDataSource};
+use pw_gtk_ext::gtkx::buffered_list_store::{BufferedListStore, Row, RowDataSource};
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
 use pw_gtk_ext::gtkx::list_store::ListViewSpec;
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
@@ -69,26 +69,28 @@ impl ListViewSpec for SnapshotRowData {
 }
 
 impl RowDataSource for SnapshotRowData {
-    fn generate_rows(&self) -> Vec<Vec<Value>> {
+    fn rows_and_digest(&self) -> (Vec<Row>, Vec<u8>) {
         let archive_name = &*self.0.archive_name.borrow();
         match &archive_name {
             Some(archive_name) => {
                 match snapshot::get_snapshot_names_for_archive(archive_name, true) {
                     Ok(snapshot_names) => {
                         let mut rows = vec![];
+                        let mut hasher = Hasher::new(Algorithm::SHA256);
                         for item in snapshot_names {
+                            hasher.write_all(item.as_bytes()).expect(UNEXPECTED);
                             rows.push(vec![item.to_value()])
                         }
-                        rows
+                        (rows, hasher.finish())
                     }
-                    Err(_) => vec![],
+                    Err(_) => (vec![], vec![]),
                 }
             }
-            None => vec![],
+            None => (vec![], vec![]),
         }
     }
 
-    fn refresh(&self) -> Vec<u8> {
+    fn digest(&self) -> Vec<u8> {
         let archive_name = &*self.0.archive_name.borrow();
         match &archive_name {
             Some(archive_name) => {
@@ -146,7 +148,7 @@ impl SnapshotListView {
         self.0.buffered_list_store.update()
     }
 
-    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
+    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Row) + 'static>(
         &self,
         name: &str,
         callback: F,
