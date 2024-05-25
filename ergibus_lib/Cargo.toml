@@ -26,6 +26,7 @@ snap = "0.2"
 tempdir = "0.3"
 users = "*"
 walkdir = "2.3.2"
+window-sort-iterator = "0.1.0"
 
 dychatat = { path = "../dychatat" }
 path_ext = { path = "../path_ext" }

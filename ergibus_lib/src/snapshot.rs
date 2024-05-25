@@ -1,21 +1,24 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::archive::{get_archive_data, ArchiveData, Exclusions};
-use crate::content::ContentMgmtKey;
-use crate::fs_objects::{DirectoryData, ExtractionStats, FileData, SymLinkData};
-use crate::fs_objects::{FileStats, SymLinkStats};
-use crate::report::ignore_report_or_fail;
-use crate::{archive, EResult, Error, UNEXPECTED};
-use chrono::{DateTime, Local};
-use log::*;
-use path_ext::{absolute_path_buf, PathType};
-use serde::Serialize;
 use std::convert::TryFrom;
 use std::fs::{DirEntry, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 use std::{fs, time};
+
+use chrono::{DateTime, Local};
+use log::*;
+use path_ext::{absolute_path_buf, PathType};
+use serde::Serialize;
+use window_sort_iterator::WindowSortIterExt;
+
+use crate::archive::{get_archive_data, ArchiveData, Exclusions};
+use crate::content::ContentMgmtKey;
+use crate::fs_objects::{DirectoryData, ExtractionStats, FileData, SymLinkData};
+use crate::fs_objects::{FileStats, SymLinkStats};
+use crate::report::ignore_report_or_fail;
+use crate::{archive, EResult, Error, UNEXPECTED};
 
 fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
     let path = path_arg.as_ref();
@@ -435,7 +438,8 @@ pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<impl Iterator<Item
     Ok(path_utilities::usable_dir_entries(dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(|e| dir_path.join(e.path())))
+        .map(|e| dir_path.join(e.path()))
+        .window_sort(100))
 }
 
 pub fn iter_snapshot_paths_for_archive(
@@ -445,7 +449,8 @@ pub fn iter_snapshot_paths_for_archive(
     Ok(path_utilities::usable_dir_entries(&dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| dir_path.join(e.path())))
+        .map(move |e| dir_path.join(e.path()))
+        .window_sort(100))
 }
 
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {
