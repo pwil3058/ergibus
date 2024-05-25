@@ -160,52 +160,6 @@ impl SnapshotPersistentData {
     }
 }
 
-// Doing this near where the file names are constructed for programming convenience
-lazy_static! {
-    static ref SS_FILE_NAME_RE: regex::Regex =
-        regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
-}
-
-fn entry_is_ss_file(entry: &DirEntry) -> bool {
-    let path = entry.path();
-    if path.is_file() {
-        if let Some(file_name) = path.file_name() {
-            if let Some(file_name) = file_name.to_str() {
-                return SS_FILE_NAME_RE.is_match(file_name);
-            }
-        }
-    }
-    false
-}
-
-fn file_path_is_snapshot(path: &Path) -> bool {
-    debug_assert!(path.is_file());
-    if let Some(file_name) = path.file_name() {
-        if let Some(file_name) = file_name.to_str() {
-            return SS_FILE_NAME_RE.is_match(file_name);
-        }
-    }
-    false
-}
-
-fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
-    let dir_entries = fs::read_dir(dir_path)
-        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
-    let mut ss_entries = Vec::new();
-    for entry_or_err in dir_entries {
-        match entry_or_err {
-            Ok(entry) => {
-                if entry_is_ss_file(&entry) {
-                    ss_entries.push(entry);
-                }
-            }
-            Err(_) => (),
-        }
-    }
-    ss_entries.sort_by_key(|e| e.path());
-    Ok(ss_entries)
-}
-
 impl SnapshotPersistentData {
     // Interrogation/extraction/restoration methods
 
@@ -441,61 +395,57 @@ pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     Ok(())
 }
 
-pub struct SnapshotPathsIter<T: Clone> {
-    items: Box<[T]>,
-    index: usize,
-    back_index: isize,
+// Doing this near where the file names are constructed for programming convenience
+lazy_static! {
+    static ref SS_FILE_NAME_RE: regex::Regex =
+        regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
 }
 
-impl<T: Clone> Iterator for SnapshotPathsIter<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index > self.back_index as usize {
-            None
-        } else {
-            let index = self.index;
-            self.index += 1;
-            Some(self.items[index].clone())
-        }
-    }
-}
-
-impl<T: Clone> DoubleEndedIterator for SnapshotPathsIter<T> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.back_index < self.index as isize {
-            None
-        } else {
-            let index = self.back_index;
-            self.back_index -= 1;
-            Some(self.items[index as usize].clone())
-        }
-    }
-}
-
-pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<SnapshotPathsIter<PathBuf>> {
-    let dir_entries = path_utilities::usable_dir_entries(dir_path)
-        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
-    let mut items = Vec::new();
-    for usable_dir_entry in dir_entries {
-        if usable_dir_entry.is_file() {
-            if file_path_is_snapshot(&usable_dir_entry.path()) {
-                items.push(dir_path.join(&usable_dir_entry.path()));
+fn entry_is_ss_file(entry: &DirEntry) -> bool {
+    let path = entry.path();
+    if path.is_file() {
+        if let Some(file_name) = path.file_name() {
+            if let Some(file_name) = file_name.to_str() {
+                return SS_FILE_NAME_RE.is_match(file_name);
             }
         }
     }
-    items.sort();
-    let back_index = items.len() as isize - 1;
-    Ok(SnapshotPathsIter {
-        items: items.into_boxed_slice(),
-        index: 0,
-        back_index,
-    })
+    false
 }
 
-pub fn iter_snapshot_paths_for_archive(archive_name: &str) -> EResult<SnapshotPathsIter<PathBuf>> {
-    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    iter_snapshot_paths_in_dir(&snapshot_dir_path)
+fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
+    let dir_entries = fs::read_dir(dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+    let mut ss_entries = Vec::new();
+    for entry_or_err in dir_entries {
+        match entry_or_err {
+            Ok(entry) => {
+                if entry_is_ss_file(&entry) {
+                    ss_entries.push(entry);
+                }
+            }
+            Err(_) => (),
+        }
+    }
+    ss_entries.sort_by_key(|e| e.path());
+    Ok(ss_entries)
+}
+
+pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<impl Iterator<Item = PathBuf> + '_> {
+    Ok(path_utilities::usable_dir_entries(dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
+        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
+        .map(|e| dir_path.join(e.path())))
+}
+
+pub fn iter_snapshot_paths_for_archive(
+    archive_name: &str,
+) -> EResult<impl Iterator<Item = PathBuf> + '_> {
+    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    Ok(path_utilities::usable_dir_entries(&dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
+        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
+        .map(move |e| dir_path.join(e.path())))
 }
 
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {

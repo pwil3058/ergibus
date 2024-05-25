@@ -75,7 +75,7 @@ impl RowDataSource for SnapshotRowData {
         let mut hasher = Hasher::new(Algorithm::SHA256);
         if let Some(archive_name) = archive_name {
             if let Ok(pathbufs) = snapshot::iter_snapshot_paths_for_archive(archive_name) {
-                for pathbuf in pathbufs.rev() {
+                for pathbuf in pathbufs {
                     hasher
                         .write_all(pathbuf.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
@@ -91,10 +91,9 @@ impl RowDataSource for SnapshotRowData {
     fn digest(&self) -> Vec<u8> {
         let archive_name = &*self.0.archive_name.borrow();
         let mut hasher = Hasher::new(Algorithm::SHA256);
-        // match &archive_name {
         if let Some(archive_name) = archive_name {
             if let Ok(pathbufs) = snapshot::iter_snapshot_paths_for_archive(archive_name) {
-                for pathbuf in pathbufs.rev() {
+                for pathbuf in pathbufs {
                     hasher
                         .write_all(pathbuf.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
