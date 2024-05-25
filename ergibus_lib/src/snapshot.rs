@@ -463,7 +463,7 @@ impl<T: Clone> Iterator for SnapshotPathsIter<T> {
 
 impl<T: Clone> DoubleEndedIterator for SnapshotPathsIter<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.back_index < self.back_index as isize {
+        if self.back_index < self.index as isize {
             None
         } else {
             let index = self.back_index;
@@ -484,6 +484,7 @@ pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<SnapshotPathsIter<
             }
         }
     }
+    items.sort();
     let back_index = items.len() as isize - 1;
     Ok(SnapshotPathsIter {
         items: items.into_boxed_slice(),

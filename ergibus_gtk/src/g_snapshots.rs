@@ -71,42 +71,37 @@ impl ListViewSpec for SnapshotRowData {
 impl RowDataSource for SnapshotRowData {
     fn rows_and_digest(&self) -> (Vec<Row>, Vec<u8>) {
         let archive_name = &*self.0.archive_name.borrow();
-        match &archive_name {
-            Some(archive_name) => {
-                match snapshot::get_snapshot_names_for_archive(archive_name, true) {
-                    Ok(snapshot_names) => {
-                        let mut rows = vec![];
-                        let mut hasher = Hasher::new(Algorithm::SHA256);
-                        for item in snapshot_names {
-                            hasher.write_all(item.as_bytes()).expect(UNEXPECTED);
-                            rows.push(vec![item.to_value()])
-                        }
-                        (rows, hasher.finish())
+        let mut rows = vec![];
+        let mut hasher = Hasher::new(Algorithm::SHA256);
+        if let Some(archive_name) = archive_name {
+            if let Ok(pathbufs) = snapshot::iter_snapshot_paths_for_archive(archive_name) {
+                for pathbuf in pathbufs.rev() {
+                    hasher
+                        .write_all(pathbuf.to_string_lossy().as_bytes())
+                        .expect(UNEXPECTED);
+                    if let Some(snapshot_name) = pathbuf.file_name() {
+                        rows.push(vec![snapshot_name.to_string_lossy().to_value()]);
                     }
-                    Err(_) => (vec![], vec![]),
                 }
             }
-            None => (vec![], vec![]),
         }
+        (rows, hasher.finish())
     }
 
     fn digest(&self) -> Vec<u8> {
         let archive_name = &*self.0.archive_name.borrow();
-        match &archive_name {
-            Some(archive_name) => {
-                match snapshot::get_snapshot_names_for_archive(archive_name, true) {
-                    Ok(snapshot_names) => {
-                        let mut hasher = Hasher::new(Algorithm::SHA256);
-                        for item in snapshot_names {
-                            hasher.write_all(item.as_bytes()).expect(UNEXPECTED);
-                        }
-                        hasher.finish()
-                    }
-                    Err(_) => vec![],
+        let mut hasher = Hasher::new(Algorithm::SHA256);
+        // match &archive_name {
+        if let Some(archive_name) = archive_name {
+            if let Ok(pathbufs) = snapshot::iter_snapshot_paths_for_archive(archive_name) {
+                for pathbuf in pathbufs.rev() {
+                    hasher
+                        .write_all(pathbuf.to_string_lossy().as_bytes())
+                        .expect(UNEXPECTED);
                 }
             }
-            None => vec![],
         }
+        hasher.finish()
     }
 }
 
