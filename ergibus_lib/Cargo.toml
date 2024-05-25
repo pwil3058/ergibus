@@ -28,4 +28,5 @@ users = "*"
 walkdir = "2.3.2"
 
 dychatat = { path = "../dychatat" }
-path_ext = { path = "../path_ext"}
+path_ext = { path = "../path_ext" }
+path_utilities = { path = "../path_utilities" }

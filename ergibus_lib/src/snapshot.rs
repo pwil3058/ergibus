@@ -178,6 +178,16 @@ fn entry_is_ss_file(entry: &DirEntry) -> bool {
     false
 }
 
+fn file_path_is_snapshot(path: &Path) -> bool {
+    debug_assert!(path.is_file());
+    if let Some(file_name) = path.file_name() {
+        if let Some(file_name) = file_name.to_str() {
+            return SS_FILE_NAME_RE.is_match(file_name);
+        }
+    }
+    false
+}
+
 fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
     let dir_entries = fs::read_dir(dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
@@ -429,6 +439,62 @@ pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
         .map_err(|err| Error::SnapshotDeleteIOError(err, ss_file_path.to_path_buf()))?;
     snapshot.release_contents()?;
     Ok(())
+}
+
+pub struct SnapshotPathsIter<T: Clone> {
+    items: Box<[T]>,
+    index: usize,
+    back_index: isize,
+}
+
+impl<T: Clone> Iterator for SnapshotPathsIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index > self.back_index as usize {
+            None
+        } else {
+            let index = self.index;
+            self.index += 1;
+            Some(self.items[index].clone())
+        }
+    }
+}
+
+impl<T: Clone> DoubleEndedIterator for SnapshotPathsIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.back_index < self.back_index as isize {
+            None
+        } else {
+            let index = self.back_index;
+            self.back_index -= 1;
+            Some(self.items[index as usize].clone())
+        }
+    }
+}
+
+pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<SnapshotPathsIter<PathBuf>> {
+    let dir_entries = path_utilities::usable_dir_entries(dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+    let mut items = Vec::new();
+    for usable_dir_entry in dir_entries {
+        if usable_dir_entry.is_file() {
+            if file_path_is_snapshot(&usable_dir_entry.path()) {
+                items.push(dir_path.join(&usable_dir_entry.path()));
+            }
+        }
+    }
+    let back_index = items.len() as isize - 1;
+    Ok(SnapshotPathsIter {
+        items: items.into_boxed_slice(),
+        index: 0,
+        back_index,
+    })
+}
+
+pub fn iter_snapshot_paths_for_archive(archive_name: &str) -> EResult<SnapshotPathsIter<PathBuf>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    iter_snapshot_paths_in_dir(&snapshot_dir_path)
 }
 
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {
