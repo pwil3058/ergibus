@@ -1,0 +1,41 @@
+[package]
+name = "pw_gtk_ext"
+version = "0.2.0"
+authors = ["Peter Williams <pwil3058@bigpond.net.au>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+atk = "0.9.0"
+cairo-rs = "0.9.0"
+gdk = "0.13.0"
+gdk-pixbuf = "0.9.0"
+gdkx11 = "0.9.0"
+gio = "0.9.0"
+glib = "0.10.0"
+gtk = "0.9.0"
+pango = "0.9.0"
+pango-sys = "0.10.0"
+pangocairo = "0.10.0"
+sourceview = "0.9.0"
+
+dirs = "5"
+num = "0.4"
+num-traits = "0.2"
+which = "6"
+
+mut_static = "5"
+lazy_static = "1.4"
+
+log = "0.4"
+
+path_utilities = { path = "../path_utilities" }
+pw_gtk_ext_derive = { path = "../pw_gtk_ext_derive" }
+#recollections = { path = "../recollections" }
+recollections = { git = "https://github.com/pwil3058/recollections.git" }
+normalised_angles = { git = "https://github.com/pwil3058/rs_normalised_angles.git" }
+num_traits_plus = { git = "https://github.com/pwil3058/rs_num_traits_plus.git" }
+
+[features]
+default = ["gtk/v3_18", "gio/v2_44", "cairo-rs/png"]

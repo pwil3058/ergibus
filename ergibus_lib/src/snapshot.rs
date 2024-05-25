@@ -14,6 +14,7 @@ use std::convert::TryFrom;
 use std::fs::{DirEntry, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 use std::{fs, time};
 
 fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
@@ -172,6 +173,16 @@ fn entry_is_ss_file(entry: &DirEntry) -> bool {
             if let Some(file_name) = file_name.to_str() {
                 return SS_FILE_NAME_RE.is_match(file_name);
             }
+        }
+    }
+    false
+}
+
+fn file_path_is_snapshot(path: &Path) -> bool {
+    debug_assert!(path.is_file());
+    if let Some(file_name) = path.file_name() {
+        if let Some(file_name) = file_name.to_str() {
+            return SS_FILE_NAME_RE.is_match(file_name);
         }
     }
     false
@@ -430,6 +441,62 @@ pub fn delete_snapshot_file(ss_file_path: &Path) -> EResult<()> {
     Ok(())
 }
 
+pub struct SnapshotPathsIter<T: Clone> {
+    items: Box<[T]>,
+    index: usize,
+    back_index: isize,
+}
+
+impl<T: Clone> Iterator for SnapshotPathsIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index > self.back_index as usize {
+            None
+        } else {
+            let index = self.index;
+            self.index += 1;
+            Some(self.items[index].clone())
+        }
+    }
+}
+
+impl<T: Clone> DoubleEndedIterator for SnapshotPathsIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.back_index < self.back_index as isize {
+            None
+        } else {
+            let index = self.back_index;
+            self.back_index -= 1;
+            Some(self.items[index as usize].clone())
+        }
+    }
+}
+
+pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<SnapshotPathsIter<PathBuf>> {
+    let dir_entries = path_utilities::usable_dir_entries(dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
+    let mut items = Vec::new();
+    for usable_dir_entry in dir_entries {
+        if usable_dir_entry.is_file() {
+            if file_path_is_snapshot(&usable_dir_entry.path()) {
+                items.push(dir_path.join(&usable_dir_entry.path()));
+            }
+        }
+    }
+    let back_index = items.len() as isize - 1;
+    Ok(SnapshotPathsIter {
+        items: items.into_boxed_slice(),
+        index: 0,
+        back_index,
+    })
+}
+
+pub fn iter_snapshot_paths_for_archive(archive_name: &str) -> EResult<SnapshotPathsIter<PathBuf>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    iter_snapshot_paths_in_dir(&snapshot_dir_path)
+}
+
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_paths = Vec::new();
@@ -464,6 +531,39 @@ pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<
 pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
+    Ok(snapshot_names)
+}
+
+pub fn get_snapshot_names_and_stats_in_dir(
+    dir_path: &Path,
+    reverse: bool,
+) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
+    let entries = get_ss_entries_in_dir(dir_path)?;
+    let mut snapshot_names_and_stats = Vec::new();
+    for entry in entries {
+        let name = String::from(entry.file_name().to_string_lossy().to_owned());
+        let snapshot_file_path = entry.path();
+        let snapshot = SnapshotPersistentData::from_file(&snapshot_file_path)?;
+        snapshot_names_and_stats.push((
+            name,
+            snapshot.file_stats,
+            snapshot.sym_link_stats,
+            snapshot.started_create,
+            snapshot.finished_create,
+        ));
+    }
+    if reverse {
+        snapshot_names_and_stats.reverse();
+    };
+    Ok(snapshot_names_and_stats)
+}
+
+pub fn get_snapshot_names_and_stats_for_archive(
+    archive_name: &str,
+    reverse: bool,
+) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let snapshot_names = get_snapshot_names_and_stats_in_dir(&snapshot_dir_path, reverse)?;
     Ok(snapshot_names)
 }
 

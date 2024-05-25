@@ -10,7 +10,7 @@ pub mod attributes;
 pub mod config;
 pub mod content;
 pub mod fs_objects;
-mod path_buf_ext;
+pub mod path_buf_ext;
 mod report;
 pub mod snapshot;
 

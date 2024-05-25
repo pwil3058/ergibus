@@ -1,0 +1,14 @@
+[package]
+name = "pw_gtk_ext_derive"
+version = "0.2.0"
+authors = ["Peter Williams <pwil3058@bigpond.net.au>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
