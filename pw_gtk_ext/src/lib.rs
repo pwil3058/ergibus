@@ -35,10 +35,8 @@ pub use recollections;
 pub mod gdkx;
 pub mod geometry;
 pub mod glibx;
-// #[macro_use]
 pub mod gtkx;
 pub mod printer;
+pub mod sample;
 pub mod sav_state;
-// #[macro_use]
 pub mod wrapper;
-// pub mod sample;

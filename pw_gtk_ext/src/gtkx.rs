@@ -10,6 +10,7 @@ pub mod drawing_area;
 pub mod entry;
 pub mod list;
 pub mod list_store;
+pub mod mapped;
 pub mod menu;
 pub mod notebook;
 pub mod paned;
