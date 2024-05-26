@@ -11,6 +11,7 @@ use pw_gtk_ext::{
 use crypto_hash::{Algorithm, Hasher};
 
 use ergibus_lib::snapshot;
+use ergibus_lib::snapshot::Order;
 
 use crate::g_archive;
 use crate::g_snapshot::SnapshotManager;
@@ -74,7 +75,9 @@ impl RowDataSource for SnapshotRowData {
         let mut rows = vec![];
         let mut hasher = Hasher::new(Algorithm::SHA256);
         if let Some(archive_name) = archive_name {
-            if let Ok(pathbufs) = snapshot::iter_snapshot_paths_for_archive(archive_name) {
+            if let Ok(pathbufs) =
+                snapshot::iter_snapshot_paths_for_archive(archive_name, Order::Descending)
+            {
                 for pathbuf in pathbufs {
                     hasher
                         .write_all(pathbuf.to_string_lossy().as_bytes())
@@ -92,7 +95,9 @@ impl RowDataSource for SnapshotRowData {
         let archive_name = &*self.0.archive_name.borrow();
         let mut hasher = Hasher::new(Algorithm::SHA256);
         if let Some(archive_name) = archive_name {
-            if let Ok(pathbufs) = snapshot::iter_snapshot_paths_for_archive(archive_name) {
+            if let Ok(pathbufs) =
+                snapshot::iter_snapshot_paths_for_archive(archive_name, Order::Descending)
+            {
                 for pathbuf in pathbufs {
                     hasher
                         .write_all(pathbuf.to_string_lossy().as_bytes())

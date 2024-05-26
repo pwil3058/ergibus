@@ -11,6 +11,7 @@ use chrono::{DateTime, Local};
 use log::*;
 use path_ext::{absolute_path_buf, PathType};
 use serde::Serialize;
+use sortby::SortByIteratorExt;
 use window_sort_iterator::WindowSortIterExt;
 
 use crate::archive::{get_archive_data, ArchiveData, Exclusions};
@@ -434,23 +435,46 @@ fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
     Ok(ss_entries)
 }
 
-pub fn iter_snapshot_paths_in_dir(dir_path: &Path) -> EResult<impl Iterator<Item = PathBuf> + '_> {
-    Ok(path_utilities::usable_dir_entries(dir_path)
+pub enum Order {
+    Ascending,
+    Descending,
+}
+
+pub fn iter_snapshot_paths_in_dir(
+    dir_path: &Path,
+    order: Order,
+) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
+    let iter = path_utilities::usable_dir_entries(dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(|e| dir_path.join(e.path()))
-        .window_sort(100))
+        .map(|e| dir_path.join(e.path()));
+    match order {
+        Order::Ascending => Ok(Box::new(
+            iter.map(|e| std::cmp::Reverse(e))
+                .window_sort(usize::MAX)
+                .map(|e| e.0),
+        )),
+        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
+    }
 }
 
 pub fn iter_snapshot_paths_for_archive(
     archive_name: &str,
-) -> EResult<impl Iterator<Item = PathBuf> + '_> {
+    order: Order,
+) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
     let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    Ok(path_utilities::usable_dir_entries(&dir_path)
+    let iter = path_utilities::usable_dir_entries(&dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| dir_path.join(e.path()))
-        .window_sort(100))
+        .map(move |e| dir_path.join(e.path()));
+    match order {
+        Order::Ascending => Ok(Box::new(
+            iter.map(|e| std::cmp::Reverse(e))
+                .window_sort(usize::MAX)
+                .map(|e| e.0),
+        )),
+        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
+    }
 }
 
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {
