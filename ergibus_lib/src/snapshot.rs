@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::fs::{DirEntry, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
-use std::time::SystemTime;
+use std::time::Duration;
 use std::{fs, time};
 
 use chrono::{DateTime, Local};
@@ -532,7 +532,7 @@ pub fn get_snapshot_names_for_archive(archive_name: &str, order: Order) -> EResu
 pub fn get_snapshot_names_and_stats_in_dir(
     dir_path: &Path,
     order: Order,
-) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
+) -> EResult<Vec<(String, FileStats, SymLinkStats, Duration)>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_names_and_stats = Vec::new();
     for entry in entries {
@@ -543,8 +543,7 @@ pub fn get_snapshot_names_and_stats_in_dir(
             name,
             snapshot.file_stats,
             snapshot.sym_link_stats,
-            snapshot.started_create,
-            snapshot.finished_create,
+            snapshot.creation_duration(),
         ));
     }
     if order.is_descending() {
@@ -556,7 +555,7 @@ pub fn get_snapshot_names_and_stats_in_dir(
 pub fn get_snapshot_names_and_stats_for_archive(
     archive_name: &str,
     order: Order,
-) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
+) -> EResult<Vec<(String, FileStats, SymLinkStats, Duration)>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     let snapshot_names = get_snapshot_names_and_stats_in_dir(&snapshot_dir_path, order)?;
     Ok(snapshot_names)
