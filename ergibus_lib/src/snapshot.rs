@@ -11,7 +11,6 @@ use chrono::{DateTime, Local};
 use log::*;
 use path_ext::{absolute_path_buf, PathType};
 use serde::Serialize;
-use sortby::SortByIteratorExt;
 use window_sort_iterator::WindowSortIterExt;
 
 use crate::archive::{get_archive_data, ArchiveData, Exclusions};
@@ -435,9 +434,25 @@ fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
     Ok(ss_entries)
 }
 
+#[derive(Debug)]
 pub enum Order {
     Ascending,
     Descending,
+}
+impl Order {
+    pub fn is_ascending(&self) -> bool {
+        match self {
+            Order::Ascending => true,
+            Order::Descending => false,
+        }
+    }
+
+    pub fn is_descending(&self) -> bool {
+        match self {
+            Order::Ascending => false,
+            Order::Descending => true,
+        }
+    }
 }
 
 pub fn iter_snapshot_paths_in_dir(
@@ -477,46 +492,46 @@ pub fn iter_snapshot_paths_for_archive(
     }
 }
 
-pub fn get_snapshot_paths_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<PathBuf>> {
+pub fn get_snapshot_paths_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<PathBuf>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_paths = Vec::new();
     for entry in entries {
         let e_path = dir_path.join(entry.path());
         snapshot_paths.push(e_path);
     }
-    if reverse {
+    if order.is_descending() {
         snapshot_paths.reverse();
     };
     Ok(snapshot_paths)
 }
 
-pub fn get_snapshot_paths_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<PathBuf>> {
+pub fn get_snapshot_paths_for_archive(archive_name: &str, order: Order) -> EResult<Vec<PathBuf>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, reverse)?;
+    let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, order)?;
     Ok(snapshot_paths)
 }
 
-pub fn get_snapshot_names_in_dir(dir_path: &Path, reverse: bool) -> EResult<Vec<String>> {
+pub fn get_snapshot_names_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<String>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_names = Vec::new();
     for entry in entries {
         snapshot_names.push(String::from(entry.file_name().to_string_lossy().to_owned()));
     }
-    if reverse {
+    if order.is_descending() {
         snapshot_names.reverse();
     };
     Ok(snapshot_names)
 }
 
-pub fn get_snapshot_names_for_archive(archive_name: &str, reverse: bool) -> EResult<Vec<String>> {
+pub fn get_snapshot_names_for_archive(archive_name: &str, order: Order) -> EResult<Vec<String>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, reverse)?;
+    let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, order)?;
     Ok(snapshot_names)
 }
 
 pub fn get_snapshot_names_and_stats_in_dir(
     dir_path: &Path,
-    reverse: bool,
+    order: Order,
 ) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
     let entries = get_ss_entries_in_dir(dir_path)?;
     let mut snapshot_names_and_stats = Vec::new();
@@ -532,7 +547,7 @@ pub fn get_snapshot_names_and_stats_in_dir(
             snapshot.finished_create,
         ));
     }
-    if reverse {
+    if order.is_descending() {
         snapshot_names_and_stats.reverse();
     };
     Ok(snapshot_names_and_stats)
@@ -540,10 +555,10 @@ pub fn get_snapshot_names_and_stats_in_dir(
 
 pub fn get_snapshot_names_and_stats_for_archive(
     archive_name: &str,
-    reverse: bool,
+    order: Order,
 ) -> EResult<Vec<(String, FileStats, SymLinkStats, SystemTime, SystemTime)>> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let snapshot_names = get_snapshot_names_and_stats_in_dir(&snapshot_dir_path, reverse)?;
+    let snapshot_names = get_snapshot_names_and_stats_in_dir(&snapshot_dir_path, order)?;
     Ok(snapshot_names)
 }
 

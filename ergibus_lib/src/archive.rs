@@ -14,6 +14,7 @@ use path_ext::expand_home_dir;
 use path_ext::{absolute_path_buf, PathType};
 
 use crate::report::ignore_report_or_fail;
+use crate::snapshot::Order;
 use crate::{
     config,
     content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
@@ -373,7 +374,7 @@ impl Snapshots {
     }
 
     pub fn delete(&self) -> EResult<()> {
-        let snapshot_paths = self.get_snapshot_paths(false)?;
+        let snapshot_paths = self.get_snapshot_paths(Order::Ascending)?;
         // NB: this necessary to free all the references to content data
         for snapshot_path in snapshot_paths.iter() {
             snapshot::delete_snapshot_file(snapshot_path)?;
@@ -382,16 +383,16 @@ impl Snapshots {
         Ok(())
     }
 
-    pub fn get_snapshot_paths(&self, reverse: bool) -> EResult<Vec<PathBuf>> {
-        snapshot::get_snapshot_paths_in_dir(&self.dir_path, reverse)
+    pub fn get_snapshot_paths(&self, order: Order) -> EResult<Vec<PathBuf>> {
+        snapshot::get_snapshot_paths_in_dir(&self.dir_path, order)
     }
 
-    pub fn get_snapshot_names(&self, reverse: bool) -> EResult<Vec<String>> {
-        snapshot::get_snapshot_names_in_dir(&self.dir_path, reverse)
+    pub fn get_snapshot_names(&self, order: Order) -> EResult<Vec<String>> {
+        snapshot::get_snapshot_names_in_dir(&self.dir_path, order)
     }
 
     pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
-        let snapshot_paths = self.get_snapshot_paths(true)?;
+        let snapshot_paths = self.get_snapshot_paths(Order::Ascending)?;
         if snapshot_paths.len() == 0 {
             return Err(Error::ArchiveEmpty(self.id()));
         };
@@ -416,7 +417,7 @@ impl Snapshots {
         if !clear_fell && newest_count == 0 {
             return Err(Error::LastSnapshot(self.id()));
         }
-        let snapshot_paths = self.get_snapshot_paths(false)?;
+        let snapshot_paths = self.get_snapshot_paths(Order::Ascending)?;
         if snapshot_paths.len() == 0 {
             return Err(Error::ArchiveEmpty(self.id()));
         }
@@ -432,7 +433,7 @@ impl Snapshots {
     }
 
     pub fn delete_ss_back_n(&self, n: i64, clear_fell: bool) -> EResult<usize> {
-        let snapshot_paths = self.get_snapshot_paths(true)?;
+        let snapshot_paths = self.get_snapshot_paths(Order::Descending)?;
         if snapshot_paths.len() == 0 {
             return Err(Error::ArchiveEmpty(self.id()));
         };

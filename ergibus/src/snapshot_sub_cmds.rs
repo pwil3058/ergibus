@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use structopt::{clap::ArgGroup, StructOpt};
 
+use ergibus_lib::snapshot::Order;
 use ergibus_lib::{archive::Snapshots, snapshot, EResult, Error};
 use std::env;
 
@@ -60,7 +61,7 @@ impl SnapshotManager {
         };
         match self.sub_cmd {
             SubCmd::List => {
-                for name in snapshot_dir.get_snapshot_names(false)?.iter() {
+                for name in snapshot_dir.get_snapshot_names(Order::Ascending)?.iter() {
                     println!("{:?}", name);
                 }
             }
