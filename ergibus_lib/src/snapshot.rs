@@ -11,6 +11,7 @@ use std::{fs, time};
 use chrono::{DateTime, Local};
 use log::*;
 use path_ext::{absolute_path_buf, PathType};
+use path_utilities::UsableDirEntry;
 use serde::Serialize;
 use window_sort_iterator::WindowSortIterExt;
 
@@ -456,14 +457,18 @@ impl Order {
     }
 }
 
-pub fn iter_snapshot_paths_in_dir(
-    dir_path: &Path,
+pub fn iter_snapshot_i_in_dir<'a, I: Ord + 'a>(
+    dir_path: &'a Path,
     order: Order,
-) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
+    e_to_i: fn(UsableDirEntry) -> I,
+) -> EResult<Box<dyn Iterator<Item = I> + '_>>
+where
+    UsableDirEntry: PartialOrd,
+{
     let iter = path_utilities::usable_dir_entries(dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(|e| e.path());
+        .map(move |e| e_to_i(e));
     match order {
         Order::Ascending => Ok(Box::new(
             iter.map(|e| std::cmp::Reverse(e))
@@ -496,7 +501,7 @@ pub fn iter_snapshot_paths_for_archive(
 pub fn iter_snapshot_names_in_dir(
     dir_path: &Path,
     order: Order,
-) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
+) -> EResult<Box<dyn Iterator<Item = OsString> + '_>> {
     let iter = path_utilities::usable_dir_entries(dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))

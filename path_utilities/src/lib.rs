@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{DirEntry, FileType, Metadata, ReadDir};
@@ -94,6 +95,18 @@ impl UsableDirEntry {
 
     pub fn metadata(&self) -> io::Result<Metadata> {
         self.dir_entry.metadata()
+    }
+}
+
+impl PartialEq for UsableDirEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.file_name() == other.file_name()
+    }
+}
+
+impl PartialOrd for UsableDirEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.file_name().cmp(&other.file_name()))
     }
 }
 
