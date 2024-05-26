@@ -463,7 +463,7 @@ pub fn iter_snapshot_paths_in_dir(
     let iter = path_utilities::usable_dir_entries(dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(|e| dir_path.join(e.path()));
+        .map(|e| e.path());
     match order {
         Order::Ascending => Ok(Box::new(
             iter.map(|e| std::cmp::Reverse(e))
@@ -483,6 +483,24 @@ pub fn iter_snapshot_paths_for_archive(
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
         .map(move |e| e.path());
+    match order {
+        Order::Ascending => Ok(Box::new(
+            iter.map(|e| std::cmp::Reverse(e))
+                .window_sort(usize::MAX)
+                .map(|e| e.0),
+        )),
+        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
+    }
+}
+
+pub fn iter_snapshot_names_in_dir(
+    dir_path: &Path,
+    order: Order,
+) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
+    let iter = path_utilities::usable_dir_entries(dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
+        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
+        .map(|e| e.file_name());
     match order {
         Order::Ascending => Ok(Box::new(
             iter.map(|e| std::cmp::Reverse(e))
