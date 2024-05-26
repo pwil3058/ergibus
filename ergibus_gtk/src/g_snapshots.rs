@@ -75,16 +75,14 @@ impl RowDataSource for SnapshotRowData {
         let mut rows = vec![];
         let mut hasher = Hasher::new(Algorithm::SHA256);
         if let Some(archive_name) = archive_name {
-            if let Ok(pathbufs) =
-                snapshot::iter_snapshot_paths_for_archive(archive_name, Order::Descending)
+            if let Ok(snapshot_names) =
+                snapshot::iter_snapshot_names_for_archive(archive_name, Order::Descending)
             {
-                for pathbuf in pathbufs {
+                for snapshot_name in snapshot_names {
                     hasher
-                        .write_all(pathbuf.to_string_lossy().as_bytes())
+                        .write_all(snapshot_name.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
-                    if let Some(snapshot_name) = pathbuf.file_name() {
-                        rows.push(vec![snapshot_name.to_string_lossy().to_value()]);
-                    }
+                    rows.push(vec![snapshot_name.to_string_lossy().to_value()]);
                 }
             }
         }
@@ -95,12 +93,12 @@ impl RowDataSource for SnapshotRowData {
         let archive_name = &*self.0.archive_name.borrow();
         let mut hasher = Hasher::new(Algorithm::SHA256);
         if let Some(archive_name) = archive_name {
-            if let Ok(pathbufs) =
-                snapshot::iter_snapshot_paths_for_archive(archive_name, Order::Descending)
+            if let Ok(snapshot_names) =
+                snapshot::iter_snapshot_names_for_archive(archive_name, Order::Descending)
             {
-                for pathbuf in pathbufs {
+                for snapshot_name in snapshot_names {
                     hasher
-                        .write_all(pathbuf.to_string_lossy().as_bytes())
+                        .write_all(snapshot_name.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
                 }
             }

@@ -1,6 +1,7 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use std::convert::TryFrom;
+use std::ffi::OsString;
 use std::fs::{DirEntry, File};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -481,7 +482,26 @@ pub fn iter_snapshot_paths_for_archive(
     let iter = path_utilities::usable_dir_entries(&dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| dir_path.join(e.path()));
+        .map(move |e| e.path());
+    match order {
+        Order::Ascending => Ok(Box::new(
+            iter.map(|e| std::cmp::Reverse(e))
+                .window_sort(usize::MAX)
+                .map(|e| e.0),
+        )),
+        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
+    }
+}
+
+pub fn iter_snapshot_names_for_archive(
+    archive_name: &str,
+    order: Order,
+) -> EResult<Box<dyn Iterator<Item = OsString> + '_>> {
+    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let iter = path_utilities::usable_dir_entries(&dir_path)
+        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
+        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
+        .map(move |e| e.file_name());
     match order {
         Order::Ascending => Ok(Box::new(
             iter.map(|e| std::cmp::Reverse(e))
