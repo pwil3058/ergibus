@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::rc::Rc;
 
@@ -83,6 +84,7 @@ impl RowDataSource for SnapshotRowData {
                         .write_all(snapshot_name.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
                     rows.push(vec![snapshot_name.to_string_lossy().to_value()]);
+                    let _stats = snapshot::get_snapshot_stats(archive_name, &snapshot_name);
                 }
             }
         }
@@ -251,7 +253,7 @@ pub struct SnapshotsManagerCore {
     paned: gtk::Paned,
     snapshot_list_view: SnapshotListView,
     notebook: gtk::Notebook,
-    open_snapshots: RefCell<Vec<(String, SnapshotManager)>>,
+    open_snapshots: RefCell<Vec<(OsString, SnapshotManager)>>,
 }
 
 #[derive(PWO, WClone, Wrapper)]
@@ -302,7 +304,7 @@ impl SnapshotsManager {
                         .expect(UNEXPECTED)
                         .expect(UNEXPECTED),
                 };
-                snapshots_mgr_clone.open_snapshot(&snapshot_name);
+                snapshots_mgr_clone.open_snapshot(&OsString::from(snapshot_name));
             },
         );
 
@@ -312,7 +314,7 @@ impl SnapshotsManager {
             .snapshot_list_view
             .connect_double_click(move |value| {
                 let snapshot_name = value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED);
-                snapshots_mgr_clone.open_snapshot(&snapshot_name);
+                snapshots_mgr_clone.open_snapshot(&OsString::from(snapshot_name));
             });
 
         let snapshots_mgr_clone = snapshots_mgr.clone();
@@ -320,9 +322,11 @@ impl SnapshotsManager {
             .0
             .snapshot_list_view
             .connect_popup_menu_item("delete", move |_, selected| {
-                let snapshot_names: Vec<String> = selected
+                let snapshot_names: Vec<OsString> = selected
                     .iter()
-                    .map(|value| value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED))
+                    .map(|value| {
+                        OsString::from(value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED))
+                    })
                     .collect();
                 snapshots_mgr_clone.delete_snapshots(&snapshot_names);
             });
@@ -336,9 +340,9 @@ impl SnapshotsManager {
         snapshots_mgr
     }
 
-    fn open_snapshot(&self, snapshot_name: &str) {
+    fn open_snapshot(&self, snapshot_name: &OsStr) {
         let mut open_snapshots = self.0.open_snapshots.borrow_mut();
-        match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_str()) {
+        match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_os_str()) {
             Ok(index) => {
                 // already open so just make it the current page
                 let (_, ref page) = open_snapshots[index];
@@ -350,28 +354,29 @@ impl SnapshotsManager {
                 match SnapshotManager::new(&archive_name, snapshot_name) {
                     Ok(page) => {
                         let tab_label = TabRemoveLabelBuilder::new()
-                            .label_text(snapshot_name)
+                            .label_text(&snapshot_name.to_string_lossy())
                             .build();
                         let self_clone = self.clone();
-                        let sn_string = snapshot_name.to_string();
+                        let sn_clone = snapshot_name.to_os_string();
                         tab_label.connect_remove_page(move || {
-                            self_clone.close_snapshot(&sn_string, false)
+                            self_clone.close_snapshot(&sn_clone, false)
                         });
-                        let menu_label = gtk::Label::new(Some(snapshot_name));
+                        let menu_label = gtk::Label::new(Some(&snapshot_name.to_string_lossy()));
                         let page_no = self.0.notebook.insert_page_menu(
                             page.pwo(),
                             Some(tab_label.pwo()),
                             Some(&menu_label),
                             Some(index as u32),
                         );
-                        open_snapshots.insert(index, (snapshot_name.to_string(), page));
+                        open_snapshots.insert(index, (snapshot_name.to_os_string(), page));
                         self.0.notebook.set_current_page(Some(page_no));
                         self.0.notebook.show_all();
                     }
                     Err(err) => self.report_error(
                         &format!(
                             "Error opening \"{}\" snapshot \"{}\"",
-                            archive_name, snapshot_name
+                            archive_name,
+                            snapshot_name.to_string_lossy()
                         ),
                         &err,
                     ),
@@ -380,9 +385,9 @@ impl SnapshotsManager {
         }
     }
 
-    fn close_snapshot(&self, snapshot_name: &str, conditional: bool) {
+    fn close_snapshot(&self, snapshot_name: &OsStr, conditional: bool) {
         let mut open_snapshots = self.0.open_snapshots.borrow_mut();
-        match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_str()) {
+        match open_snapshots.binary_search_by_key(&snapshot_name, |os| os.0.as_os_str()) {
             Ok(index) => {
                 let (_, ref page) = open_snapshots[index];
                 let page_no = self.0.notebook.page_num(page.pwo());
@@ -395,7 +400,7 @@ impl SnapshotsManager {
                     log::error!(
                         "Close \"{}:{}\" failed.  Not open",
                         archive_name,
-                        snapshot_name
+                        snapshot_name.to_string_lossy()
                     )
                 }
             }
@@ -409,11 +414,11 @@ impl SnapshotsManager {
         self.0.open_snapshots.borrow_mut().clear();
     }
 
-    fn delete_snapshots(&self, snapshot_names: &[String]) {
+    fn delete_snapshots(&self, snapshot_names: &[OsString]) {
         let archive_name = self.0.snapshot_list_view.archive_name().expect(UNEXPECTED);
         let mut question = "Delete the following snapshots:\n".to_string();
         for snapshot_name in snapshot_names.iter() {
-            question += format!("\t{}\n", snapshot_name).as_str();
+            question += format!("\t{}\n", snapshot_name.to_string_lossy()).as_str();
         }
         question += format!("belonging to the \"{}\" archive?", archive_name).as_str();
         let dialog_builder = self.new_message_dialog_builder();

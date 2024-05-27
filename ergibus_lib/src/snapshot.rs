@@ -1,10 +1,11 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use std::convert::TryFrom;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 use std::{fs, time};
 
 use chrono::{DateTime, Local};
@@ -454,13 +455,6 @@ fn iter_snapshot_i_for_archive<'a, I: Ord + 'a>(
     iter_snapshot_i_in_dir(dir_path, order, ude_to_i)
 }
 
-pub fn iter_snapshot_paths_for_archive(
-    archive_name: &str,
-    order: Order,
-) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
-    iter_snapshot_i_for_archive::<PathBuf>(archive_name, order, |ude| ude.path())
-}
-
 pub fn iter_snapshot_names_in_dir(
     dir_path: &Path,
     order: Order,
@@ -482,6 +476,13 @@ pub fn iter_snapshot_names_for_archive(
     iter_snapshot_i_for_archive::<OsString>(archive_name, order, |ude| ude.file_name())
 }
 
+pub fn iter_snapshot_paths_for_archive(
+    archive_name: &str,
+    order: Order,
+) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
+    iter_snapshot_i_for_archive::<PathBuf>(archive_name, order, |ude| ude.path())
+}
+
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<PathBuf>> {
     Ok(iter_snapshot_paths_in_dir(dir_path, order)?.collect::<Vec<_>>())
 }
@@ -499,7 +500,7 @@ pub fn get_snapshot_names_for_archive(archive_name: &str, order: Order) -> EResu
 }
 
 // GUI interface functions
-pub fn delete_named_snapshots(archive_name: &str, snapshot_names: &[String]) -> EResult<()> {
+pub fn delete_named_snapshots(archive_name: &str, snapshot_names: &[OsString]) -> EResult<()> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     for snapshot_name in snapshot_names.iter() {
         let snapshot_file_path = snapshot_dir_path.join(snapshot_name);
@@ -510,11 +511,33 @@ pub fn delete_named_snapshots(archive_name: &str, snapshot_names: &[String]) -> 
 
 pub fn get_named_snapshot(
     archive_name: &str,
-    snapshot_name: &str,
+    snapshot_name: &OsStr,
 ) -> EResult<SnapshotPersistentData> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     let snapshot_file_path = snapshot_dir_path.join(snapshot_name);
     SnapshotPersistentData::from_file(&snapshot_file_path)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SnapshotStats {
+    pub file_stats: FileStats,
+    pub sym_link_stats: SymLinkStats,
+    pub creation_duration: Duration,
+}
+
+impl From<SnapshotPersistentData> for SnapshotStats {
+    fn from(spd: SnapshotPersistentData) -> Self {
+        Self {
+            file_stats: spd.file_stats,
+            sym_link_stats: spd.sym_link_stats,
+            creation_duration: spd.creation_duration(),
+        }
+    }
+}
+
+pub fn get_snapshot_stats(archive_name: &str, snapshot_name: &OsStr) -> EResult<SnapshotStats> {
+    let snapshot = get_named_snapshot(archive_name, snapshot_name)?;
+    Ok(SnapshotStats::from(snapshot))
 }
 
 #[cfg(test)]

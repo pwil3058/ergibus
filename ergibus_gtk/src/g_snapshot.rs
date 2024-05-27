@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ffi::OsStr;
 use std::rc::Rc;
 
 use pw_gtk_ext::{
@@ -112,7 +113,7 @@ impl ListViewSpec for SnapshotManagerSpec {
 }
 
 impl SnapshotManager {
-    pub fn new(archive_name: &str, snapshot_name: &str) -> EResult<Self> {
+    pub fn new(archive_name: &str, snapshot_name: &OsStr) -> EResult<Self> {
         let snapshot = snapshot::get_named_snapshot(archive_name, snapshot_name)?;
         let base_dir_path = snapshot.base_dir_path().to_path_buf();
         let current_directory_manager = CurrentDirectoryManager::new(&base_dir_path);
