@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -387,7 +388,7 @@ impl Snapshots {
         snapshot::get_snapshot_paths_in_dir(&self.dir_path, order)
     }
 
-    pub fn get_snapshot_names(&self, order: Order) -> EResult<Vec<String>> {
+    pub fn get_snapshot_names(&self, order: Order) -> EResult<Vec<OsString>> {
         snapshot::get_snapshot_names_in_dir(&self.dir_path, order)
     }
 

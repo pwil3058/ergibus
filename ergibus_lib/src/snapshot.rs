@@ -2,10 +2,9 @@
 
 use std::convert::TryFrom;
 use std::ffi::OsString;
-use std::fs::{DirEntry, File};
+use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
-use std::time::Duration;
 use std::{fs, time};
 
 use chrono::{DateTime, Local};
@@ -406,36 +405,6 @@ lazy_static! {
         regex::Regex::new(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})[+-](\d{4})$").unwrap();
 }
 
-fn entry_is_ss_file(entry: &DirEntry) -> bool {
-    let path = entry.path();
-    if path.is_file() {
-        if let Some(file_name) = path.file_name() {
-            if let Some(file_name) = file_name.to_str() {
-                return SS_FILE_NAME_RE.is_match(file_name);
-            }
-        }
-    }
-    false
-}
-
-fn get_ss_entries_in_dir(dir_path: &Path) -> EResult<Vec<DirEntry>> {
-    let dir_entries = fs::read_dir(dir_path)
-        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?;
-    let mut ss_entries = Vec::new();
-    for entry_or_err in dir_entries {
-        match entry_or_err {
-            Ok(entry) => {
-                if entry_is_ss_file(&entry) {
-                    ss_entries.push(entry);
-                }
-            }
-            Err(_) => (),
-        }
-    }
-    ss_entries.sort_by_key(|e| e.path());
-    Ok(ss_entries)
-}
-
 #[derive(Debug)]
 pub enum Order {
     Ascending,
@@ -457,18 +426,15 @@ impl Order {
     }
 }
 
-pub fn iter_snapshot_i_in_dir<'a, I: Ord + 'a>(
-    dir_path: &'a Path,
+fn iter_snapshot_i_in_dir<'a, I: Ord + 'a>(
+    dir_path: PathBuf,
     order: Order,
-    e_to_i: fn(UsableDirEntry) -> I,
-) -> EResult<Box<dyn Iterator<Item = I> + '_>>
-where
-    UsableDirEntry: PartialOrd,
-{
-    let iter = path_utilities::usable_dir_entries(dir_path)
+    ude_to_i: fn(UsableDirEntry) -> I,
+) -> EResult<Box<dyn Iterator<Item = I> + 'a>> {
+    let iter = path_utilities::usable_dir_entries(&dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| e_to_i(e));
+        .map(move |e| ude_to_i(e));
     match order {
         Order::Ascending => Ok(Box::new(
             iter.map(|e| std::cmp::Reverse(e))
@@ -477,131 +443,59 @@ where
         )),
         Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
     }
+}
+
+fn iter_snapshot_i_for_archive<'a, I: Ord + 'a>(
+    archive_name: &str,
+    order: Order,
+    ude_to_i: fn(UsableDirEntry) -> I,
+) -> EResult<Box<dyn Iterator<Item = I> + 'a>> {
+    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    iter_snapshot_i_in_dir(dir_path, order, ude_to_i)
 }
 
 pub fn iter_snapshot_paths_for_archive(
     archive_name: &str,
     order: Order,
 ) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
-    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let iter = path_utilities::usable_dir_entries(&dir_path)
-        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
-        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| e.path());
-    match order {
-        Order::Ascending => Ok(Box::new(
-            iter.map(|e| std::cmp::Reverse(e))
-                .window_sort(usize::MAX)
-                .map(|e| e.0),
-        )),
-        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
-    }
+    iter_snapshot_i_for_archive::<PathBuf>(archive_name, order, |ude| ude.path())
 }
 
 pub fn iter_snapshot_names_in_dir(
     dir_path: &Path,
     order: Order,
 ) -> EResult<Box<dyn Iterator<Item = OsString> + '_>> {
-    let iter = path_utilities::usable_dir_entries(dir_path)
-        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
-        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(|e| e.file_name());
-    match order {
-        Order::Ascending => Ok(Box::new(
-            iter.map(|e| std::cmp::Reverse(e))
-                .window_sort(usize::MAX)
-                .map(|e| e.0),
-        )),
-        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
-    }
+    iter_snapshot_i_in_dir::<OsString>(dir_path.to_path_buf(), order, |ude| ude.file_name())
+}
+
+pub fn iter_snapshot_paths_in_dir(
+    dir_path: &Path,
+    order: Order,
+) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
+    iter_snapshot_i_in_dir::<PathBuf>(dir_path.to_path_buf(), order, |ude| ude.path())
 }
 
 pub fn iter_snapshot_names_for_archive(
     archive_name: &str,
     order: Order,
 ) -> EResult<Box<dyn Iterator<Item = OsString> + '_>> {
-    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let iter = path_utilities::usable_dir_entries(&dir_path)
-        .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
-        .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| e.file_name());
-    match order {
-        Order::Ascending => Ok(Box::new(
-            iter.map(|e| std::cmp::Reverse(e))
-                .window_sort(usize::MAX)
-                .map(|e| e.0),
-        )),
-        Order::Descending => Ok(Box::new(iter.window_sort(usize::MAX))),
-    }
+    iter_snapshot_i_for_archive::<OsString>(archive_name, order, |ude| ude.file_name())
 }
 
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<PathBuf>> {
-    let entries = get_ss_entries_in_dir(dir_path)?;
-    let mut snapshot_paths = Vec::new();
-    for entry in entries {
-        let e_path = dir_path.join(entry.path());
-        snapshot_paths.push(e_path);
-    }
-    if order.is_descending() {
-        snapshot_paths.reverse();
-    };
-    Ok(snapshot_paths)
+    Ok(iter_snapshot_paths_in_dir(dir_path, order)?.collect::<Vec<_>>())
 }
 
 pub fn get_snapshot_paths_for_archive(archive_name: &str, order: Order) -> EResult<Vec<PathBuf>> {
-    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let snapshot_paths = get_snapshot_paths_in_dir(&snapshot_dir_path, order)?;
-    Ok(snapshot_paths)
+    Ok(iter_snapshot_paths_for_archive(archive_name, order)?.collect::<Vec<_>>())
 }
 
-pub fn get_snapshot_names_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<String>> {
-    let entries = get_ss_entries_in_dir(dir_path)?;
-    let mut snapshot_names = Vec::new();
-    for entry in entries {
-        snapshot_names.push(String::from(entry.file_name().to_string_lossy().to_owned()));
-    }
-    if order.is_descending() {
-        snapshot_names.reverse();
-    };
-    Ok(snapshot_names)
+pub fn get_snapshot_names_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<OsString>> {
+    Ok(iter_snapshot_names_in_dir(dir_path, order)?.collect::<Vec<_>>())
 }
 
-pub fn get_snapshot_names_for_archive(archive_name: &str, order: Order) -> EResult<Vec<String>> {
-    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let snapshot_names = get_snapshot_names_in_dir(&snapshot_dir_path, order)?;
-    Ok(snapshot_names)
-}
-
-pub fn get_snapshot_names_and_stats_in_dir(
-    dir_path: &Path,
-    order: Order,
-) -> EResult<Vec<(String, FileStats, SymLinkStats, Duration)>> {
-    let entries = get_ss_entries_in_dir(dir_path)?;
-    let mut snapshot_names_and_stats = Vec::new();
-    for entry in entries {
-        let name = String::from(entry.file_name().to_string_lossy().to_owned());
-        let snapshot_file_path = entry.path();
-        let snapshot = SnapshotPersistentData::from_file(&snapshot_file_path)?;
-        snapshot_names_and_stats.push((
-            name,
-            snapshot.file_stats,
-            snapshot.sym_link_stats,
-            snapshot.creation_duration(),
-        ));
-    }
-    if order.is_descending() {
-        snapshot_names_and_stats.reverse();
-    };
-    Ok(snapshot_names_and_stats)
-}
-
-pub fn get_snapshot_names_and_stats_for_archive(
-    archive_name: &str,
-    order: Order,
-) -> EResult<Vec<(String, FileStats, SymLinkStats, Duration)>> {
-    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    let snapshot_names = get_snapshot_names_and_stats_in_dir(&snapshot_dir_path, order)?;
-    Ok(snapshot_names)
+pub fn get_snapshot_names_for_archive(archive_name: &str, order: Order) -> EResult<Vec<OsString>> {
+    Ok(iter_snapshot_names_for_archive(archive_name, order)?.collect::<Vec<_>>())
 }
 
 // GUI interface functions
