@@ -111,8 +111,6 @@ impl RowDataSource for SnapshotRowData {
                         .expect("should be good");
                     rows.push(vec![
                         snapshot_name.to_string_lossy().to_value(),
-                        // format!("{}", stats.file_stats.file_count).to_value(),
-                        // format!("{}", stats.file_stats.byte_count).to_value(),
                         stats
                             .file_stats
                             .file_count
@@ -128,7 +126,6 @@ impl RowDataSource for SnapshotRowData {
                             .stored_byte_count
                             .to_formatted_string(&Locale::en_AU)
                             .to_value(),
-                        // format!("{}", stats.file_stats.stored_byte_count).to_value(),
                         format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
                         format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
                         format!("{:.1?}", stats.creation_duration).to_value(),
@@ -160,7 +157,6 @@ impl RowDataSource for SnapshotRowData {
 #[derive(PWO)]
 pub struct SnapshotListViewCore {
     vbox: gtk::Box,
-    archive_selector: Rc<g_archive::ArchiveSelector>,
     buffered_list_view: Rc<TreeViewWithPopup>,
     buffered_list_store: BufferedListStore<SnapshotRowData>,
     changed_archive_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
@@ -262,8 +258,6 @@ impl SnapshotListViewBuilder {
 
     pub fn build(&self) -> SnapshotListView {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let archive_selector = g_archive::ArchiveSelector::new();
-        vbox.pack_start(archive_selector.pwo(), false, false, 0);
         let buffered_list_store = BufferedListStore::new(SnapshotRowData::default());
         let buffered_list_view = TreeViewWithPopupBuilder::new()
             .id_field(self.id_field)
@@ -280,17 +274,10 @@ impl SnapshotListViewBuilder {
         vbox.show_all();
         let snapshot_list_view = SnapshotListView(Rc::new(SnapshotListViewCore {
             vbox,
-            archive_selector,
             buffered_list_view,
             buffered_list_store,
             changed_archive_callbacks: RefCell::new(vec![]),
         }));
-
-        let sst_c = snapshot_list_view.clone();
-        snapshot_list_view
-            .0
-            .archive_selector
-            .connect_changed(move |archive_name| sst_c.set_archive_name(archive_name));
 
         snapshot_list_view
     }
@@ -298,7 +285,8 @@ impl SnapshotListViewBuilder {
 
 #[derive(PWO)]
 pub struct SnapshotsManagerCore {
-    paned: gtk::Paned,
+    vbox: gtk::Box,
+    archive_selector: Rc<g_archive::ArchiveSelector>,
     snapshot_list_view: SnapshotListView,
     notebook: gtk::Notebook,
     open_snapshots: RefCell<Vec<(OsString, SnapshotManager)>>,
@@ -309,6 +297,13 @@ pub struct SnapshotsManager(Rc<SnapshotsManagerCore>);
 
 impl SnapshotsManager {
     pub fn new() -> Self {
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let archive_selector = g_archive::ArchiveSelector::new();
+        hbox.pack_start(archive_selector.pwo(), false, false, 0);
+        let label = gtk::Label::new(Some("Buttons go here"));
+        hbox.pack_start(&label, false, false, 0);
+        vbox.pack_start(&hbox, false, false, 0);
         let paned = gtk::PanedBuilder::new()
             .orientation(gtk::Orientation::Horizontal)
             .name("Snapshot Files")
@@ -327,6 +322,7 @@ impl SnapshotsManager {
                 SAV_SELN_MADE,
             ))
             .build();
+        vbox.pack_start(&paned, true, true, 0);
         paned.add1(snapshot_list_view.pwo());
         let notebook = gtk::NotebookBuilder::new()
             .scrollable(true)
@@ -334,7 +330,8 @@ impl SnapshotsManager {
             .build();
         paned.add2(&notebook);
         let snapshots_mgr = Self(Rc::new(SnapshotsManagerCore {
-            paned,
+            vbox,
+            archive_selector,
             snapshot_list_view,
             notebook,
             open_snapshots: RefCell::new(vec![]),
@@ -384,6 +381,12 @@ impl SnapshotsManager {
             .0
             .snapshot_list_view
             .connect_archive_change(move |_| snapshots_mgr_clone.close_all_snapshots());
+
+        let slv_c = snapshots_mgr.0.snapshot_list_view.clone();
+        snapshots_mgr
+            .0
+            .archive_selector
+            .connect_changed(move |archive_name| slv_c.set_archive_name(archive_name));
 
         snapshots_mgr
     }
