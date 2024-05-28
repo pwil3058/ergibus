@@ -446,15 +446,6 @@ fn iter_snapshot_i_in_dir<'a, I: Ord + 'a>(
     }
 }
 
-fn iter_snapshot_i_for_archive<'a, I: Ord + 'a>(
-    archive_name: &str,
-    order: Order,
-    ude_to_i: fn(UsableDirEntry) -> I,
-) -> EResult<Box<dyn Iterator<Item = I> + 'a>> {
-    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
-    iter_snapshot_i_in_dir(dir_path, order, ude_to_i)
-}
-
 pub fn iter_snapshot_names_in_dir(
     dir_path: &Path,
     order: Order,
@@ -473,14 +464,16 @@ pub fn iter_snapshot_names_for_archive(
     archive_name: &str,
     order: Order,
 ) -> EResult<Box<dyn Iterator<Item = OsString> + '_>> {
-    iter_snapshot_i_for_archive::<OsString>(archive_name, order, |ude| ude.file_name())
+    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    iter_snapshot_i_in_dir::<OsString>(dir_path, order, |ude| ude.file_name())
 }
 
 pub fn iter_snapshot_paths_for_archive(
     archive_name: &str,
     order: Order,
 ) -> EResult<Box<dyn Iterator<Item = PathBuf> + '_>> {
-    iter_snapshot_i_for_archive::<PathBuf>(archive_name, order, |ude| ude.path())
+    let dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    iter_snapshot_i_in_dir::<PathBuf>(dir_path, order, |ude| ude.path())
 }
 
 pub fn get_snapshot_paths_in_dir(dir_path: &Path, order: Order) -> EResult<Vec<PathBuf>> {
