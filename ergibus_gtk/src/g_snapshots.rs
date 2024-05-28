@@ -47,26 +47,49 @@ impl SnapshotRowData {
 
 impl ListViewSpec for SnapshotRowData {
     fn column_types() -> Vec<Type> {
-        vec![Type::String]
+        vec![
+            Type::String,
+            Type::String,
+            Type::String,
+            Type::String,
+            Type::String,
+            Type::String,
+            Type::String,
+        ]
     }
 
     fn columns() -> Vec<gtk::TreeViewColumn> {
-        let col = gtk::TreeViewColumnBuilder::new()
-            .title("Snapshot Time")
-            .expand(false)
-            .resizable(false)
-            .build();
+        let mut cols = vec![];
+        for (column, title) in [
+            "Snapshot Time",
+            "#Files",
+            "#Bytes",
+            "#Stored",
+            "#Dir SL",
+            "#File SL",
+            "Time Taken",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let col = gtk::TreeViewColumnBuilder::new()
+                .title(title)
+                .expand(false)
+                .resizable(false)
+                .build();
 
-        let cell = gtk::CellRendererTextBuilder::new()
-            .editable(false)
-            .max_width_chars(29)
-            .width_chars(29)
-            .xalign(0.0)
-            .build();
+            let cell = gtk::CellRendererTextBuilder::new()
+                .editable(false)
+                .max_width_chars(29)
+                .width_chars(29)
+                .xalign(1.0)
+                .build();
 
-        col.pack_start(&cell, false);
-        col.add_attribute(&cell, "text", 0);
-        vec![col]
+            col.pack_start(&cell, false);
+            col.add_attribute(&cell, "text", column as i32);
+            cols.push(col);
+        }
+        cols
     }
 }
 
@@ -83,8 +106,17 @@ impl RowDataSource for SnapshotRowData {
                     hasher
                         .write_all(snapshot_name.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
-                    rows.push(vec![snapshot_name.to_string_lossy().to_value()]);
-                    let _stats = snapshot::get_snapshot_stats(archive_name, &snapshot_name);
+                    let stats = snapshot::get_snapshot_stats(archive_name, &snapshot_name)
+                        .expect("should be good");
+                    rows.push(vec![
+                        snapshot_name.to_string_lossy().to_value(),
+                        format!("{}", stats.file_stats.file_count).to_value(),
+                        format!("{}", stats.file_stats.byte_count).to_value(),
+                        format!("{}", stats.file_stats.stored_byte_count).to_value(),
+                        format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
+                        format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
+                        format!("{:?}", stats.creation_duration).to_value(),
+                    ]);
                 }
             }
         }
