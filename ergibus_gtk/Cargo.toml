@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 crypto-hash = "0.3.0"
 log = "0.4.14"
+num-format = "0.4.4"
 
 #pw_gix = { git = "https://github.com/pwil3058/rs_pw_gix.git" }
 #pw_gtk_ext = { git = "https://github.com/pwil3058/rs_pw_gix.git" }

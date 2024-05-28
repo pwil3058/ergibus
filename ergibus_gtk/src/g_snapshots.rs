@@ -10,6 +10,7 @@ use pw_gtk_ext::{
 };
 
 use crypto_hash::{Algorithm, Hasher};
+use num_format::{Locale, ToFormattedString};
 
 use ergibus_lib::snapshot;
 use ergibus_lib::snapshot::Order;
@@ -110,12 +111,27 @@ impl RowDataSource for SnapshotRowData {
                         .expect("should be good");
                     rows.push(vec![
                         snapshot_name.to_string_lossy().to_value(),
-                        format!("{}", stats.file_stats.file_count).to_value(),
-                        format!("{}", stats.file_stats.byte_count).to_value(),
-                        format!("{}", stats.file_stats.stored_byte_count).to_value(),
+                        // format!("{}", stats.file_stats.file_count).to_value(),
+                        // format!("{}", stats.file_stats.byte_count).to_value(),
+                        stats
+                            .file_stats
+                            .file_count
+                            .to_formatted_string(&Locale::en_AU)
+                            .to_value(),
+                        stats
+                            .file_stats
+                            .byte_count
+                            .to_formatted_string(&Locale::en_AU)
+                            .to_value(),
+                        stats
+                            .file_stats
+                            .stored_byte_count
+                            .to_formatted_string(&Locale::en_AU)
+                            .to_value(),
+                        // format!("{}", stats.file_stats.stored_byte_count).to_value(),
                         format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
                         format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
-                        format!("{:?}", stats.creation_duration).to_value(),
+                        format!("{:.1?}", stats.creation_duration).to_value(),
                     ]);
                 }
             }
