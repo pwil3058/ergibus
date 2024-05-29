@@ -154,7 +154,7 @@ impl RowDataSource for SnapshotRowData {
     }
 }
 
-#[derive(PWO)]
+#[derive(PWO, Wrapper)]
 pub struct SnapshotListViewCore {
     vbox: gtk::Box,
     buffered_list_view: Rc<TreeViewWithPopup>,
@@ -301,6 +301,8 @@ impl SnapshotsManager {
         let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let archive_selector = g_archive::ArchiveSelector::new();
         hbox.pack_start(archive_selector.pwo(), false, false, 0);
+        let take_snapsot_button = gtk::Button::with_label("Take Snapshot");
+        hbox.pack_start(&take_snapsot_button, false, false, 0);
         let label = gtk::Label::new(Some("Buttons go here"));
         hbox.pack_start(&label, false, false, 0);
         vbox.pack_start(&hbox, false, false, 0);
@@ -387,6 +389,17 @@ impl SnapshotsManager {
             .0
             .archive_selector
             .connect_changed(move |archive_name| slv_c.set_archive_name(archive_name));
+
+        let slv_c = snapshots_mgr.0.snapshot_list_view.clone();
+        take_snapsot_button.connect_clicked(move |_| {
+            if let Some(archive_name) = slv_c.archive_name() {
+                slv_c.show_busy();
+                if snapshot::generate_snapshot(&archive_name).is_ok() {
+                    slv_c.repopulate();
+                }
+                slv_c.unshow_busy(None);
+            }
+        });
 
         snapshots_mgr
     }
