@@ -521,8 +521,10 @@ pub fn get_snapshot_names_for_archive(archive_name: &str, order: Order) -> EResu
 pub fn delete_named_snapshots(archive_name: &str, snapshot_names: &[OsString]) -> EResult<()> {
     let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
     for snapshot_name in snapshot_names.iter() {
-        let snapshot_file_path = snapshot_dir_path.join(snapshot_name);
+        let mut snapshot_file_path = snapshot_dir_path.join(snapshot_name);
         delete_snapshot_file(&snapshot_file_path)?;
+        snapshot_file_path.set_extension("stats");
+        fs::remove_file(&snapshot_file_path)?;
     }
     Ok(())
 }
