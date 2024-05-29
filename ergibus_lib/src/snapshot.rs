@@ -151,17 +151,33 @@ impl SnapshotPersistentData {
         format!("{}", dt.format("%Y-%m-%d-%H-%M-%S%z"))
     }
 
-    fn write_to_dir<P: AsRef<Path>>(&self, dir_path: P) -> EResult<PathBuf> {
+    fn write_to_dir<P: AsRef<Path>>(&self, dir_path: P) -> EResult<(PathBuf, PathBuf)> {
         let file_name = self.snapshot_name();
         let path = dir_path.as_ref().join(file_name);
+        let mut stats_path = path.to_path_buf();
+        stats_path.set_extension("stats");
         let file = File::create(&path)
             .map_err(|err| Error::SnapshotWriteIOError(err, path.to_path_buf()))?;
+        let stats_file = match File::create(&stats_path) {
+            Ok(file) => file,
+            Err(err) => {
+                fs::remove_file(path)?;
+                return Err(Error::SnapshotWriteIOError(err, stats_path.to_path_buf()));
+            }
+        };
         let json_text = self.serialize()?;
+        let stats = SnapshotStats::from(self);
+        let stats_json_text = stats.serialize()?;
         let mut snappy_wtr = snap::Writer::new(file);
         snappy_wtr
             .write_all(json_text.as_bytes())
             .map_err(|err| Error::SnapshotWriteIOError(err, path.to_path_buf()))?;
-        Ok(path)
+        let mut snappy_wtr = snap::Writer::new(stats_file);
+        if let Err(err) = snappy_wtr.write_all(stats_json_text.as_bytes()) {
+            fs::remove_file(path)?;
+            return Err(Error::SnapshotWriteIOError(err, stats_path.to_path_buf()));
+        }
+        Ok((path, stats_path))
     }
 }
 
@@ -354,31 +370,40 @@ impl SnapshotGenerator {
     }
 
     fn write_snapshot(&mut self) -> EResult<PathBuf> {
-        let file_path = match self.snapshot {
-            Some(ref snapshot) => snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?,
-            None => return Err(Error::NoSnapshotAvailable),
-        };
-        // check that the snapshot can be rebuilt from the file
-        match SnapshotPersistentData::from_file(&file_path) {
-            Ok(rb_snapshot) => {
-                if self.snapshot == Some(rb_snapshot) {
-                    // don't release contents as references are stored in the file
-                    self.snapshot = None;
-                    Ok(file_path)
-                } else {
-                    // The file is mangled so remove it
-                    match fs::remove_file(&file_path) {
-                        Ok(_) => Err(Error::SnapshotMismatch(file_path.to_path_buf())),
-                        Err(err) => Err(Error::SnapshotMismatchDirty(err, file_path.to_path_buf())),
+        match self.snapshot {
+            Some(ref snapshot) => {
+                let (file_path, stats_file_path) =
+                    snapshot.write_to_dir(&self.archive_data.snapshot_dir_path)?;
+                // check that the snapshot can be rebuilt from the file
+                match SnapshotPersistentData::from_file(&file_path) {
+                    Ok(rb_snapshot) => {
+                        if self.snapshot == Some(rb_snapshot) {
+                            // don't release contents as references are stored in the file
+                            self.snapshot = None;
+                            Ok(file_path)
+                        } else {
+                            // The file is mangled so remove it
+                            match fs::remove_file(&file_path) {
+                                Ok(_) => match fs::remove_file(stats_file_path) {
+                                    _ => Err(Error::SnapshotMismatch(file_path.to_path_buf())),
+                                },
+                                Err(err) => {
+                                    Err(Error::SnapshotMismatchDirty(err, file_path.to_path_buf()))
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        // The file is mangled so remove it
+                        match fs::remove_file(&file_path) {
+                            _ => match fs::remove_file(stats_file_path) {
+                                _ => Err(err),
+                            },
+                        }
                     }
                 }
             }
-            Err(err) => {
-                // The file is mangled so remove it
-                match fs::remove_file(&file_path) {
-                    _ => Err(err),
-                }
-            }
+            None => return Err(Error::NoSnapshotAvailable),
         }
     }
 }
@@ -518,8 +543,8 @@ pub struct SnapshotStats {
     pub creation_duration: Duration,
 }
 
-impl From<SnapshotPersistentData> for SnapshotStats {
-    fn from(spd: SnapshotPersistentData) -> Self {
+impl From<&SnapshotPersistentData> for SnapshotStats {
+    fn from(spd: &SnapshotPersistentData) -> Self {
         Self {
             file_stats: spd.file_stats,
             sym_link_stats: spd.sym_link_stats,
@@ -528,9 +553,42 @@ impl From<SnapshotPersistentData> for SnapshotStats {
     }
 }
 
+impl SnapshotStats {
+    fn serialize(&self) -> EResult<String> {
+        match serde_json::to_string(self) {
+            Ok(string) => Ok(string),
+            Err(err) => Err(Error::SnapshotSerializeError(err)),
+        }
+    }
+
+    pub fn from_file<P: AsRef<Path>>(file_path_arg: P) -> EResult<SnapshotStats> {
+        let file_path = file_path_arg.as_ref();
+        match File::open(file_path) {
+            Ok(file) => {
+                let mut spd_str = String::new();
+                let mut snappy_rdr = snap::Reader::new(file);
+                match snappy_rdr.read_to_string(&mut spd_str) {
+                    Err(err) => {
+                        return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()))
+                    }
+                    _ => (),
+                };
+                let spde = serde_json::from_str::<SnapshotStats>(&spd_str);
+                match spde {
+                    Ok(snapshot_stats) => Ok(snapshot_stats),
+                    Err(err) => Err(Error::SnapshotReadJsonError(err, file_path.to_path_buf())),
+                }
+            }
+            Err(err) => Err(Error::SnapshotReadIOError(err, file_path.to_path_buf())),
+        }
+    }
+}
+
 pub fn get_snapshot_stats(archive_name: &str, snapshot_name: &OsStr) -> EResult<SnapshotStats> {
-    let snapshot = get_named_snapshot(archive_name, snapshot_name)?;
-    Ok(SnapshotStats::from(snapshot))
+    let snapshot_dir_path = archive::get_archive_snapshot_dir_path(archive_name)?;
+    let mut snapshot_file_path = snapshot_dir_path.join(snapshot_name);
+    snapshot_file_path.set_extension("stats");
+    SnapshotStats::from_file(&snapshot_file_path)
 }
 
 #[cfg(test)]
