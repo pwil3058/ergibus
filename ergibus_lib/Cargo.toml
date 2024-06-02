@@ -29,6 +29,6 @@ walkdir = "2.3.2"
 window-sort-iterator = "0.1.0"
 sortby = "0.1.3"
 
-dychatat = { path = "../dychatat" }
+dychatat = { path = "../dychatat_lib" }
 path_ext = { path = "../path_ext" }
 path_utilities = { path = "../path_utilities" }
