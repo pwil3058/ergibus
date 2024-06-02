@@ -78,7 +78,7 @@ impl SnapshotPersistentData {
     fn release_contents(&self) -> EResult<()> {
         let content_mgr = self
             .content_mgmt_key
-            .open_content_manager(dychatat::Mutability::Mutable)?;
+            .open_content_manager(dychatat_lib::Mutability::Mutable)?;
         self.root_dir.release_contents(&content_mgr)
     }
 
@@ -86,7 +86,7 @@ impl SnapshotPersistentData {
         let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
         let content_mgr = self
             .content_mgmt_key
-            .open_content_manager(dychatat::Mutability::Mutable)?;
+            .open_content_manager(dychatat_lib::Mutability::Mutable)?;
         let (file_stats, sym_link_stats, delta_repo_size) =
             dir.populate(exclusions, &content_mgr)?;
         self.file_stats += file_stats;
@@ -106,7 +106,7 @@ impl SnapshotPersistentData {
                     if e_type.is_file() {
                         let content_mgr = self
                             .content_mgmt_key
-                            .open_content_manager(dychatat::Mutability::Mutable)?;
+                            .open_content_manager(dychatat_lib::Mutability::Mutable)?;
                         match FileData::file_system_object(abs_file_path, &content_mgr) {
                             Ok((file_system_object, stats, delta)) => {
                                 self.file_stats += stats;
@@ -261,7 +261,7 @@ impl SnapshotPersistentData {
         let file_data = self.find_file(fm_file_path)?;
         let c_mgr = self
             .content_mgmt_key
-            .open_content_manager(dychatat::Mutability::Immutable)?;
+            .open_content_manager(dychatat_lib::Mutability::Immutable)?;
         Ok(file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?)
     }
 

@@ -2,11 +2,11 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-pub use dychatat::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, RepoSpec};
+use dychatat_lib::UnreferencedContentData;
+pub use dychatat_lib::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, RepoSpec};
 
 use crate::config;
 use crate::{EResult, Error};
-use dychatat::UnreferencedContentData;
 
 pub fn content_repo_exists(repo_name: &str) -> bool {
     get_repo_spec_file_path(repo_name).exists()

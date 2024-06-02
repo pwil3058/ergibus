@@ -594,7 +594,7 @@ impl DirectoryData {
             stats.dir_sym_link_count += subdir.copy_dir_links_into(&new_dir_path, overwrite)?;
         }
         // then do all the files (holding lock as little as needed)
-        match c_mgt_key.open_content_manager(dychatat::Mutability::Immutable) {
+        match c_mgt_key.open_content_manager(dychatat_lib::Mutability::Immutable) {
             Ok(ref c_mgr) => {
                 let (count, bytes) = self.copy_files_into(&to_dir_path, c_mgr, overwrite)?;
                 stats.file_count += count;

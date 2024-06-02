@@ -36,7 +36,7 @@ pub enum Error {
     IOError(std::io::Error),
 
     ContentCopyIOError(std::io::Error),
-    RepoError(dychatat::RepoError),
+    RepoError(dychatat_lib::RepoError),
     RepoExists(String),
     RepoReadError(std::io::Error, std::path::PathBuf),
     RepoWriteError(std::io::Error, std::path::PathBuf),
@@ -63,8 +63,8 @@ pub enum Error {
     FSOBrokenSymLink(std::path::PathBuf, std::path::PathBuf),
 }
 
-impl From<dychatat::RepoError> for Error {
-    fn from(error: dychatat::RepoError) -> Self {
+impl From<dychatat_lib::RepoError> for Error {
+    fn from(error: dychatat_lib::RepoError) -> Self {
         Error::RepoError(error)
     }
 }
