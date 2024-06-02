@@ -299,6 +299,10 @@ impl SnapshotsManager {
     pub fn new() -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let new_archive_button = gtk::Button::with_label("New Archive");
+        hbox.pack_start(&new_archive_button, false, false, 0);
+        vbox.pack_start(&hbox, false, false, 0);
+        let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let archive_selector = g_archive::ArchiveSelector::new();
         hbox.pack_start(archive_selector.pwo(), false, false, 0);
         let take_snapsot_button = gtk::Button::with_label("Take Snapshot");
