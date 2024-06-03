@@ -107,29 +107,38 @@ impl RowDataSource for SnapshotRowData {
                     hasher
                         .write_all(snapshot_name.to_string_lossy().as_bytes())
                         .expect(UNEXPECTED);
-                    let stats = snapshot::get_snapshot_stats(archive_name, &snapshot_name)
-                        .expect("should be good");
-                    rows.push(vec![
-                        snapshot_name.to_string_lossy().to_value(),
-                        stats
-                            .file_stats
-                            .file_count
-                            .to_formatted_string(&Locale::en_AU)
-                            .to_value(),
-                        stats
-                            .file_stats
-                            .byte_count
-                            .to_formatted_string(&Locale::en_AU)
-                            .to_value(),
-                        stats
-                            .file_stats
-                            .stored_byte_count
-                            .to_formatted_string(&Locale::en_AU)
-                            .to_value(),
-                        format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
-                        format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
-                        format!("{:.1?}", stats.creation_duration).to_value(),
-                    ]);
+                    match snapshot::get_snapshot_stats(archive_name, &snapshot_name) {
+                        Ok(stats) => rows.push(vec![
+                            snapshot_name.to_string_lossy().to_value(),
+                            stats
+                                .file_stats
+                                .file_count
+                                .to_formatted_string(&Locale::en_AU)
+                                .to_value(),
+                            stats
+                                .file_stats
+                                .byte_count
+                                .to_formatted_string(&Locale::en_AU)
+                                .to_value(),
+                            stats
+                                .file_stats
+                                .stored_byte_count
+                                .to_formatted_string(&Locale::en_AU)
+                                .to_value(),
+                            format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
+                            format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
+                            format!("{:.1?}", stats.creation_duration).to_value(),
+                        ]),
+                        Err(_) => rows.push(vec![
+                            snapshot_name.to_string_lossy().to_value(),
+                            "_".to_value(),
+                            "_".to_value(),
+                            "-".to_value(),
+                            "-".to_value(),
+                            "-".to_value(),
+                            "-".to_value(),
+                        ]),
+                    }
                 }
             }
         }
