@@ -36,9 +36,6 @@ pub enum Error {
 
     ContentCopyIOError(std::io::Error),
     RepoError(dychatat_lib::RepoError),
-    RepoExists(String),
-    RepoReadError(std::io::Error, std::path::PathBuf),
-    RepoWriteError(std::io::Error, std::path::PathBuf),
     UnknownRepo(String),
 
     LastSnapshot(ArchiveNameOrDirPath),
