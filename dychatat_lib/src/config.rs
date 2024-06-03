@@ -1,5 +1,3 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au> <pwil3058@outlook.com>
-
 use std::env;
 use std::path::PathBuf;
 
@@ -7,13 +5,13 @@ use dirs;
 
 use path_ext;
 
-const DEFAULT_CONFIG_DIR_PATH: &str = "~/.config/ergibus";
+const DEFAULT_CONFIG_DIR_PATH: &str = "~/.config/dychatat";
 
-const DCDP_OVERRIDE_ENVAR: &str = "ERGIBUS_CONFIG_DIR";
+const DCDP_OVERRIDE_ENVAR: &str = "DYCHATAT_CONFIG_DIR";
 
 pub fn abs_default_config_dir_path() -> PathBuf {
     match dirs::config_dir() {
-        Some(config_dir) => config_dir.join("ergibus"),
+        Some(config_dir) => config_dir.join("dychatat"),
         None => match path_ext::expand_home_dir(&PathBuf::from(DEFAULT_CONFIG_DIR_PATH)) {
             Ok(expanded_dir) => expanded_dir,
             Err(_) => panic!("config dir path expansion failed"),
@@ -39,11 +37,7 @@ fn get_config_dir_path() -> PathBuf {
     }
 }
 
-pub fn get_archive_config_dir_path() -> PathBuf {
-    get_config_dir_path().join("archives")
-}
-
-pub fn get_gui_config_dir_path() -> PathBuf {
+pub fn _get_gui_config_dir_path() -> PathBuf {
     get_config_dir_path().join("gui")
 }
 
@@ -61,19 +55,11 @@ mod tests {
         env::set_var(DCDP_OVERRIDE_ENVAR, new_path);
         assert_eq!(get_config_dir_path(), PathBuf::from(new_path));
         assert_eq!(
-            get_archive_config_dir_path(),
-            PathBuf::from(new_path).join("archives")
-        );
-        assert_eq!(
             get_repo_config_dir_path(),
             PathBuf::from(new_path).join("repos")
         );
         env::set_var(DCDP_OVERRIDE_ENVAR, "");
         assert_eq!(get_config_dir_path(), abs_default_config_dir_path());
-        assert_eq!(
-            get_archive_config_dir_path(),
-            abs_default_config_dir_path().join("archives")
-        );
         assert_eq!(
             get_repo_config_dir_path(),
             abs_default_config_dir_path().join("repos")

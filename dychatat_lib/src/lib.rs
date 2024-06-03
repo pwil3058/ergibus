@@ -20,6 +20,8 @@ use serde_json;
 use serde_yaml;
 use snap;
 
+mod config;
+pub mod content;
 mod error;
 
 pub use crate::error::*;

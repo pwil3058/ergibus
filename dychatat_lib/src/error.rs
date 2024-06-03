@@ -15,8 +15,12 @@ pub enum RepoError {
     JsonError(#[from] serde_json::Error),
     #[error("Not implemented")]
     NotImplemented,
+    #[error("{0:?}: a repository with that name already exists")]
+    RepoExists(String),
     #[error("{0:?}: repository path already exists")]
     RepoDirExists(PathBuf),
+    #[error("{0:?}: no repository with that name exists")]
+    UnknownRepo(String),
     #[error("{0}: unknown hash algorithm")]
     UnknownHashAlgorithm(String),
     #[error("{0}: unknown content token")]
@@ -40,3 +44,5 @@ impl From<ReferencedContentData> for RepoError {
         RepoError::StillBeingReferenced(rcd.num_references, rcd.num_items)
     }
 }
+
+pub type RepoResult<T> = Result<T, RepoError>;

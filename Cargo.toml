@@ -4,8 +4,10 @@ members = [
     "ergibus",
     "ergibus_lib",
     "ergibus_gtk",
-#    "ergibus_orbtk",
+    #    "ergibus_orbtk",
     "path_ext",
     "pw_gtk_ext",
-    "pw_gtk_ext_derive"
+    "pw_gtk_ext_derive",
+    "dychatat_lib",
+    "dychatat",
 ]

@@ -1,20 +1,21 @@
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au> <pwil3058@outlook.com>
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use dychatat_lib::UnreferencedContentData;
-pub use dychatat_lib::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, RepoSpec};
+use crate::UnreferencedContentData;
+pub use crate::{ContentManager, ContentMgmtKey, HashAlgorithm, Mutability, RepoSpec};
 
 use crate::config;
-use crate::{EResult, Error};
+use crate::{RepoError, RepoResult};
 
 pub fn content_repo_exists(repo_name: &str) -> bool {
     get_repo_spec_file_path(repo_name).exists()
 }
 
-pub fn get_content_mgmt_key(repo_name: &str) -> EResult<ContentMgmtKey> {
+pub fn get_content_mgmt_key(repo_name: &str) -> RepoResult<ContentMgmtKey> {
     if !content_repo_exists(repo_name) {
-        Err(Error::UnknownRepo(repo_name.to_string()))
+        Err(RepoError::UnknownRepo(repo_name.to_string()))
     } else {
         let spec = read_repo_spec(repo_name)?;
         Ok(ContentMgmtKey::from(&spec))
@@ -25,15 +26,15 @@ pub fn create_new_repo<P: AsRef<Path>>(
     name: &str,
     location: P,
     hash_algortithm_str: &str,
-) -> EResult<()> {
+) -> RepoResult<()> {
     if content_repo_exists(name) {
-        return Err(Error::RepoExists(name.to_string()));
+        return Err(RepoError::RepoExists(name.to_string()));
     }
 
     let hash_algorithm = HashAlgorithm::from_str(hash_algortithm_str)?;
 
     let mut repo_dir_path = location.as_ref().to_path_buf();
-    repo_dir_path.push("ergibus");
+    repo_dir_path.push("dychatat");
     repo_dir_path.push("repos");
     repo_dir_path.push(name);
 
@@ -49,30 +50,30 @@ fn get_repo_spec_file_path(repo_name: &str) -> PathBuf {
     config::get_repo_config_dir_path().join(repo_name)
 }
 
-pub fn read_repo_spec(repo_name: &str) -> EResult<RepoSpec> {
+pub fn read_repo_spec(repo_name: &str) -> RepoResult<RepoSpec> {
     let spec_file_path = get_repo_spec_file_path(repo_name);
-    let spec_file = File::open(&spec_file_path)
-        .map_err(|err| Error::RepoReadError(err, spec_file_path.clone()))?;
+    let spec_file = File::open(&spec_file_path)?;
+    // .map_err(|err| RepoError::RepoReadError(err, spec_file_path.clone()))?;
     let spec = RepoSpec::from_reader(spec_file)?;
     Ok(spec)
 }
 
-fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> EResult<()> {
+fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> RepoResult<()> {
     let spec_file_path = get_repo_spec_file_path(repo_name);
     if spec_file_path.exists() {
-        return Err(Error::RepoExists(repo_name.to_string()));
+        return Err(RepoError::RepoExists(repo_name.to_string()));
     }
     match spec_file_path.parent() {
         Some(config_dir_path) => {
             if !config_dir_path.exists() {
-                fs::create_dir_all(&config_dir_path)
-                    .map_err(|err| Error::RepoWriteError(err, config_dir_path.to_path_buf()))?;
+                fs::create_dir_all(&config_dir_path)?;
+                // .map_err(|err| RepoError::RepoWriteError(err, config_dir_path.to_path_buf()))?;
             }
         }
         None => (),
     }
-    let spec_file = File::create(&spec_file_path)
-        .map_err(|err| Error::RepoWriteError(err, spec_file_path.clone()))?;
+    let spec_file = File::create(&spec_file_path)?;
+    // .map_err(|err| RepoError::RepoWriteError(err, spec_file_path.clone()))?;
     repo_spec.to_writer(spec_file)?;
     Ok(())
 }
@@ -96,7 +97,7 @@ pub fn get_repo_names() -> Vec<String> {
     names
 }
 
-pub fn delete_repository(repo_name: &str) -> EResult<()> {
+pub fn delete_repository(repo_name: &str) -> RepoResult<()> {
     let repo_key = get_content_mgmt_key(repo_name)?;
     let content_manager = repo_key.open_content_manager(Mutability::Mutable)?;
     content_manager.delete()?;
@@ -105,7 +106,7 @@ pub fn delete_repository(repo_name: &str) -> EResult<()> {
     Ok(())
 }
 
-pub fn prune_repository(repo_name: &str) -> EResult<UnreferencedContentData> {
+pub fn prune_repository(repo_name: &str) -> RepoResult<UnreferencedContentData> {
     let repo_key = get_content_mgmt_key(repo_name)?;
     let content_manager = repo_key.open_content_manager(Mutability::Mutable)?;
     Ok(content_manager.prune_contents()?)
@@ -114,7 +115,7 @@ pub fn prune_repository(repo_name: &str) -> EResult<UnreferencedContentData> {
 #[cfg(test)]
 mod content_tests {
     use super::*;
-    use dychatat_lib::Mutability;
+    use crate::Mutability;
     use fs2::FileExt;
     use std::env;
     use std::fs::OpenOptions;
@@ -130,7 +131,7 @@ mod content_tests {
 
         let temp_dir = TempDir::new("REPO_TEST").unwrap();
 
-        env::set_var("ERGIBUS_CONFIG_DIR", temp_dir.path().join("config"));
+        env::set_var("DYCHATAT_CONFIG_DIR", temp_dir.path().join("config"));
         let data_dir = temp_dir.path().join("data");
         let data_dir_str = data_dir.to_str().unwrap();
         assert!(create_new_repo("test_repo", data_dir_str, "Sha1").is_ok());
@@ -143,7 +144,7 @@ mod content_tests {
         assert!(temp_dir
             .path()
             .join("data")
-            .join("ergibus")
+            .join("dychatat")
             .join("repos")
             .join("test_repo")
             .join("ref_count")
@@ -157,7 +158,7 @@ mod content_tests {
                 assert_eq!(cm.ref_count_for_token(&token).unwrap(), i);
             }
             for i in 1..5 {
-                let mut file = File::open("./src/snapshot.rs").unwrap();
+                let mut file = File::open("./src/error.rs").unwrap();
                 let (token, _, _) = cm.store_contents(&mut file).unwrap();
                 assert_eq!(cm.ref_count_for_token(&token).unwrap(), i);
             }
