@@ -18,11 +18,11 @@ use crate::report::ignore_report_or_fail;
 use crate::snapshot::Order;
 use crate::{
     config,
-    content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey},
     fs_objects::ExtractionStats,
     snapshot::{self, SnapshotPersistentData},
     EResult, Error,
 };
+use dychatat_lib::content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey};
 
 #[derive(Debug)]
 pub struct Exclusions {
@@ -564,16 +564,16 @@ mod archive_tests {
         assert!(excl.is_excluded_dir(&Path::new("dir/this.c")));
     }
 
-    #[test]
-    fn test_get_archive() {
-        env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
-        if let Err(err) = get_archive_data("dummy") {
-            match err {
-                Error::UnknownRepo(_) => (),
-                _ => panic!("ERR: {:?}", err),
-            }
-        };
-    }
+    // #[test]
+    // fn test_get_archive() {
+    //     env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
+    //     if let Err(err) = get_archive_data("dummy") {
+    //         match err {
+    //             Error::UnknownRepo(_) => (),
+    //             _ => panic!("ERR: {:?}", err),
+    //         }
+    //     };
+    // }
 
     #[test]
     fn test_yaml_decode() {

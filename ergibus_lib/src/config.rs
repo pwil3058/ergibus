@@ -47,10 +47,6 @@ pub fn get_gui_config_dir_path() -> PathBuf {
     get_config_dir_path().join("gui")
 }
 
-pub fn get_repo_config_dir_path() -> PathBuf {
-    get_config_dir_path().join("repos")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,19 +60,11 @@ mod tests {
             get_archive_config_dir_path(),
             PathBuf::from(new_path).join("archives")
         );
-        assert_eq!(
-            get_repo_config_dir_path(),
-            PathBuf::from(new_path).join("repos")
-        );
         env::set_var(DCDP_OVERRIDE_ENVAR, "");
         assert_eq!(get_config_dir_path(), abs_default_config_dir_path());
         assert_eq!(
             get_archive_config_dir_path(),
             abs_default_config_dir_path().join("archives")
-        );
-        assert_eq!(
-            get_repo_config_dir_path(),
-            abs_default_config_dir_path().join("repos")
         );
     }
 }

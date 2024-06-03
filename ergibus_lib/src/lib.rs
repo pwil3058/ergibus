@@ -8,7 +8,6 @@ use path_ext;
 pub mod archive;
 pub mod attributes;
 pub mod config;
-pub mod content;
 pub mod fs_objects;
 pub mod path_buf_ext;
 mod report;

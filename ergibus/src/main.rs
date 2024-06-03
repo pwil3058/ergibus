@@ -1,7 +1,6 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 mod archive_sub_cmds;
-mod repository_sub_cmds;
 mod snapshot_sub_cmds;
 
 use log::*;
@@ -9,7 +8,6 @@ use stderrlog;
 use structopt::StructOpt;
 
 use crate::archive_sub_cmds::ManageArchives;
-use crate::repository_sub_cmds::ManageRepositories;
 use crate::snapshot_sub_cmds::{BackUp, SnapshotContents, SnapshotManager};
 
 /// A StructOpt example
@@ -36,9 +34,6 @@ enum SubCommands {
     /// Manage archives
     #[structopt(alias = "ar")]
     Archive(ManageArchives),
-    /// Manage repositories
-    #[structopt(alias = "re")]
-    Repo(ManageRepositories),
     /// Manage archive snapshots
     #[structopt(alias = "ms")]
     ManageSnapshots(SnapshotManager),
@@ -63,7 +58,6 @@ fn main() {
 
     if let Err(err) = match ergibus.sub_cmd {
         SubCommands::Archive(sub_cmd) => sub_cmd.exec(),
-        SubCommands::Repo(sub_cmd) => sub_cmd.exec(),
         SubCommands::ManageSnapshots(sub_cmd) => sub_cmd.exec(),
         SubCommands::SnapshotContents(sub_cmd) => sub_cmd.exec(),
         SubCommands::BackUp(sub_cmd) => sub_cmd.exec(),

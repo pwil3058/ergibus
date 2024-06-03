@@ -16,11 +16,11 @@ use serde::Serialize;
 use window_sort_iterator::WindowSortIterExt;
 
 use crate::archive::{get_archive_data, ArchiveData, Exclusions};
-use crate::content::ContentMgmtKey;
 use crate::fs_objects::{DirectoryData, ExtractionStats, FileData, SymLinkData};
 use crate::fs_objects::{FileStats, SymLinkStats};
 use crate::report::ignore_report_or_fail;
 use crate::{archive, EResult, Error, UNEXPECTED};
+use dychatat_lib::content::ContentMgmtKey;
 
 fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
     let path = path_arg.as_ref();
@@ -597,7 +597,7 @@ pub fn get_snapshot_stats(archive_name: &str, snapshot_name: &OsStr) -> EResult<
 mod tests {
     use super::*;
     use crate::archive;
-    use crate::content;
+    use dychatat_lib::content;
     use fs2::FileExt;
     use std::env;
     use std::os::unix::fs::MetadataExt;
@@ -621,6 +621,7 @@ mod tests {
         let dir =
             TempDir::new("SS_TEST").unwrap_or_else(|err| panic!("open temp dir failed: {:?}", err));
         env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
+        env::set_var("DYCHATAT_CONFIG_DIR", dir.path().join("config"));
         let data_dir = dir.path().join("data");
         let data_dir_str = match data_dir.to_str() {
             Some(data_dir_str) => data_dir_str,

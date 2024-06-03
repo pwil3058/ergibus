@@ -11,7 +11,7 @@ use pw_gtk_ext::{
 use ergibus_lib::{snapshot, EResult};
 
 use crate::icons;
-use ergibus_lib::content::Mutability;
+use dychatat_lib::content::Mutability;
 use ergibus_lib::fs_objects::{DirectoryData, ExtractionStats, FileSystemObject, Name};
 use ergibus_lib::snapshot::SnapshotPersistentData;
 use pw_gtk_ext::glib::{Type, Value};
