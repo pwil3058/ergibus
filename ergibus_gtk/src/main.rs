@@ -17,6 +17,8 @@ mod icons;
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(app);
     window.set_title("ERGIBUS GUI");
+    let snapshots_manager = SnapshotsManager::new();
+    window.add(snapshots_manager.pwo());
     if let Some(geometry) = recollections::recall("main_window:geometry") {
         window.parse_geometry(&geometry);
     } else {
@@ -26,12 +28,6 @@ fn activate(app: &gtk::Application) {
         recollections::remember("main_window:geometry", &format_geometry(event));
         false
     });
-    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let snapshots_manager = SnapshotsManager::new();
-    vbox.pack_start(snapshots_manager.pwo(), true, true, 0);
-    let label = gtk::Label::new(Some("GUI is under construction"));
-    vbox.pack_start(&label, false, false, 0);
-    window.add(&vbox);
     window.show_all();
 }
 
