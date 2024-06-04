@@ -110,7 +110,7 @@ impl SimpleList<String> {
         self.list_store.repopulate_with(&rows);
     }
 
-    pub fn add_path_buf(&mut self, string: &str) {
+    pub fn add_string(&mut self, string: &str) {
         self.list_items.push(string.to_string());
         self.repopulate();
     }
