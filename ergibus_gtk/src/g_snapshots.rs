@@ -12,13 +12,13 @@ use pw_gtk_ext::{
 use crypto_hash::{Algorithm, Hasher};
 use num_format::{Locale, ToFormattedString};
 
-use ergibus_lib::snapshot;
 use ergibus_lib::snapshot::Order;
+use ergibus_lib::{archive, snapshot};
 
-use crate::g_archive;
 use crate::g_snapshot::SnapshotManager;
 use pw_gtk_ext::glib::{Type, Value};
 use pw_gtk_ext::gtkx::buffered_list_store::{BufferedListStore, Row, RowDataSource};
+use pw_gtk_ext::gtkx::combo_box_text::NameSelector;
 use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
 use pw_gtk_ext::gtkx::list_store::ListViewSpec;
 use pw_gtk_ext::gtkx::menu::MenuItemSpec;
@@ -295,7 +295,7 @@ impl SnapshotListViewBuilder {
 #[derive(PWO)]
 pub struct SnapshotsManagerCore {
     vbox: gtk::Box,
-    archive_selector: Rc<g_archive::ArchiveSelector>,
+    archive_selector: Rc<NameSelector>,
     snapshot_list_view: SnapshotListView,
     notebook: gtk::Notebook,
     open_snapshots: RefCell<Vec<(OsString, SnapshotManager)>>,
@@ -312,7 +312,7 @@ impl SnapshotsManager {
         hbox.pack_start(&new_archive_button, false, false, 0);
         vbox.pack_start(&hbox, false, false, 0);
         let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        let archive_selector = g_archive::ArchiveSelector::new();
+        let archive_selector = NameSelector::new("Archive:", archive::get_archive_names);
         hbox.pack_start(archive_selector.pwo(), false, false, 0);
         let take_snapsot_button = gtk::Button::with_label("Take Snapshot");
         hbox.pack_start(&take_snapsot_button, false, false, 0);
