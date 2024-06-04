@@ -42,14 +42,14 @@ impl ListViewSpec for PathBufListSpec {
 }
 
 #[derive(PWO)]
-pub struct PathBufList {
+pub struct SimpleList<T> {
     vbox: gtk::Box,
     list_view: Rc<TreeViewWithPopup>,
     list_store: WrappedListStore<PathBufListSpec>,
-    path_bufs: Vec<PathBuf>,
+    list_items: Vec<T>,
 }
 
-impl PathBufList {
+impl<T> SimpleList<T> {
     pub fn new() -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let list_store = WrappedListStore::new();
@@ -71,22 +71,8 @@ impl PathBufList {
             vbox,
             list_view,
             list_store,
-            path_bufs: vec![],
+            list_items: vec![],
         }
-    }
-
-    pub fn repopulate(&self) {
-        let rows = self
-            .path_bufs
-            .iter()
-            .map(|p| vec![p.to_string_lossy().to_value()])
-            .collect::<Vec<_>>();
-        self.list_store.repopulate_with(&rows);
-    }
-
-    pub fn add_path_buf(&mut self, path: &Path) {
-        self.path_bufs.push(path.to_path_buf());
-        self.repopulate();
     }
 
     pub fn connect_popup_menu_item<F: Fn(Option<Value>, Row) + 'static>(
@@ -95,5 +81,37 @@ impl PathBufList {
         callback: F,
     ) {
         self.list_view.connect_popup_menu_item(name, callback)
+    }
+}
+
+impl SimpleList<PathBuf> {
+    pub fn repopulate(&self) {
+        let rows = self
+            .list_items
+            .iter()
+            .map(|p| vec![p.to_string_lossy().to_value()])
+            .collect::<Vec<_>>();
+        self.list_store.repopulate_with(&rows);
+    }
+
+    pub fn add_path_buf(&mut self, path: &Path) {
+        self.list_items.push(path.to_path_buf());
+        self.repopulate();
+    }
+}
+
+impl SimpleList<String> {
+    pub fn repopulate(&self) {
+        let rows = self
+            .list_items
+            .iter()
+            .map(|s| vec![s.to_value()])
+            .collect::<Vec<_>>();
+        self.list_store.repopulate_with(&rows);
+    }
+
+    pub fn add_path_buf(&mut self, string: &str) {
+        self.list_items.push(string.to_string());
+        self.repopulate();
     }
 }
