@@ -168,11 +168,11 @@ impl SnapshotPersistentData {
         let json_text = self.serialize()?;
         let stats = SnapshotStats::from(self);
         let stats_json_text = stats.serialize()?;
-        let mut snappy_wtr = snap::Writer::new(file);
+        let mut snappy_wtr = snap::write::FrameEncoder::new(file);
         snappy_wtr
             .write_all(json_text.as_bytes())
             .map_err(|err| Error::SnapshotWriteIOError(err, path.to_path_buf()))?;
-        let mut snappy_wtr = snap::Writer::new(stats_file);
+        let mut snappy_wtr = snap::write::FrameEncoder::new(stats_file);
         if let Err(err) = snappy_wtr.write_all(stats_json_text.as_bytes()) {
             fs::remove_file(path)?;
             return Err(Error::SnapshotWriteIOError(err, stats_path.to_path_buf()));
@@ -189,7 +189,7 @@ impl SnapshotPersistentData {
         match File::open(file_path) {
             Ok(file) => {
                 let mut spd_str = String::new();
-                let mut snappy_rdr = snap::Reader::new(file);
+                let mut snappy_rdr = snap::read::FrameDecoder::new(file);
                 match snappy_rdr.read_to_string(&mut spd_str) {
                     Err(err) => {
                         return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()))
@@ -568,7 +568,7 @@ impl SnapshotStats {
         match File::open(file_path) {
             Ok(file) => {
                 let mut spd_str = String::new();
-                let mut snappy_rdr = snap::Reader::new(file);
+                let mut snappy_rdr = snap::read::FrameDecoder::new(file);
                 match snappy_rdr.read_to_string(&mut spd_str) {
                     Err(err) => {
                         return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()))

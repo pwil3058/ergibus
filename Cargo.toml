@@ -11,3 +11,5 @@ members = [
     "dychatat_lib",
     "dychatat",
 ]
+
+workspace.resolver = "2"
