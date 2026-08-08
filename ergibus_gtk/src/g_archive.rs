@@ -4,6 +4,7 @@ use std::rc::Rc;
 use pw_gtk_ext::{
     glib::{Type, Value},
     gtk::{self, prelude::*},
+    gtkx::combo_box_text::NameSelector,
     gtkx::list_store::{ListRowOps, ListViewSpec, Row, WrappedListStore},
     gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder},
     wrapper::*,
@@ -114,4 +115,15 @@ impl SimpleList<String> {
         self.list_items.push(string.to_string());
         self.repopulate();
     }
+}
+
+#[derive(PWO)]
+pub struct ArchiveCreator {
+    v_box: gtk::Box,
+    archive_name: gtk::Entry,
+    location: PathBuf,
+    repo: NameSelector,
+    inclusions: SimpleList<PathBuf>,
+    excluded_dirs: SimpleList<String>,
+    excluded_files: SimpleList<String>,
 }
