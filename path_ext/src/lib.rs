@@ -4,7 +4,6 @@ use std::{
     path::{Component, Path, PathBuf, StripPrefixError},
 };
 
-use dirs;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

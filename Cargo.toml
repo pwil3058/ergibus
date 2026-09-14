@@ -4,7 +4,6 @@ members = [
     "ergibus",
     "ergibus_lib",
     "ergibus_gtk",
-    #    "ergibus_orbtk",
     "path_ext",
     "pw_gtk_ext",
     "pw_gtk_ext_derive",
@@ -12,4 +11,4 @@ members = [
     "dychatat",
 ]
 
-workspace.resolver = "2"
+workspace.resolver = "3"

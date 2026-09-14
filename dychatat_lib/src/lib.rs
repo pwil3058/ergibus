@@ -1,24 +1,19 @@
-// #[macro_use]
-// extern crate serde_derive;
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::{
     cell::RefCell,
     collections::HashMap,
     fmt,
-    fs::{create_dir_all, remove_dir_all, remove_file, File, OpenOptions},
+    fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file},
     io::{self, Read, Seek, SeekFrom, Write},
     ops::AddAssign,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
-use crypto_hash;
 use fs2::FileExt;
 use hex::ToHex;
 use serde::{Deserialize, Serialize};
-use serde_json;
-use serde_yaml;
-use snap;
 
 mod config;
 pub mod content;
@@ -65,12 +60,7 @@ impl HashAlgorithm {
             HashAlgorithm::Sha512 => crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA512),
         };
         hasher.write_all(data)?;
-        let mut s = String::new();
-        hasher
-            .finish()
-            .write_hex_upper(&mut s)
-            .expect("HEX format failed");
-        Ok(s)
+        Ok(hasher.finish().encode_hex_upper())
     }
 
     /// Returns the hash digest for `reader`'s as a hexadecimal string.crypto_hash.
@@ -88,12 +78,7 @@ impl HashAlgorithm {
             };
             hasher.write_all(&buffer[..n_bytes])?;
         }
-        let mut s = String::new();
-        hasher
-            .finish()
-            .write_hex_upper(&mut s)
-            .expect("HEX format failed");
-        Ok(s)
+        Ok(hasher.finish().encode_hex_upper())
     }
 }
 
@@ -155,7 +140,7 @@ impl From<&RepoSpec> for ContentMgmtKey {
         let base_dir_path = PathBuf::from(&spec.base_dir_path);
         ContentMgmtKey {
             ref_counter_path: base_dir_path.join("ref_count"),
-            base_dir_path: base_dir_path,
+            base_dir_path,
             hash_algortithm: spec.hash_algorithm,
         }
     }
@@ -290,12 +275,12 @@ pub enum TokenProblem {
     ContentInconsistent(String),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 struct RefCounter(HashMap<String, RefCountData>);
 
 impl RefCounter {
     fn new() -> Self {
-        Self { 0: HashMap::new() }
+        Self(HashMap::new())
     }
 
     fn from_file(file: &mut File) -> Result<RefCounter, RepoError> {
@@ -631,10 +616,10 @@ pub struct ContentManager {
 
 impl Drop for ContentManager {
     fn drop(&mut self) {
-        if self.ref_counter.is_mutable() {
-            if let Err(err) = self.ref_counter.to_file(&mut self.hash_map_file) {
-                panic!("{:?}: line {:?}: {:?}", file!(), line!(), err);
-            };
+        if self.ref_counter.is_mutable()
+            && let Err(err) = self.ref_counter.to_file(&mut self.hash_map_file)
+        {
+            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err);
         };
         if let Err(err) = self.hash_map_file.unlock() {
             panic!("{:?}: line {:?}: {:?}", file!(), line!(), err);
@@ -658,7 +643,7 @@ impl ContentManager {
         self.ref_counter.is_mutable()
     }
 
-    pub fn key<'a>(&'a self) -> &'a ContentMgmtKey {
+    pub fn key(&self) -> &ContentMgmtKey {
         &self.content_mgmt_key
     }
 
@@ -714,7 +699,7 @@ impl ContentManager {
     }
 
     pub fn release_contents(&self, content_token: &str) -> Result<RefCountData, RepoError> {
-        self.ref_counter.decr_ref_count_for_token(&content_token)
+        self.ref_counter.decr_ref_count_for_token(content_token)
     }
 
     pub fn store_contents(&self, file: &mut File) -> Result<(String, u64, u64), RepoError> {
@@ -730,8 +715,8 @@ impl ContentManager {
                 };
                 let stored_size = self.storage.store(&digest, file)?;
                 let rcd = RefCountData {
-                    content_size: content_size,
-                    stored_size: stored_size,
+                    content_size,
+                    stored_size,
                     ref_count: 1,
                 };
                 self.ref_counter.insert(&digest, rcd);
@@ -870,9 +855,10 @@ mod tests {
         );
         let target_path = tmp_dir.path().join("target");
         let mut target_file = File::create(&target_path).unwrap();
-        assert!(cmgr
-            .write_contents_for_token(&result.0, &mut target_file)
-            .is_ok());
+        assert!(
+            cmgr.write_contents_for_token(&result.0, &mut target_file)
+                .is_ok()
+        );
         assert_eq!(cmgr.problems().unwrap().total(), 0);
         let f1 = File::open(&target_path).unwrap();
         let f2 = File::open("../LICENSE-APACHE").unwrap();

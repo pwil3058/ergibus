@@ -1,9 +1,10 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use std::{convert::From, ffi::OsString, io, path::PathBuf};
 
-use crate::ReferencedContentData;
-use serde_json;
-use serde_yaml;
 use thiserror::*;
+
+use crate::ReferencedContentData;
 
 /// A wrapper around the various error types than can be encountered
 /// by this crate.

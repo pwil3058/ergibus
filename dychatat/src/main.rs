@@ -1,9 +1,8 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 mod sub_cmds;
 
 use log::*;
-use stderrlog;
 use structopt::StructOpt;
 
 use sub_cmds::ManageRepositories;

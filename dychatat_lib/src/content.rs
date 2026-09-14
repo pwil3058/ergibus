@@ -1,4 +1,4 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au> <pwil3058@outlook.com>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -63,17 +63,12 @@ fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> RepoResult<()> {
     if spec_file_path.exists() {
         return Err(RepoError::RepoExists(repo_name.to_string()));
     }
-    match spec_file_path.parent() {
-        Some(config_dir_path) => {
-            if !config_dir_path.exists() {
-                fs::create_dir_all(&config_dir_path)?;
-                // .map_err(|err| RepoError::RepoWriteError(err, config_dir_path.to_path_buf()))?;
-            }
-        }
-        None => (),
+    if let Some(config_dir_path) = spec_file_path.parent()
+        && !config_dir_path.exists()
+    {
+        fs::create_dir_all(config_dir_path)?;
     }
     let spec_file = File::create(&spec_file_path)?;
-    // .map_err(|err| RepoError::RepoWriteError(err, spec_file_path.clone()))?;
     repo_spec.to_writer(spec_file)?;
     Ok(())
 }
@@ -81,16 +76,13 @@ fn write_repo_spec(repo_name: &str, repo_spec: &RepoSpec) -> RepoResult<()> {
 pub fn get_repo_names() -> Vec<String> {
     let mut names = Vec::new();
     if let Ok(dir_entries) = fs::read_dir(config::get_repo_config_dir_path()) {
-        for entry_or_err in dir_entries {
-            if let Ok(entry) = entry_or_err {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(file_name) = path.file_name() {
-                        if let Some(file_name) = file_name.to_str() {
-                            names.push(file_name.to_string());
-                        }
-                    }
-                }
+        for entry in dir_entries.flatten() {
+            let path = entry.path();
+            if path.is_file()
+                && let Some(file_name) = path.file_name()
+                && let Some(file_name) = file_name.to_str()
+            {
+                names.push(file_name.to_string());
             }
         }
     };
@@ -109,7 +101,7 @@ pub fn delete_repository(repo_name: &str) -> RepoResult<()> {
 pub fn prune_repository(repo_name: &str) -> RepoResult<UnreferencedContentData> {
     let repo_key = get_content_mgmt_key(repo_name)?;
     let content_manager = repo_key.open_content_manager(Mutability::Mutable)?;
-    Ok(content_manager.prune_contents()?)
+    content_manager.prune_contents()
 }
 
 #[cfg(test)]
@@ -131,24 +123,30 @@ mod content_tests {
 
         let temp_dir = TempDir::new("REPO_TEST").unwrap();
 
-        env::set_var("DYCHATAT_CONFIG_DIR", temp_dir.path().join("config"));
+        unsafe {
+            env::set_var("DYCHATAT_CONFIG_DIR", temp_dir.path().join("config"));
+        }
         let data_dir = temp_dir.path().join("data");
         let data_dir_str = data_dir.to_str().unwrap();
         assert!(create_new_repo("test_repo", data_dir_str, "Sha1").is_ok());
-        assert!(temp_dir
-            .path()
-            .join("config")
-            .join("repos")
-            .join("test_repo")
-            .exists());
-        assert!(temp_dir
-            .path()
-            .join("data")
-            .join("dychatat")
-            .join("repos")
-            .join("test_repo")
-            .join("ref_count")
-            .exists());
+        assert!(
+            temp_dir
+                .path()
+                .join("config")
+                .join("repos")
+                .join("test_repo")
+                .exists()
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("data")
+                .join("dychatat")
+                .join("repos")
+                .join("test_repo")
+                .join("ref_count")
+                .exists()
+        );
         let key = get_content_mgmt_key("test_repo").unwrap();
         {
             let cm = key.open_content_manager(Mutability::Mutable).unwrap();
