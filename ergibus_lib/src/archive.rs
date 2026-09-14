@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::fs::{self, File};
@@ -12,57 +14,50 @@ use users;
 use walkdir;
 
 use path_ext::expand_home_dir;
-use path_ext::{absolute_path_buf, PathType};
+use path_ext::{PathType, absolute_path_buf};
 
 use crate::report::ignore_report_or_fail;
 use crate::snapshot::Order;
 use crate::{
-    config,
+    EResult, Error, config,
     fs_objects::ExtractionStats,
     snapshot::{self, SnapshotPersistentData},
-    EResult, Error,
 };
-use dychatat_lib::content::{content_repo_exists, get_content_mgmt_key, ContentMgmtKey};
+use dychatat_lib::content::{ContentMgmtKey, content_repo_exists, get_content_mgmt_key};
 
 #[derive(Debug)]
 pub struct Exclusions {
-    dir_globset: GlobSet,
-    file_globset: GlobSet,
+    dir_glob_set: GlobSet,
+    file_glob_set: GlobSet,
 }
 
 impl Exclusions {
     fn new(dir_patterns: &Vec<String>, file_patterns: &Vec<String>) -> EResult<Exclusions> {
         let mut dgs_builder = GlobSetBuilder::new();
         for pattern in dir_patterns {
-            let glob = Glob::new(pattern).map_err(|err| Error::GlobError(err))?;
+            let glob = Glob::new(pattern).map_err(Error::GlobError)?;
             dgs_builder.add(glob);
         }
-        let dir_globset = dgs_builder.build().map_err(|err| Error::GlobError(err))?;
+        let dir_globset = dgs_builder.build().map_err(Error::GlobError)?;
 
         let mut fgs_builder = GlobSetBuilder::new();
         for pattern in file_patterns {
-            let glob = Glob::new(pattern).map_err(|err| Error::GlobError(err))?;
+            let glob = Glob::new(pattern).map_err(Error::GlobError)?;
             fgs_builder.add(glob);
         }
-        let file_globset = fgs_builder.build().map_err(|err| Error::GlobError(err))?;
+        let file_globset = fgs_builder.build().map_err(Error::GlobError)?;
 
         Ok(Exclusions {
-            dir_globset,
-            file_globset,
+            dir_glob_set: dir_globset,
+            file_glob_set: file_globset,
         })
     }
 
     pub fn is_non_excluded_dir(&self, dir_entry: &walkdir::DirEntry) -> bool {
         if dir_entry.file_type().is_dir() {
-            if self.dir_globset.is_empty() {
-                true
-            } else if self.dir_globset.is_match(&dir_entry.file_name()) {
-                false
-            } else if self.dir_globset.is_match(&dir_entry.path()) {
-                false
-            } else {
-                true
-            }
+            self.dir_glob_set.is_empty()
+                || !(self.dir_glob_set.is_match(dir_entry.file_name())
+                    || self.dir_glob_set.is_match(dir_entry.path()))
         } else {
             false
         }
@@ -72,61 +67,49 @@ impl Exclusions {
         match dir_entry.file_type() {
             Ok(file_type) => {
                 if file_type.is_dir() {
-                    if self.dir_globset.is_empty() {
-                        Ok(false)
-                    } else if self.dir_globset.is_match(&dir_entry.file_name()) {
-                        Ok(true)
-                    } else if self.dir_globset.is_match(&dir_entry.path()) {
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
+                    Ok(!self.dir_glob_set.is_empty()
+                        && (self.dir_glob_set.is_match(dir_entry.file_name())
+                            || self.dir_glob_set.is_match(dir_entry.path())))
                 } else if file_type.is_file() || file_type.is_symlink() {
-                    if self.file_globset.is_empty() {
-                        Ok(false)
-                    } else if self.file_globset.is_match(&dir_entry.file_name()) {
-                        Ok(true)
-                    } else if self.file_globset.is_match(&dir_entry.path()) {
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
+                    Ok(!self.file_glob_set.is_empty()
+                        && (self.file_glob_set.is_match(dir_entry.file_name())
+                            || self.file_glob_set.is_match(dir_entry.path())))
                 } else {
                     Ok(true)
                 }
             }
             Err(err) => {
-                ignore_report_or_fail(err.into(), &dir_entry.path())?;
+                ignore_report_or_fail(err.into(), dir_entry.path())?;
                 Ok(false)
             }
         }
     }
 
     pub fn is_excluded_dir(&self, abs_dir_path: &Path) -> bool {
-        if self.dir_globset.is_empty() {
-            return false;
-        } else if self.dir_globset.is_match(abs_dir_path) {
-            return true;
+        if self.dir_glob_set.is_empty() {
+            false
+        } else if self.dir_glob_set.is_match(abs_dir_path) {
+            true
         } else {
             let dir_name = match abs_dir_path.file_name() {
                 Some(dir_name) => dir_name,
                 None => panic!("{:?}: line {:?}", file!(), line!()),
             };
-            return self.dir_globset.is_match(&dir_name);
+            self.dir_glob_set.is_match(dir_name)
         }
     }
 
     pub fn is_excluded_file(&self, abs_file_path: &Path) -> bool {
-        if self.file_globset.is_empty() {
-            return false;
-        } else if self.file_globset.is_match(abs_file_path) {
-            return true;
+        if self.file_glob_set.is_empty() {
+            false
+        } else if self.file_glob_set.is_match(abs_file_path) {
+            true
         } else {
             let file_name = match abs_file_path.file_name() {
                 Some(file_name) => file_name,
                 None => panic!("{:?}: line {:?}", file!(), line!()),
             };
-            return self.file_globset.is_match(&file_name);
+            self.file_glob_set.is_match(file_name)
         }
     }
 }
@@ -164,14 +147,11 @@ fn write_archive_spec(
     if !overwrite && spec_file_path.exists() {
         return Err(Error::ArchiveExists(archive_name.to_string()));
     }
-    match spec_file_path.parent() {
-        Some(config_dir_path) => {
-            if !config_dir_path.exists() {
-                fs::create_dir_all(&config_dir_path)
-                    .map_err(|err| Error::ArchiveWriteError(err, config_dir_path.to_path_buf()))?;
-            }
-        }
-        None => (),
+    if let Some(config_dir_path) = spec_file_path.parent()
+        && !config_dir_path.exists()
+    {
+        fs::create_dir_all(config_dir_path)
+            .map_err(|err| Error::ArchiveWriteError(err, config_dir_path.to_path_buf()))?;
     }
     let spec_file = File::create(&spec_file_path)
         .map_err(|err| Error::ArchiveWriteError(err, spec_file_path.clone()))?;
@@ -195,10 +175,10 @@ pub fn create_new_archive<P: AsRef<Path>>(
         return Err(Error::UnknownRepo(content_repo_name.to_string()));
     }
     for pattern in dir_exclusions.iter() {
-        let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
+        let _glob = Glob::new(pattern).map_err(Error::GlobError)?;
     }
     for pattern in file_exclusions.iter() {
-        let _glob = Glob::new(&pattern).map_err(|err| Error::GlobError(err))?;
+        let _glob = Glob::new(pattern).map_err(Error::GlobError)?;
     }
     // expand inclusion paths while relativity is well defined
     let mut exp_inclusions = vec![];
@@ -210,20 +190,18 @@ pub fn create_new_archive<P: AsRef<Path>>(
     let mut snapshot_dir_path = location.as_ref().to_path_buf();
     snapshot_dir_path.push("ergibus");
     snapshot_dir_path.push("archives");
-    match hostname::get_hostname() {
-        Some(hostname) => snapshot_dir_path.push(hostname),
-        None => (),
-    };
-    match users::get_current_username() {
-        Some(user_name) => snapshot_dir_path.push(user_name),
-        None => (),
-    };
+    if let Ok(hostname) = hostname::get() {
+        snapshot_dir_path.push(hostname);
+    }
+    if let Some(user_name) = users::get_current_username() {
+        snapshot_dir_path.push(user_name);
+    }
     snapshot_dir_path.push(name);
     fs::create_dir_all(&snapshot_dir_path)
         .map_err(|err| Error::ArchiveWriteError(err, snapshot_dir_path.clone()))?;
     let spec = ArchiveSpec {
         content_repo_name: content_repo_name.to_string(),
-        snapshot_dir_path: snapshot_dir_path,
+        snapshot_dir_path,
         inclusions: exp_inclusions,
         dir_exclusions: dir_exclusions.to_vec(),
         file_exclusions: file_exclusions.to_vec(),
@@ -298,16 +276,13 @@ pub fn get_archive_snapshot_dir_path(archive_name: &str) -> EResult<PathBuf> {
 pub fn get_archive_names() -> Vec<String> {
     let mut names = Vec::new();
     if let Ok(dir_entries) = fs::read_dir(config::get_archive_config_dir_path()) {
-        for entry_or_err in dir_entries {
-            if let Ok(entry) = entry_or_err {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(file_name) = path.file_name() {
-                        if let Some(file_name) = file_name.to_str() {
-                            names.push(file_name.to_string());
-                        }
-                    }
-                }
+        for entry in dir_entries.flatten() {
+            let path = entry.path();
+            if path.is_file()
+                && let Some(file_name) = path.file_name()
+                && let Some(file_name) = file_name.to_str()
+            {
+                names.push(file_name.to_string());
             }
         }
     };
@@ -394,7 +369,7 @@ impl Snapshots {
 
     pub fn get_snapshot_path_back_n(&self, n: i64) -> EResult<PathBuf> {
         let snapshot_paths = self.get_snapshot_paths(Order::Ascending)?;
-        if snapshot_paths.len() == 0 {
+        if snapshot_paths.is_empty() {
             return Err(Error::ArchiveEmpty(self.id()));
         };
         let index: usize = if n < 0 {
@@ -419,7 +394,7 @@ impl Snapshots {
             return Err(Error::LastSnapshot(self.id()));
         }
         let snapshot_paths = self.get_snapshot_paths(Order::Ascending)?;
-        if snapshot_paths.len() == 0 {
+        if snapshot_paths.is_empty() {
             return Err(Error::ArchiveEmpty(self.id()));
         }
         if snapshot_paths.len() <= newest_count {
@@ -435,7 +410,7 @@ impl Snapshots {
 
     pub fn delete_ss_back_n(&self, n: i64, clear_fell: bool) -> EResult<usize> {
         let snapshot_paths = self.get_snapshot_paths(Order::Descending)?;
-        if snapshot_paths.len() == 0 {
+        if snapshot_paths.is_empty() {
             return Err(Error::ArchiveEmpty(self.id()));
         };
         let index: usize = if n < 0 {
@@ -608,7 +583,9 @@ file_exclusions:\n
 
     #[test]
     fn test_read_write_archive_spec() {
-        env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
+        unsafe {
+            env::set_var("ERGIBUS_CONFIG_DIR", "../TEST/config");
+        }
         let spec: ArchiveSpec = read_archive_spec("dummy").unwrap();
         assert_eq!(spec.content_repo_name, "dummy");
         assert_eq!(

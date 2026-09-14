@@ -1,13 +1,13 @@
 [package]
 name = "ergibus"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Peter Williams <pwil3058@bigpond.net.au>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-log = "0.4.14"
+log = "0.4"
 stderrlog = "0.5"
 structopt = "0.3"
 

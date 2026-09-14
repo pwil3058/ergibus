@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::archive::Exclusions;
 use crate::attributes::{Attributes, AttributesIfce};
@@ -129,7 +129,7 @@ impl SymLinkData {
             Ok(_) => (),
             Err(err) => match err.kind() {
                 ErrorKind::NotFound => {
-                    return Err(Error::FSOBrokenSymLink(path.to_path_buf(), link_target))
+                    return Err(Error::FSOBrokenSymLink(path.to_path_buf(), link_target));
                 }
                 _ => return Err(err.into()),
             },
@@ -139,16 +139,16 @@ impl SymLinkData {
             attributes,
             link_target,
         };
-        let sym_link_stats = if is_file {
+        let sym_link_stats = //if is_file {
             SymLinkStats {
                 dir_sym_link_count: 0,
                 file_sym_link_count: 1,
-            }
-        } else {
-            SymLinkStats {
-                dir_sym_link_count: 0,
-                file_sym_link_count: 1,
-            }
+            // }
+        // } else {
+        //     SymLinkStats {
+        //         dir_sym_link_count: 0,
+        //         file_sym_link_count: 1,
+        //     }
         };
         Ok((
             FileSystemObject::SymLink(sym_link_data, is_file),
@@ -161,12 +161,11 @@ impl SymLinkData {
     // Interrogation/extraction/restoration methods
     pub fn copy_link_as(&self, as_path: &Path, overwrite: bool) -> EResult<()> {
         if as_path.exists() {
-            if as_path.is_symlink() {
-                if let Ok(link_target) = as_path.read_link() {
-                    if self.link_target == link_target {
-                        return Ok(());
-                    }
-                }
+            if as_path.is_symlink()
+                && let Ok(link_target) = as_path.read_link()
+                && self.link_target == link_target
+            {
+                return Ok(());
             }
             if !overwrite {
                 let new_path = move_aside_file_path(as_path);
@@ -276,7 +275,7 @@ impl DirectoryData {
                     .find_or_add_subdir(abs_subdir_path),
                 Err(index) => {
                     let file_system_object =
-                        DirectoryData::file_system_object(&self.path.join(first_name))?;
+                        DirectoryData::file_system_object(self.path.join(first_name))?;
                     self.contents.insert(index, file_system_object);
                     self.contents[index]
                         .get_dir_data_mut()
@@ -305,17 +304,18 @@ impl DirectoryData {
                     }
                     let name = entry.file_name();
                     match self.index_for(&name) {
-                        Ok(index) => match self.contents[index].get_dir_data_mut() {
-                            Some(dir_data) => match dir_data.populate(exclusions, content_mgr) {
-                                Ok(stats) => {
-                                    file_stats += stats.0;
-                                    sym_link_stats += stats.1;
-                                    delta_repo_size += stats.2;
+                        Ok(index) => {
+                            if let Some(dir_data) = self.contents[index].get_dir_data_mut() {
+                                match dir_data.populate(exclusions, content_mgr) {
+                                    Ok(stats) => {
+                                        file_stats += stats.0;
+                                        sym_link_stats += stats.1;
+                                        delta_repo_size += stats.2;
+                                    }
+                                    Err(err) => ignore_report_or_fail(err, &self.path)?,
                                 }
-                                Err(err) => ignore_report_or_fail(err, &self.path)?,
-                            },
-                            _ => (),
-                        },
+                            }
+                        }
                         Err(index) => match entry.file_type() {
                             Ok(e_type) => {
                                 let path = entry.path();
@@ -357,7 +357,7 @@ impl DirectoryData {
                                     }
                                 }
                             }
-                            Err(err) => ignore_report_or_fail(err.into(), &entry.path())?,
+                            Err(err) => ignore_report_or_fail(err.into(), entry.path())?,
                         },
                     }
                 }
@@ -393,15 +393,11 @@ impl<'a> Iterator for SubdirIter<'a> {
                 self.index += 1;
             }
         }
-        loop {
-            if let Some(ref mut sub_iter) = *self.current_subdir_iter {
-                if let Some(item) = sub_iter.next() {
-                    return Some(item);
-                }
-            } else {
-                break;
+        while let Some(ref mut sub_iter) = *self.current_subdir_iter {
+            if let Some(item) = sub_iter.next() {
+                return Some(item);
             };
-            self.current_subdir_iter = Box::new(self.subdir_iters.pop())
+            *self.current_subdir_iter = self.subdir_iters.pop()
         }
         None
     }
@@ -486,7 +482,7 @@ impl DirectoryData {
             .map_err(|_| Error::SnapshotUnknownDirectory(subdir_path.to_path_buf()))?;
         match rel_path.components().next() {
             None => Ok(self),
-            Some(Component::Normal(first_name)) => match self.get_directory(&first_name) {
+            Some(Component::Normal(first_name)) => match self.get_directory(first_name) {
                 Some(sd) => sd.find_subdir(path_arg),
                 None => Err(Error::SnapshotUnknownDirectory(subdir_path.to_path_buf())),
             },
@@ -567,7 +563,7 @@ impl DirectoryData {
                 to_dir
                     .attributes
                     .set_file_attributes(to_dir_path)
-                    .map_err(|err| Error::ContentCopyIOError(err))?;
+                    .map_err(Error::ContentCopyIOError)?;
             }
         }
         stats.dir_count += 1;
@@ -582,35 +578,33 @@ impl DirectoryData {
                 subdir
                     .attributes
                     .set_file_attributes(&new_dir_path)
-                    .map_err(|err| Error::ContentCopyIOError(err))?;
+                    .map_err(Error::ContentCopyIOError)?;
             }
             stats.dir_count += 1;
         }
         // then do links to subdirs
-        stats.dir_sym_link_count += self.copy_dir_links_into(&to_dir_path, overwrite)?;
+        stats.dir_sym_link_count += self.copy_dir_links_into(to_dir_path, overwrite)?;
         for subdir in self.subdir_iter(true) {
             let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
             let new_dir_path = to_dir_path.join(path_tail);
             stats.dir_sym_link_count += subdir.copy_dir_links_into(&new_dir_path, overwrite)?;
         }
         // then do all the files (holding lock as little as needed)
-        match c_mgt_key.open_content_manager(dychatat_lib::Mutability::Immutable) {
-            Ok(ref c_mgr) => {
-                let (count, bytes) = self.copy_files_into(&to_dir_path, c_mgr, overwrite)?;
+        {
+            let c_mgr = &c_mgt_key.open_content_manager(dychatat_lib::Mutability::Immutable)?;
+            let (count, bytes) = self.copy_files_into(to_dir_path, c_mgr, overwrite)?;
+            stats.file_count += count;
+            stats.bytes_count += bytes;
+            for subdir in self.subdir_iter(true) {
+                let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
+                let new_dir_path = to_dir_path.join(path_tail);
+                let (count, bytes) = subdir.copy_files_into(&new_dir_path, c_mgr, overwrite)?;
                 stats.file_count += count;
                 stats.bytes_count += bytes;
-                for subdir in self.subdir_iter(true) {
-                    let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
-                    let new_dir_path = to_dir_path.join(path_tail);
-                    let (count, bytes) = subdir.copy_files_into(&new_dir_path, c_mgr, overwrite)?;
-                    stats.file_count += count;
-                    stats.bytes_count += bytes;
-                }
             }
-            Err(err) => return Err(err.into()),
         }
         // then do links to file
-        stats.file_sym_link_count += self.copy_file_links_into(&to_dir_path, overwrite)?;
+        stats.file_sym_link_count += self.copy_file_links_into(to_dir_path, overwrite)?;
         for subdir in self.subdir_iter(true) {
             let path_tail = subdir.path.strip_prefix(&self.path).unwrap(); // Should not fail
             let new_dir_path = to_dir_path.join(path_tail);

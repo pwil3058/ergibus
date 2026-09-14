@@ -1,9 +1,9 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
-
-use path_ext;
 
 pub mod archive;
 pub mod attributes;

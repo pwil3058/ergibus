@@ -1,4 +1,4 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au> <pwil3058@outlook.com>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::env;
 use std::path::PathBuf;
@@ -14,7 +14,7 @@ const DCDP_OVERRIDE_ENVAR: &str = "ERGIBUS_CONFIG_DIR";
 pub fn abs_default_config_dir_path() -> PathBuf {
     match dirs::config_dir() {
         Some(config_dir) => config_dir.join("ergibus"),
-        None => match path_ext::expand_home_dir(&PathBuf::from(DEFAULT_CONFIG_DIR_PATH)) {
+        None => match path_ext::expand_home_dir(PathBuf::from(DEFAULT_CONFIG_DIR_PATH)) {
             Ok(expanded_dir) => expanded_dir,
             Err(_) => panic!("config dir path expansion failed"),
         },
@@ -24,10 +24,10 @@ pub fn abs_default_config_dir_path() -> PathBuf {
 fn get_config_dir_path() -> PathBuf {
     match env::var(DCDP_OVERRIDE_ENVAR) {
         Ok(dir_path) => {
-            if dir_path.len() == 0 {
+            if dir_path.is_empty() {
                 abs_default_config_dir_path()
             } else if dir_path.starts_with("~") {
-                match path_ext::expand_home_dir(&PathBuf::from(dir_path)) {
+                match path_ext::expand_home_dir(PathBuf::from(dir_path)) {
                     Ok(expanded_dir) => expanded_dir,
                     Err(_) => panic!("config dir path expansion failed",),
                 }
@@ -54,13 +54,17 @@ mod tests {
     #[test]
     fn get_config_dir_works() {
         let new_path = "./TEST/config";
-        env::set_var(DCDP_OVERRIDE_ENVAR, new_path);
+        unsafe {
+            env::set_var(DCDP_OVERRIDE_ENVAR, new_path);
+        }
         assert_eq!(get_config_dir_path(), PathBuf::from(new_path));
         assert_eq!(
             get_archive_config_dir_path(),
             PathBuf::from(new_path).join("archives")
         );
-        env::set_var(DCDP_OVERRIDE_ENVAR, "");
+        unsafe {
+            env::set_var(DCDP_OVERRIDE_ENVAR, "");
+        }
         assert_eq!(get_config_dir_path(), abs_default_config_dir_path());
         assert_eq!(
             get_archive_config_dir_path(),

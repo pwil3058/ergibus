@@ -1,4 +1,3 @@
----
 content_repo_name: dummy
 snapshot_dir_path: "./TEST/store/ergibus/archives/dummy"
 inclusions:

@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
@@ -10,22 +10,22 @@ use std::{fs, time};
 
 use chrono::{DateTime, Local};
 use log::*;
-use path_ext::{absolute_path_buf, PathType};
+use path_ext::{PathType, absolute_path_buf};
 use path_utilities::UsableDirEntry;
 use serde::Serialize;
 use window_sort_iterator::WindowSortIterExt;
 
-use crate::archive::{get_archive_data, ArchiveData, Exclusions};
+use crate::archive::{ArchiveData, Exclusions, get_archive_data};
 use crate::fs_objects::{DirectoryData, ExtractionStats, FileData, SymLinkData};
 use crate::fs_objects::{FileStats, SymLinkStats};
 use crate::report::ignore_report_or_fail;
-use crate::{archive, EResult, Error, UNEXPECTED};
+use crate::{EResult, Error, UNEXPECTED, archive};
 use dychatat_lib::content::ContentMgmtKey;
 
 fn get_entry_for_path<P: AsRef<Path>>(path_arg: P) -> EResult<fs::DirEntry> {
     let path = path_arg.as_ref();
     if let Some(parent_dir_path) = path.parent() {
-        let read_dir = fs::read_dir(&parent_dir_path)?;
+        let read_dir = fs::read_dir(parent_dir_path)?;
         for entry in read_dir.filter_map(|e| e.ok()) {
             if entry.path() == path {
                 return Ok(entry);
@@ -83,7 +83,7 @@ impl SnapshotPersistentData {
     }
 
     fn add_dir(&mut self, abs_dir_path: &Path, exclusions: &Exclusions) -> EResult<u64> {
-        let dir = self.root_dir.find_or_add_subdir(&abs_dir_path)?;
+        let dir = self.root_dir.find_or_add_subdir(abs_dir_path)?;
         let content_mgr = self
             .content_mgmt_key
             .open_content_manager(dychatat_lib::Mutability::Mutable)?;
@@ -97,10 +97,10 @@ impl SnapshotPersistentData {
     fn add_other(&mut self, abs_file_path: &Path) -> EResult<u64> {
         let entry = get_entry_for_path(abs_file_path)?;
         let dir_path = abs_file_path.parent().expect(UNEXPECTED);
-        let dir = self.root_dir.find_or_add_subdir(&dir_path)?;
+        let dir = self.root_dir.find_or_add_subdir(dir_path)?;
         let mut delta_repo_size: u64 = 0;
         match entry.file_type() {
-            Ok(e_type) => match dir.index_for(&abs_file_path.file_name().expect(UNEXPECTED)) {
+            Ok(e_type) => match dir.index_for(abs_file_path.file_name().expect(UNEXPECTED)) {
                 Ok(_) => (),
                 Err(index) => {
                     if e_type.is_file() {
@@ -113,7 +113,7 @@ impl SnapshotPersistentData {
                                 delta_repo_size = delta;
                                 dir.contents.insert(index, file_system_object);
                             }
-                            Err(err) => ignore_report_or_fail(err.into(), abs_file_path)?,
+                            Err(err) => ignore_report_or_fail(err, abs_file_path)?,
                         }
                     } else if e_type.is_symlink() {
                         match SymLinkData::file_system_object(abs_file_path) {
@@ -121,7 +121,7 @@ impl SnapshotPersistentData {
                                 self.sym_link_stats += stats;
                                 dir.contents.insert(index, file_system_object);
                             }
-                            Err(err) => ignore_report_or_fail(err.into(), abs_file_path)?,
+                            Err(err) => ignore_report_or_fail(err, abs_file_path)?,
                         }
                     }
                 }
@@ -190,12 +190,9 @@ impl SnapshotPersistentData {
             Ok(file) => {
                 let mut spd_str = String::new();
                 let mut snappy_rdr = snap::read::FrameDecoder::new(file);
-                match snappy_rdr.read_to_string(&mut spd_str) {
-                    Err(err) => {
-                        return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()))
-                    }
-                    _ => (),
-                };
+                if let Err(err) = snappy_rdr.read_to_string(&mut spd_str) {
+                    return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()));
+                }
                 let spde = serde_json::from_str::<SnapshotPersistentData>(&spd_str);
                 match spde {
                     Ok(snapshot_persistent_data) => Ok(snapshot_persistent_data),
@@ -226,9 +223,9 @@ impl SnapshotPersistentData {
         let dir_path = dir_path_arg.as_ref();
         match PathType::of(dir_path) {
             PathType::Absolute => self.root_dir.find_subdir(dir_path),
-            PathType::RelativeCurDirImplicit => self
-                .root_dir
-                .find_subdir(&self.base_dir_path.join(dir_path)),
+            PathType::RelativeCurDirImplicit => {
+                self.root_dir.find_subdir(self.base_dir_path.join(dir_path))
+            }
             PathType::Empty => self.root_dir.find_subdir(&self.base_dir_path),
             _ => self.root_dir.find_subdir(
                 absolute_path_buf(dir_path)
@@ -242,7 +239,7 @@ impl SnapshotPersistentData {
         match PathType::of(file_path) {
             PathType::Absolute => self.root_dir.find_file(file_path),
             PathType::RelativeCurDirImplicit => {
-                self.root_dir.find_file(&self.base_dir_path.join(file_path))
+                self.root_dir.find_file(self.base_dir_path.join(file_path))
             }
             PathType::Empty => Err(Error::SnapshotUnknownFile(file_path.to_path_buf())),
             _ => self.root_dir.find_file(
@@ -262,7 +259,7 @@ impl SnapshotPersistentData {
         let c_mgr = self
             .content_mgmt_key
             .open_content_manager(dychatat_lib::Mutability::Immutable)?;
-        Ok(file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)?)
+        file_data.copy_contents_to(to_file_path, &c_mgr, overwrite)
     }
 
     pub fn copy_dir_to(
@@ -361,9 +358,8 @@ impl SnapshotGenerator {
     }
 
     fn release_snapshot(&mut self) -> EResult<()> {
-        match self.snapshot {
-            Some(ref snapshot) => snapshot.release_contents()?,
-            None => (),
+        if let Some(ref snapshot) = self.snapshot {
+            snapshot.release_contents()?
         }
         self.snapshot = None;
         Ok(())
@@ -384,9 +380,10 @@ impl SnapshotGenerator {
                         } else {
                             // The file is mangled so remove it
                             match fs::remove_file(&file_path) {
-                                Ok(_) => match fs::remove_file(stats_file_path) {
-                                    _ => Err(Error::SnapshotMismatch(file_path.to_path_buf())),
-                                },
+                                Ok(_) => {
+                                    let _ = fs::remove_file(stats_file_path);
+                                    Err(Error::SnapshotMismatch(file_path.to_path_buf()))
+                                }
                                 Err(err) => {
                                     Err(Error::SnapshotMismatchDirty(err, file_path.to_path_buf()))
                                 }
@@ -395,15 +392,15 @@ impl SnapshotGenerator {
                     }
                     Err(err) => {
                         // The file is mangled so remove it
-                        match fs::remove_file(&file_path) {
-                            _ => match fs::remove_file(stats_file_path) {
-                                _ => Err(err),
-                            },
+                        let _ = fs::remove_file(&file_path);
+                        {
+                            let _ = fs::remove_file(stats_file_path);
+                            Err(err)
                         }
                     }
                 }
             }
-            None => return Err(Error::NoSnapshotAvailable),
+            None => Err(Error::NoSnapshotAvailable),
         }
     }
 }
@@ -460,7 +457,7 @@ fn iter_snapshot_i_in_dir<'a, I: Ord + 'a>(
     let iter = path_utilities::usable_dir_entries(&dir_path)
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
-        .map(move |e| ude_to_i(e));
+        .map(ude_to_i);
     match order {
         Order::Ascending => Ok(Box::new(
             iter.map(|e| std::cmp::Reverse(e))
@@ -569,12 +566,9 @@ impl SnapshotStats {
             Ok(file) => {
                 let mut spd_str = String::new();
                 let mut snappy_rdr = snap::read::FrameDecoder::new(file);
-                match snappy_rdr.read_to_string(&mut spd_str) {
-                    Err(err) => {
-                        return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()))
-                    }
-                    _ => (),
-                };
+                if let Err(err) = snappy_rdr.read_to_string(&mut spd_str) {
+                    return Err(Error::SnapshotReadIOError(err, file_path.to_path_buf()));
+                }
                 let spde = serde_json::from_str::<SnapshotStats>(&spd_str);
                 match spde {
                     Ok(snapshot_stats) => Ok(snapshot_stats),
@@ -620,8 +614,12 @@ mod tests {
         };
         let dir =
             TempDir::new("SS_TEST").unwrap_or_else(|err| panic!("open temp dir failed: {:?}", err));
-        env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
-        env::set_var("DYCHATAT_CONFIG_DIR", dir.path().join("config"));
+        unsafe {
+            env::set_var("ERGIBUS_CONFIG_DIR", dir.path().join("config"));
+        }
+        unsafe {
+            env::set_var("DYCHATAT_CONFIG_DIR", dir.path().join("config"));
+        }
         let data_dir = dir.path().join("data");
         let data_dir_str = match data_dir.to_str() {
             Some(data_dir_str) => data_dir_str,

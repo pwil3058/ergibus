@@ -1,8 +1,9 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use std::io::ErrorKind;
 use std::path::Path;
 
 use crate::{EResult, Error};
-use log;
 
 pub fn ignore_report_or_fail<P: AsRef<Path>>(err: Error, path: P) -> EResult<()> {
     match &err {

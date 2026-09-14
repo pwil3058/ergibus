@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -197,7 +197,7 @@ impl SnapshotContents {
                         *overwrite,
                     )?;
                     if *show_stats {
-                        println!("Transfered {} files containing {} bytes and {} sym links in {} dirs in {:?}", 
+                        println!("Transfered {} files containing {} bytes and {} sym links in {} dirs in {:?}",
                                  stats.0.file_count,
                                  stats.0.bytes_count,
                                  (stats.0.dir_sym_link_count + stats.0.file_sym_link_count),
@@ -216,7 +216,7 @@ impl SnapshotContents {
                     // TODO: be smarter about target path for listing
                     snapshot_persistent_data.find_subdir(dir_path)?
                 } else {
-                    snapshot_persistent_data.find_subdir(&PathBuf::new())?
+                    snapshot_persistent_data.find_subdir(PathBuf::new())?
                 };
                 for fso in dir.contents() {
                     println!("{}", fso)
@@ -242,19 +242,12 @@ impl BackUp {
         let mut error_count = 0;
         if self.show_stats {
             println!(
-                "{:>12} | {:>12} | {:>12} | {:>12} | {:>8} | {:>8} | {:>14} | {}",
-                "#Files",
-                "#Bytes",
-                "#Stored",
-                "#Change",
-                "#Dir SL",
-                "#File SL",
-                "Time taken",
-                "Archive Name"
+                "{:>12} | {:>12} | {:>12} | {:>12} | {:>8} | {:>8} | {:>14} | Archive Name",
+                "#Files", "#Bytes", "#Stored", "#Change", "#Dir SL", "#File SL", "Time Taken",
             );
         };
         for archive in self.archives.iter() {
-            match snapshot::generate_snapshot(&archive) {
+            match snapshot::generate_snapshot(archive) {
                 Ok(stats) => {
                     if self.show_stats {
                         let time_taken = format!("{:?}", stats.0);
