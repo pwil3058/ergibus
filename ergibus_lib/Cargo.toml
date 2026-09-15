@@ -26,4 +26,4 @@ window-sort-iterator = "0.1.0"
 
 dychatat_lib = { path = "../dychatat_lib" }
 path_ext = { path = "../path_ext" }
-path_utilities = { path = "../path_utilities" }
+path_utilities = { git = "https://github.com/pwil3058/rust_utilities" }

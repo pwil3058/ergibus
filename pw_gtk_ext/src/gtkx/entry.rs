@@ -292,9 +292,9 @@ pub trait PathCompletion: EntryExt + EditableSignals {
                 Some(path) => path.to_path_buf(),
                 None => PathBuf::new(),
             };
-            let dir_path = match path_utilities::absolute_pathbuf(&dir_pathbuf) {
-                Some(abs_pathbuf) => abs_pathbuf,
-                None => dir_pathbuf.clone(),
+            let dir_path = match path_utilities::absolute_path_buf(&dir_pathbuf) {
+                Ok(abs_path_buf) => abs_path_buf,
+                Err(_) => dir_pathbuf.clone(),
             };
             if let Ok(entries) = path_utilities::usable_dir_entries(&dir_path) {
                 if dirs_only {

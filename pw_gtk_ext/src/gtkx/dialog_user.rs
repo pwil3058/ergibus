@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use glib::Cast;
 use gtk::prelude::WidgetExtManual;
@@ -398,12 +398,12 @@ pub trait DialogUser: TopGtkWindow {
             if let Some(file_path) = dialog.get_filename() {
                 dialog.hide();
                 if absolute {
-                    match path_utilities::absolute_pathbuf(&file_path) {
-                        Some(pathbuf) => Some(pathbuf),
-                        None => Some(file_path),
+                    match path_utilities::absolute_path_buf(&file_path) {
+                        Ok(path_buf) => Some(path_buf),
+                        Err(_) => Some(file_path),
                     }
                 } else {
-                    Some(path_utilities::relative_pathbuf_or_mine(&file_path))
+                    Some(path_utilities::relative_path_buf_or_mine(&file_path))
                 }
             } else {
                 dialog.hide();

@@ -11,7 +11,7 @@ use std::{fs, time};
 use chrono::{DateTime, Local};
 use log::*;
 use path_ext::{PathType, absolute_path_buf};
-use path_utilities::UsableDirEntry;
+use path_utilities::{UsableDirEntry, UsefulPathMethods};
 use serde::Serialize;
 use window_sort_iterator::WindowSortIterExt;
 
@@ -454,7 +454,9 @@ fn iter_snapshot_i_in_dir<'a, I: Ord + 'a>(
     order: Order,
     ude_to_i: fn(UsableDirEntry) -> I,
 ) -> EResult<Box<dyn Iterator<Item = I> + 'a>> {
-    let iter = path_utilities::usable_dir_entries(&dir_path)
+    // let iter = path_utilities::usable_dir_entries(&dir_path)
+    let iter = dir_path
+        .usable_dir_entries()
         .map_err(|err| Error::SnapshotDirIOError(err, dir_path.to_path_buf()))?
         .filter(|e| e.is_file() && SS_FILE_NAME_RE.is_match(&e.file_name().to_string_lossy()))
         .map(ude_to_i);
