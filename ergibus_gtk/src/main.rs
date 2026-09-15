@@ -33,7 +33,9 @@ fn activate(app: &gtk::Application) {
 }
 
 fn main() {
-    recollections::init(config::get_gui_config_dir_path().join("recollections"));
+    if let Err(err) = recollections::init(config::get_gui_config_dir_path().join("recollections")) {
+        eprintln!("Failed to open recollections database: {}", err);
+    };
     let flags = gio::ApplicationFlags::empty();
     let app = gtk::Application::new(None, flags)
         .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
