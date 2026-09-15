@@ -2,11 +2,11 @@
 name = "path_ext"
 version = "0.1.0"
 authors = ["Peter Williams <pwil3058@bigpond.net.au>"]
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 dirs = "3.0"
-thiserror = "1.0.26"
+thiserror = "2.0"
 
