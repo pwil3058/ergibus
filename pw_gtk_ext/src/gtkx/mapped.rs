@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RequiredMapAction {
@@ -16,9 +16,8 @@ pub trait MapManagedUpdate {
     fn set_required_map_action(&self, action: RequiredMapAction);
 
     fn auto_update(&self) {
-        match self.get_required_map_action() {
-            RequiredMapAction::Nothing => self.update(),
-            _ => (),
+        if self.get_required_map_action() == RequiredMapAction::Nothing {
+            self.update()
         }
     }
 

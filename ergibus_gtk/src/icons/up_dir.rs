@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 pub static XPM: &[&str] = &[
     "64 64 15 1",
@@ -111,11 +111,9 @@ pub fn image() -> gtk::Image {
 
 #[allow(dead_code)]
 pub fn sized_image(size: i32) -> Option<gtk::Image> {
-    if let Some(pixbuf) = pixbuf().scale_simple(size, size, gdk_pixbuf::InterpType::Bilinear) {
-        Some(gtk::Image::from_pixbuf(Some(&pixbuf)))
-    } else {
-        None
-    }
+    pixbuf()
+        .scale_simple(size, size, gdk_pixbuf::InterpType::Bilinear)
+        .map(|pix_buf| gtk::Image::from_pixbuf(Some(&pix_buf)))
 }
 
 #[allow(dead_code)]

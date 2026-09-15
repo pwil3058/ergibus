@@ -1,4 +1,4 @@
-// Copyright 2017 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::cell::{Cell, RefCell};
 use std::cmp;
@@ -303,7 +303,7 @@ pub trait PathCompletion: EntryExt + EditableSignals {
                             continue;
                         };
                         let mut path = dir_pathbuf.clone();
-                        path.push(&entry.file_name());
+                        path.push(entry.file_name());
                         if let Some(string) = path.to_str() {
                             list_store.append_row(&[string.to_value()]);
                         }
@@ -312,7 +312,7 @@ pub trait PathCompletion: EntryExt + EditableSignals {
                     let msep = format!("{}", MAIN_SEPARATOR);
                     for entry in entries {
                         let mut path = dir_pathbuf.clone();
-                        path.push(&entry.file_name());
+                        path.push(entry.file_name());
                         if entry.is_dir() {
                             path.push(&msep);
                         };

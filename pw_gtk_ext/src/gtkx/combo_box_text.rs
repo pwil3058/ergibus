@@ -1,4 +1,4 @@
-// Copyright 2017 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::glibx::GlibValueExt;
 use gtk;
@@ -102,11 +102,13 @@ impl SortedUnique for gtk::ComboBoxText {
     }
 }
 
+type ChangedCBs = RefCell<Vec<Box<dyn Fn(Option<String>)>>>;
+
 #[derive(PWO)]
 pub struct NameSelector {
     h_box: gtk::Box,
     combo: gtk::ComboBoxText,
-    changed_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
+    changed_callbacks: ChangedCBs,
     get_names: fn() -> Vec<String>,
 }
 
@@ -141,10 +143,7 @@ impl NameSelector {
     }
 
     pub fn get_selected_archive(&self) -> Option<String> {
-        match self.combo.get_active_text() {
-            Some(text) => Some(String::from(text)),
-            None => None,
-        }
+        self.combo.get_active_text().map(String::from)
     }
 
     pub fn set_selected_archive(&self, archive_name: &str) {

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -48,6 +50,12 @@ pub struct SimpleList<T> {
     list_view: Rc<TreeViewWithPopup>,
     list_store: WrappedListStore<PathBufListSpec>,
     list_items: Vec<T>,
+}
+
+impl Default for SimpleList<PathBufListSpec> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> SimpleList<T> {

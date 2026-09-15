@@ -1,10 +1,11 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use pw_gtk_ext::{
     gdkx::format_geometry,
-    gio::{self, prelude::ApplicationExtManual, ApplicationExt},
+    gio::{self, ApplicationExt, prelude::ApplicationExtManual},
     gtk::{self, prelude::*},
     wrapper::*,
 };
-use recollections;
 
 use crate::g_snapshots::SnapshotsManager;
 use ergibus_lib::config;
@@ -32,7 +33,7 @@ fn activate(app: &gtk::Application) {
 }
 
 fn main() {
-    recollections::init(&config::get_gui_config_dir_path().join("recollections"));
+    recollections::init(config::get_gui_config_dir_path().join("recollections"));
     let flags = gio::ApplicationFlags::empty();
     let app = gtk::Application::new(None, flags)
         .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));

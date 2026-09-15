@@ -1,12 +1,14 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::rc::Rc;
 
 use pw_gtk_ext::{
+    UNEXPECTED,
     gtk::{self, prelude::*},
     wrapper::*,
-    UNEXPECTED,
 };
 
 use crypto_hash::{Algorithm, Hasher};
@@ -99,46 +101,45 @@ impl RowDataSource for SnapshotRowData {
         let archive_name = &*self.0.archive_name.borrow();
         let mut rows = vec![];
         let mut hasher = Hasher::new(Algorithm::SHA256);
-        if let Some(archive_name) = archive_name {
-            if let Ok(snapshot_names) =
+        if let Some(archive_name) = archive_name
+            && let Ok(snapshot_names) =
                 snapshot::iter_snapshot_names_for_archive(archive_name, Order::Descending)
-            {
-                for snapshot_name in snapshot_names {
-                    hasher
-                        .write_all(snapshot_name.to_string_lossy().as_bytes())
-                        .expect(UNEXPECTED);
-                    match snapshot::get_snapshot_stats(archive_name, &snapshot_name) {
-                        Ok(stats) => rows.push(vec![
-                            snapshot_name.to_string_lossy().to_value(),
-                            stats
-                                .file_stats
-                                .file_count
-                                .to_formatted_string(&Locale::en_AU)
-                                .to_value(),
-                            stats
-                                .file_stats
-                                .byte_count
-                                .to_formatted_string(&Locale::en_AU)
-                                .to_value(),
-                            stats
-                                .file_stats
-                                .stored_byte_count
-                                .to_formatted_string(&Locale::en_AU)
-                                .to_value(),
-                            format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
-                            format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
-                            format!("{:.1?}", stats.creation_duration).to_value(),
-                        ]),
-                        Err(_) => rows.push(vec![
-                            snapshot_name.to_string_lossy().to_value(),
-                            "_".to_value(),
-                            "_".to_value(),
-                            "-".to_value(),
-                            "-".to_value(),
-                            "-".to_value(),
-                            "-".to_value(),
-                        ]),
-                    }
+        {
+            for snapshot_name in snapshot_names {
+                hasher
+                    .write_all(snapshot_name.to_string_lossy().as_bytes())
+                    .expect(UNEXPECTED);
+                match snapshot::get_snapshot_stats(archive_name, &snapshot_name) {
+                    Ok(stats) => rows.push(vec![
+                        snapshot_name.to_string_lossy().to_value(),
+                        stats
+                            .file_stats
+                            .file_count
+                            .to_formatted_string(&Locale::en_AU)
+                            .to_value(),
+                        stats
+                            .file_stats
+                            .byte_count
+                            .to_formatted_string(&Locale::en_AU)
+                            .to_value(),
+                        stats
+                            .file_stats
+                            .stored_byte_count
+                            .to_formatted_string(&Locale::en_AU)
+                            .to_value(),
+                        format!("{}", stats.sym_link_stats.dir_sym_link_count).to_value(),
+                        format!("{}", stats.sym_link_stats.file_sym_link_count).to_value(),
+                        format!("{:.1?}", stats.creation_duration).to_value(),
+                    ]),
+                    Err(_) => rows.push(vec![
+                        snapshot_name.to_string_lossy().to_value(),
+                        "_".to_value(),
+                        "_".to_value(),
+                        "-".to_value(),
+                        "-".to_value(),
+                        "-".to_value(),
+                        "-".to_value(),
+                    ]),
                 }
             }
         }
@@ -148,27 +149,28 @@ impl RowDataSource for SnapshotRowData {
     fn digest(&self) -> Vec<u8> {
         let archive_name = &*self.0.archive_name.borrow();
         let mut hasher = Hasher::new(Algorithm::SHA256);
-        if let Some(archive_name) = archive_name {
-            if let Ok(snapshot_names) =
+        if let Some(archive_name) = archive_name
+            && let Ok(snapshot_names) =
                 snapshot::iter_snapshot_names_for_archive(archive_name, Order::Descending)
-            {
-                for snapshot_name in snapshot_names {
-                    hasher
-                        .write_all(snapshot_name.to_string_lossy().as_bytes())
-                        .expect(UNEXPECTED);
-                }
+        {
+            for snapshot_name in snapshot_names {
+                hasher
+                    .write_all(snapshot_name.to_string_lossy().as_bytes())
+                    .expect(UNEXPECTED);
             }
         }
         hasher.finish()
     }
 }
 
+type ChangedArchiveCBs = RefCell<Vec<Box<dyn Fn(Option<String>)>>>;
+
 #[derive(PWO, Wrapper)]
 pub struct SnapshotListViewCore {
     vbox: gtk::Box,
     buffered_list_view: Rc<TreeViewWithPopup>,
     buffered_list_store: BufferedListStore<SnapshotRowData>,
-    changed_archive_callbacks: RefCell<Vec<Box<dyn Fn(Option<String>)>>>,
+    changed_archive_callbacks: ChangedArchiveCBs,
 }
 
 #[derive(PWO, Wrapper, WClone)]
@@ -281,14 +283,12 @@ impl SnapshotListViewBuilder {
         scrolled_window.add(buffered_list_view.pwo());
         vbox.pack_start(&scrolled_window, true, true, 0);
         vbox.show_all();
-        let snapshot_list_view = SnapshotListView(Rc::new(SnapshotListViewCore {
+        SnapshotListView(Rc::new(SnapshotListViewCore {
             vbox,
             buffered_list_view,
             buffered_list_store,
             changed_archive_callbacks: RefCell::new(vec![]),
-        }));
-
-        snapshot_list_view
+        }))
     }
 }
 
@@ -303,6 +303,12 @@ pub struct SnapshotsManagerCore {
 
 #[derive(PWO, WClone, Wrapper)]
 pub struct SnapshotsManager(Rc<SnapshotsManagerCore>);
+
+impl Default for SnapshotsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl SnapshotsManager {
     pub fn new() -> Self {

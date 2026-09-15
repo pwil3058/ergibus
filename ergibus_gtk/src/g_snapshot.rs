@@ -1,14 +1,16 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::rc::Rc;
 
 use pw_gtk_ext::{
+    UNEXPECTED,
     gtk::{self, prelude::*},
     wrapper::*,
-    UNEXPECTED,
 };
 
-use ergibus_lib::{snapshot, EResult};
+use ergibus_lib::{EResult, snapshot};
 
 use crate::icons;
 use dychatat_lib::content::Mutability;
@@ -219,86 +221,84 @@ impl SnapshotManager {
     fn process_double_click(&self, value: &Value) {
         let index = value.get_some::<u32>().expect(UNEXPECTED) as usize;
         let curr_dir = self.curr_dir();
-        match curr_dir[index] {
-            FileSystemObject::Directory(ref dir_data) => {
-                self.set_curr_dir_path(dir_data.path());
-                self.repopulate();
-            }
-            _ => (),
+        if let FileSystemObject::Directory(ref dir_data) = curr_dir[index] {
+            self.set_curr_dir_path(dir_data.path());
+            self.repopulate();
         }
     }
 
     fn extract_to(&self, values: &[Value]) {
         let extraction_options = ExtractionOptions::new();
-        if self.present_widget_cancel_or_ok(extraction_options.pwo()) == gtk::ResponseType::Ok {
-            if let Some(target_dir_path) = extraction_options.target_dir_path() {
-                let overwrite = extraction_options.overwrite();
-                let content_mgmt_key = self.0.snapshot.content_mgmt_key();
-                let curr_dir = self.curr_dir();
-                let mut extraction_stats = ExtractionStats::default();
-                for index in values
-                    .iter()
-                    .map(|v| v.get_some::<u32>().expect(UNEXPECTED) as usize)
-                {
-                    match &curr_dir[index] {
-                        FileSystemObject::Directory(dir_data) => {
-                            match dir_data.copy_to(
-                                &target_dir_path.join(dir_data.name()),
-                                content_mgmt_key,
+        if self.present_widget_cancel_or_ok(extraction_options.pwo()) == gtk::ResponseType::Ok
+            && let Some(target_dir_path) = extraction_options.target_dir_path()
+        {
+            let overwrite = extraction_options.overwrite();
+            let content_mgmt_key = self.0.snapshot.content_mgmt_key();
+            let curr_dir = self.curr_dir();
+            let mut extraction_stats = ExtractionStats::default();
+            for index in values
+                .iter()
+                .map(|v| v.get_some::<u32>().expect(UNEXPECTED) as usize)
+            {
+                match &curr_dir[index] {
+                    FileSystemObject::Directory(dir_data) => {
+                        match dir_data.copy_to(
+                            &target_dir_path.join(dir_data.name()),
+                            content_mgmt_key,
+                            overwrite,
+                        ) {
+                            Ok(stats) => extraction_stats += stats,
+                            Err(err) => self.report_error("error", &err),
+                        }
+                    }
+                    FileSystemObject::File(file_data) => {
+                        match content_mgmt_key.open_content_manager(Mutability::Immutable) {
+                            Ok(content_mgr) => match file_data.copy_contents_to(
+                                &target_dir_path.join(file_data.name()),
+                                &content_mgr,
                                 overwrite,
                             ) {
-                                Ok(stats) => extraction_stats += stats,
-                                Err(err) => self.report_error("error", &err),
-                            }
-                        }
-                        FileSystemObject::File(file_data) => {
-                            match content_mgmt_key.open_content_manager(Mutability::Immutable) {
-                                Ok(content_mgr) => match file_data.copy_contents_to(
-                                    &target_dir_path.join(file_data.name()),
-                                    &content_mgr,
-                                    overwrite,
-                                ) {
-                                    Ok(bytes) => {
-                                        extraction_stats.file_count += 1;
-                                        extraction_stats.bytes_count += bytes;
-                                    }
-                                    Err(err) => self.report_error("error", &err),
-                                },
-                                Err(err) => self.report_error("error", &err),
-                            }
-                        }
-                        FileSystemObject::SymLink(link_data, is_dir) => {
-                            match link_data
-                                .copy_link_as(&target_dir_path.join(link_data.name()), overwrite)
-                            {
-                                Ok(_) => {
-                                    if *is_dir {
-                                        extraction_stats.dir_sym_link_count += 1
-                                    } else {
-                                        extraction_stats.file_sym_link_count += 1
-                                    }
+                                Ok(bytes) => {
+                                    extraction_stats.file_count += 1;
+                                    extraction_stats.bytes_count += bytes;
                                 }
                                 Err(err) => self.report_error("error", &err),
+                            },
+                            Err(err) => self.report_error("error", &err),
+                        }
+                    }
+                    FileSystemObject::SymLink(link_data, is_dir) => {
+                        match link_data
+                            .copy_link_as(&target_dir_path.join(link_data.name()), overwrite)
+                        {
+                            Ok(_) => {
+                                if *is_dir {
+                                    extraction_stats.dir_sym_link_count += 1
+                                } else {
+                                    extraction_stats.file_sym_link_count += 1
+                                }
                             }
+                            Err(err) => self.report_error("error", &err),
                         }
                     }
                 }
-                self.inform_user(
-                    "Extraction complete.",
-                    Some(&format_for_inform(&extraction_stats)),
-                );
             }
+            self.inform_user(
+                "Extraction complete.",
+                Some(&format_for_inform(&extraction_stats)),
+            );
         }
     }
 }
 
 fn format_for_inform(extraction_stats: &ExtractionStats) -> String {
-    format!("{:16} Directories\n{:16} Files\n{:16} Bytes\n{:16} Directory Sym Links\n{:16} File Sym Links\n",
-            extraction_stats.dir_count,
-            extraction_stats.file_count,
-            extraction_stats.bytes_count,
-            extraction_stats.dir_sym_link_count,
-            extraction_stats.file_sym_link_count
+    format!(
+        "{:16} Directories\n{:16} Files\n{:16} Bytes\n{:16} Directory Sym Links\n{:16} File Sym Links\n",
+        extraction_stats.dir_count,
+        extraction_stats.file_count,
+        extraction_stats.bytes_count,
+        extraction_stats.dir_sym_link_count,
+        extraction_stats.file_sym_link_count
     )
 }
 
