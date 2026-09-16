@@ -13,8 +13,8 @@ use serde_yaml;
 use users;
 use walkdir;
 
-use path_ext::expand_home_dir;
-use path_ext::{PathType, absolute_path_buf};
+use path_utilities::expand_home_dir;
+use path_utilities::{PathType, absolute_path_buf};
 
 use crate::report::ignore_report_or_fail;
 use crate::snapshot::Order;

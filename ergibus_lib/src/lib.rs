@@ -28,7 +28,7 @@ pub enum Error {
     ArchiveYamlReadError(serde_yaml::Error, String),
     ArchiveYamlWriteError(serde_yaml::Error, String),
     RelativeIncludePath(std::path::PathBuf, String),
-    ArchiveIncludePathError(path_ext::Error, std::path::PathBuf),
+    ArchiveIncludePathError(path_utilities::Error, std::path::PathBuf),
 
     GlobError(globset::Error),
 

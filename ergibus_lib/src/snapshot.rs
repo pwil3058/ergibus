@@ -10,7 +10,7 @@ use std::{fs, time};
 
 use chrono::{DateTime, Local};
 use log::*;
-use path_ext::{PathType, absolute_path_buf};
+use path_utilities::{PathType, absolute_path_buf};
 use path_utilities::{UsableDirEntry, UsefulPathMethods};
 use serde::Serialize;
 use window_sort_iterator::WindowSortIterExt;

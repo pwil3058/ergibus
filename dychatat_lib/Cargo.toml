@@ -16,4 +16,4 @@ snap = "1.1"
 tempdir = "0.3"
 thiserror = "2.0"
 
-path_ext = { path = "../path_ext" }
+path_utilities = { git = "http:github.com/pwil3058/rust_utilities" }

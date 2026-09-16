@@ -29,9 +29,8 @@ lazy_static = "1.5"
 
 log = "0.4"
 
-path_utilities = { path = "../../rust_utilities/path_utilities" }
+path_utilities = { git = "http:/github.com/pwil3058/rust_utilities" }
 pw_gtk_ext_derive = { path = "../pw_gtk_ext_derive" }
-#recollections = { path = "../recollections" }
 recollections = { git = "https://github.com/pwil3058/recollections.git" }
 normalised_angles = { git = "https://github.com/pwil3058/rs_normalised_angles.git" }
 num_traits_plus = { git = "https://github.com/pwil3058/rs_num_traits_plus.git" }

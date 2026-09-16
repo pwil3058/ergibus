@@ -5,8 +5,6 @@ use std::path::PathBuf;
 
 use dirs;
 
-use path_ext;
-
 const DEFAULT_CONFIG_DIR_PATH: &str = "~/.config/ergibus";
 
 const DCDP_OVERRIDE_ENVAR: &str = "ERGIBUS_CONFIG_DIR";
@@ -14,7 +12,7 @@ const DCDP_OVERRIDE_ENVAR: &str = "ERGIBUS_CONFIG_DIR";
 pub fn abs_default_config_dir_path() -> PathBuf {
     match dirs::config_dir() {
         Some(config_dir) => config_dir.join("ergibus"),
-        None => match path_ext::expand_home_dir(PathBuf::from(DEFAULT_CONFIG_DIR_PATH)) {
+        None => match path_utilities::expand_home_dir(PathBuf::from(DEFAULT_CONFIG_DIR_PATH)) {
             Ok(expanded_dir) => expanded_dir,
             Err(_) => panic!("config dir path expansion failed"),
         },
@@ -27,7 +25,7 @@ fn get_config_dir_path() -> PathBuf {
             if dir_path.is_empty() {
                 abs_default_config_dir_path()
             } else if dir_path.starts_with("~") {
-                match path_ext::expand_home_dir(PathBuf::from(dir_path)) {
+                match path_utilities::expand_home_dir(PathBuf::from(dir_path)) {
                     Ok(expanded_dir) => expanded_dir,
                     Err(_) => panic!("config dir path expansion failed",),
                 }
