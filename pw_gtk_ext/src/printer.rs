@@ -1,4 +1,4 @@
-// Copyright 2017 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::cell::{Cell, RefCell};
 use std::error::Error;
@@ -25,13 +25,12 @@ struct RememberedPrinterSettings {
 
 impl RememberedPrinterSettings {
     fn set_file_path(&mut self, file_path: &path::Path) {
-        if !file_path.exists() {
-            if let Some(dir_path) = file_path.parent() {
-                if !dir_path.exists() {
-                    fs::create_dir_all(dir_path).unwrap_or_else(|err| {
-                        panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-                    });
-                }
+        if !file_path.exists()
+            && let Some(dir_path) = file_path.parent()
+        {
+            if !dir_path.exists() {
+                fs::create_dir_all(dir_path)
+                    .unwrap_or_else(|err| panic!("{:?}: line {:?}: {:?}", file!(), line!(), err));
             };
             if let Err(err) = gtk::PrintSettings::new().to_file(file_path) {
                 panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
@@ -55,19 +54,19 @@ pub fn init_printer(file_path: &path::Path) {
 
 fn get_printer_settings() -> gtk::PrintSettings {
     let settings = gtk::PrintSettings::new();
-    if let Some(ref file_path) = REMEMBERED_PRINTER_SETTINGS.write().unwrap().o_file_path {
-        if let Err(err) = settings.load_file(file_path) {
-            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        }
+    if let Some(ref file_path) = REMEMBERED_PRINTER_SETTINGS.write().unwrap().o_file_path
+        && let Err(err) = settings.load_file(file_path)
+    {
+        panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
     };
     settings
 }
 
 fn save_printer_settings(settings: &gtk::PrintSettings) {
-    if let Some(ref file_path) = REMEMBERED_PRINTER_SETTINGS.write().unwrap().o_file_path {
-        if let Err(err) = settings.to_file(file_path) {
-            panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
-        }
+    if let Some(ref file_path) = REMEMBERED_PRINTER_SETTINGS.write().unwrap().o_file_path
+        && let Err(err) = settings.to_file(file_path)
+    {
+        panic!("{:?}: line {:?}: {:?}", file!(), line!(), err)
     };
 }
 
@@ -110,10 +109,10 @@ fn do_print_operation<P: IsA<gtk::Window>>(
     let result = print_operation.run(gtk::PrintOperationAction::PrintDialog, parent)?;
     if result == gtk::PrintOperationResult::Error {
         return Err(PrintError(None));
-    } else if result == gtk::PrintOperationResult::Apply {
-        if let Some(settings) = print_operation.get_print_settings() {
-            save_printer_settings(&settings);
-        }
+    } else if result == gtk::PrintOperationResult::Apply
+        && let Some(settings) = print_operation.get_print_settings()
+    {
+        save_printer_settings(&settings);
     };
     Ok(())
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::io::{self, Write};
 
@@ -38,24 +38,22 @@ impl RememberGeometry for gtk::Window {}
 
 pub trait DerivedTransientFor: gtk::GtkWindowExt {
     fn set_transient_for_from<W: gtk::WidgetExt>(&self, widget: &W) {
-        if let Some(tl) = widget.get_toplevel() {
-            if tl.is_toplevel() {
-                if let Ok(window) = tl.dynamic_cast::<gtk::Window>() {
-                    self.set_transient_for(Some(&window))
-                }
-            }
+        if let Some(tl) = widget.get_toplevel()
+            && tl.is_toplevel()
+            && let Ok(window) = tl.dynamic_cast::<gtk::Window>()
+        {
+            self.set_transient_for(Some(&window))
         }
     }
 
     fn set_transient_for_and_icon_from<W: gtk::WidgetExt>(&self, widget: &W) {
-        if let Some(tl) = widget.get_toplevel() {
-            if tl.is_toplevel() {
-                if let Ok(window) = tl.dynamic_cast::<gtk::Window>() {
-                    self.set_transient_for(Some(&window));
-                    if let Some(ref icon) = window.get_icon() {
-                        self.set_icon(Some(icon));
-                    }
-                }
+        if let Some(tl) = widget.get_toplevel()
+            && tl.is_toplevel()
+            && let Ok(window) = tl.dynamic_cast::<gtk::Window>()
+        {
+            self.set_transient_for(Some(&window));
+            if let Some(ref icon) = window.get_icon() {
+                self.set_icon(Some(icon));
             }
         }
     }

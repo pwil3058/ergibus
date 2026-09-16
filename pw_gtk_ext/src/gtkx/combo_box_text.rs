@@ -33,20 +33,20 @@ pub trait SortedUnique {
 
 impl SortedUnique for gtk::ComboBoxText {
     fn get_item_index(&self, item: &str) -> (bool, i32) {
-        if let Some(model) = self.get_model() {
-            if let Some(ref iter) = model.get_iter_first() {
-                for index in 0.. {
-                    if let Some(ref text) = model.get_value(iter, 0).get_ok::<String>() {
-                        if text == item {
-                            return (true, index);
-                        } else if item < text.as_str() {
-                            return (false, index);
-                        }
-                    };
-                    if !model.iter_next(iter) {
-                        return (false, -1);
-                    };
-                }
+        if let Some(model) = self.get_model()
+            && let Some(ref iter) = model.get_iter_first()
+        {
+            for index in 0.. {
+                if let Some(ref text) = model.get_value(iter, 0).get_ok::<String>() {
+                    if text == item {
+                        return (true, index);
+                    } else if item < text.as_str() {
+                        return (false, index);
+                    }
+                };
+                if !model.iter_next(iter) {
+                    return (false, -1);
+                };
             }
         };
         (false, -1)
@@ -54,16 +54,16 @@ impl SortedUnique for gtk::ComboBoxText {
 
     fn get_text_items(&self) -> Vec<String> {
         let mut text_items = Vec::new();
-        if let Some(model) = self.get_model() {
-            if let Some(ref iter) = model.get_iter_first() {
-                loop {
-                    if let Some(ref text) = model.get_value(iter, 0).get_ok::<String>() {
-                        text_items.push(text.clone());
-                    };
-                    if !model.iter_next(iter) {
-                        break;
-                    };
-                }
+        if let Some(model) = self.get_model()
+            && let Some(ref iter) = model.get_iter_first()
+        {
+            loop {
+                if let Some(ref text) = model.get_value(iter, 0).get_ok::<String>() {
+                    text_items.push(text.clone());
+                };
+                if !model.iter_next(iter) {
+                    break;
+                };
             }
         };
         text_items

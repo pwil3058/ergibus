@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::glib::Value;
 use crate::gtk::prelude::{
@@ -27,15 +27,13 @@ pub struct TreeViewWithPopup {
 
 impl TreeViewWithPopup {
     fn get_id_value_at(&self, posn: (f64, f64)) -> Option<Value> {
-        if let Some(location) = self.tree_view.get_path_at_pos(posn.0 as i32, posn.1 as i32) {
-            if let Some(path) = location.0 {
-                if let Some(tree_model) = self.tree_view.get_model() {
-                    if let Some(iter) = tree_model.get_iter(&path) {
-                        let value = tree_model.get_value(&iter, self.id_field);
-                        return Some(value);
-                    }
-                }
-            }
+        if let Some(location) = self.tree_view.get_path_at_pos(posn.0 as i32, posn.1 as i32)
+            && let Some(path) = location.0
+            && let Some(tree_model) = self.tree_view.get_model()
+            && let Some(iter) = tree_model.get_iter(&path)
+        {
+            let value = tree_model.get_value(&iter, self.id_field);
+            return Some(value);
         };
         None
     }

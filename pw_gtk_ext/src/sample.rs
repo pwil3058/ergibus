@@ -1,4 +1,4 @@
-// Copyright 2017 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::error;
 use std::fmt;
@@ -138,8 +138,8 @@ pub mod area_selection {
     use std::rc::Rc;
 
     use cairo;
-    use gdk::{self, prelude::WindowExtManual, WindowExt};
-    use gtk::{self, prelude::WidgetExtManual, GtkWindowExt, WidgetExt};
+    use gdk::{self, WindowExt, prelude::WindowExtManual};
+    use gtk::{self, GtkWindowExt, WidgetExt, prelude::WidgetExtManual};
 
     #[derive(Debug, PartialEq, Clone, Copy)]
     struct IntPoint {
@@ -199,10 +199,10 @@ pub mod area_selection {
         }
 
         fn is_makeable() -> bool {
-            if let Some(screen) = gdk::Screen::get_default() {
-                if screen.is_composited() {
-                    return screen.get_rgba_visual().is_some();
-                }
+            if let Some(screen) = gdk::Screen::get_default()
+                && screen.is_composited()
+            {
+                return screen.get_rgba_visual().is_some();
             };
             false
         }
@@ -221,19 +221,19 @@ pub mod area_selection {
 
         fn finish(&self) -> Result<gdk::Rectangle, Failure> {
             unsafe { self.window.destroy() };
-            if let Some(start_position) = self.start_position.get() {
-                if let Some(end_position) = self.end_position.get() {
-                    let i_start: IntPoint = start_position.into();
-                    let i_last: IntPoint = end_position.into();
-                    let position = top_left_corner((i_start, i_last));
-                    let size = IntSize::from((i_start, i_last));
-                    return Ok(gdk::Rectangle {
-                        x: position.x,
-                        y: position.y,
-                        width: size.width,
-                        height: size.height,
-                    });
-                }
+            if let Some(start_position) = self.start_position.get()
+                && let Some(end_position) = self.end_position.get()
+            {
+                let i_start: IntPoint = start_position.into();
+                let i_last: IntPoint = end_position.into();
+                let position = top_left_corner((i_start, i_last));
+                let size = IntSize::from((i_start, i_last));
+                return Ok(gdk::Rectangle {
+                    x: position.x,
+                    y: position.y,
+                    width: size.width,
+                    height: size.height,
+                });
             };
             Err(Failure::new(FailureReason::UserCancelled))
         }
@@ -271,23 +271,23 @@ pub mod area_selection {
 
             let sad_c = sad.clone();
             sad.window.connect_draw(move |_, cairo_context| {
-                if let Some(start_position) = sad_c.start_position.get() {
-                    if let Some(current_position) = sad_c.current_position.get() {
-                        // NB. draw OUSIDE the selected area so that we don't have
-                        // an issue with how long it takes the screen to be redrawn
-                        // after we finish and before a sample is taken.
-                        let lw = 2.0;
-                        cairo_context.set_line_width(lw);
-                        let x = start_position.0.min(current_position.0) - lw;
-                        let y = start_position.1.min(current_position.1) - lw;
-                        let width = (start_position.0 - current_position.0).abs() + 2.0 * lw;
-                        let height = (start_position.1 - current_position.1).abs() + 2.0 * lw;
-                        cairo_context.rectangle(x, y, width, height);
-                        cairo_context.set_source_rgb(0.0, 0.0, 0.0);
-                        cairo_context.set_dash(&[3.0], 0.0);
-                        cairo_context.set_operator(cairo::Operator::Xor);
-                        cairo_context.stroke();
-                    }
+                if let Some(start_position) = sad_c.start_position.get()
+                    && let Some(current_position) = sad_c.current_position.get()
+                {
+                    // NB. draw OUSIDE the selected area so that we don't have
+                    // an issue with how long it takes the screen to be redrawn
+                    // after we finish and before a sample is taken.
+                    let lw = 2.0;
+                    cairo_context.set_line_width(lw);
+                    let x = start_position.0.min(current_position.0) - lw;
+                    let y = start_position.1.min(current_position.1) - lw;
+                    let width = (start_position.0 - current_position.0).abs() + 2.0 * lw;
+                    let height = (start_position.1 - current_position.1).abs() + 2.0 * lw;
+                    cairo_context.rectangle(x, y, width, height);
+                    cairo_context.set_source_rgb(0.0, 0.0, 0.0);
+                    cairo_context.set_dash(&[3.0], 0.0);
+                    cairo_context.set_operator(cairo::Operator::Xor);
+                    cairo_context.stroke();
                 };
                 gtk::Inhibit(false)
             });
@@ -361,12 +361,11 @@ pub mod area_selection {
 
     impl PointerAndKeyboard {
         fn is_makeable() -> bool {
-            if let Some(display) = gdk::Display::get_default() {
-                if let Some(manager) = display.get_device_manager() {
-                    if let Some(pointer) = manager.get_client_pointer() {
-                        return pointer.get_associated_device().is_some();
-                    }
-                }
+            if let Some(display) = gdk::Display::get_default()
+                && let Some(manager) = display.get_device_manager()
+                && let Some(pointer) = manager.get_client_pointer()
+            {
+                return pointer.get_associated_device().is_some();
             };
             false
         }

@@ -1,4 +1,4 @@
-// Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -34,18 +34,16 @@ pub trait ListViewSpec {
 
 impl ListViewWithPopUpMenu {
     fn set_selected_id(&self, posn: (f64, f64)) {
-        if let Some(location) = self.view.get_path_at_pos(posn.0 as i32, posn.1 as i32) {
-            if let Some(path) = location.0 {
-                if let Some(list_store) = self.view.get_model() {
-                    if let Some(iter) = list_store.get_iter(&path) {
-                        let value = list_store.get_value(&iter, self.id_field);
-                        if let Some(string) = value.get().unwrap() {
-                            *self.selected_id.borrow_mut() = Some(string);
-                            self.popup_menu.update_hover_condns(true);
-                            return;
-                        }
-                    }
-                }
+        if let Some(location) = self.view.get_path_at_pos(posn.0 as i32, posn.1 as i32)
+            && let Some(path) = location.0
+            && let Some(list_store) = self.view.get_model()
+            && let Some(iter) = list_store.get_iter(&path)
+        {
+            let value = list_store.get_value(&iter, self.id_field);
+            if let Some(string) = value.get().unwrap() {
+                *self.selected_id.borrow_mut() = Some(string);
+                self.popup_menu.update_hover_condns(true);
+                return;
             }
         };
         *self.selected_id.borrow_mut() = None;
@@ -77,14 +75,13 @@ impl ListViewWithPopUpMenu {
         let selected_ids: Option<Vec<String>> = if !tree_paths.is_empty() {
             let mut vector = vec![];
             for tree_path in tree_paths.iter() {
-                if let Some(iter) = store.get_iter(tree_path) {
-                    if let Some(id) = store
+                if let Some(iter) = store.get_iter(tree_path)
+                    && let Some(id) = store
                         .get_value(&iter, self.id_field)
                         .get::<String>()
                         .unwrap()
-                    {
-                        vector.push(id);
-                    }
+                {
+                    vector.push(id);
                 }
             }
             if vector.is_empty() {
