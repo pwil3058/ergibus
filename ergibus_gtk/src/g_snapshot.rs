@@ -2,27 +2,27 @@
 
 use std::cell::RefCell;
 use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use pw_gtk_ext::{
+use gtk3_ext::glib::{Type, Value};
+use gtk3_ext::gtk::Button;
+use gtk3_ext::gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore};
+use gtk3_ext::gtkx::menu::MenuItemSpec;
+use gtk3_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
+use gtk3_ext::sav_state::SAV_SELN_MADE;
+use gtk3_ext::{
     UNEXPECTED,
     gtk::{self, prelude::*},
     wrapper::*,
 };
 
-use ergibus_lib::{EResult, snapshot};
-
-use crate::icons;
 use dychatat_lib::content::Mutability;
 use ergibus_lib::fs_objects::{DirectoryData, ExtractionStats, FileSystemObject, Name};
 use ergibus_lib::snapshot::SnapshotPersistentData;
-use pw_gtk_ext::glib::{Type, Value};
-use pw_gtk_ext::gtk::ButtonBuilder;
-use pw_gtk_ext::gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore};
-use pw_gtk_ext::gtkx::menu::MenuItemSpec;
-use pw_gtk_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
-use pw_gtk_ext::sav_state::SAV_SELN_MADE;
-use std::path::{Path, PathBuf};
+use ergibus_lib::{EResult, snapshot};
+
+use crate::icons;
 
 #[derive(PWO)]
 pub struct CurrentDirectoryManagerCore {
@@ -36,15 +36,15 @@ pub struct CurrentDirectoryManager(Rc<CurrentDirectoryManagerCore>);
 
 impl CurrentDirectoryManager {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let h_box = gtk::BoxBuilder::new()
+        let h_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .build();
-        let button = ButtonBuilder::new()
+        let button = Button::builder()
             .tooltip_text("Change directory up one level")
             .image(&icons::up_dir::sized_image_or(16).upcast::<gtk::Widget>())
             .sensitive(false)
             .build();
-        let label = gtk::LabelBuilder::new()
+        let label = gtk::Label::builder()
             .halign(gtk::Align::Start)
             .xalign(0.0)
             .build();
@@ -93,23 +93,23 @@ struct SnapshotManagerSpec;
 
 impl ListViewSpec for SnapshotManagerSpec {
     fn column_types() -> Vec<Type> {
-        vec![Type::U32, Type::String]
+        vec![Type::U32, Type::STRING]
     }
 
     fn columns() -> Vec<gtk::TreeViewColumn> {
-        let col = gtk::TreeViewColumnBuilder::new()
+        let col = gtk::TreeViewColumn::builder()
             .title("Name")
             .expand(false)
             .resizable(false)
             .build();
 
-        let cell = gtk::CellRendererTextBuilder::new()
+        let cell = gtk::CellRendererText::builder()
             .editable(false)
             .xalign(0.0)
             .build();
 
-        col.pack_start(&cell, false);
-        col.add_attribute(&cell, "text", 1);
+        TreeViewColumnExt::pack_start(&col, &cell, false);
+        TreeViewColumnExt::add_attribute(&col, &cell, "text", 1);
         vec![col]
     }
 }
@@ -119,7 +119,7 @@ impl SnapshotManager {
         let snapshot = snapshot::get_named_snapshot(archive_name, snapshot_name)?;
         let base_dir_path = snapshot.base_dir_path().to_path_buf();
         let current_directory_manager = CurrentDirectoryManager::new(&base_dir_path);
-        let v_box = gtk::BoxBuilder::new()
+        let v_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
         v_box.pack_start(current_directory_manager.pwo(), false, false, 0);
@@ -147,7 +147,7 @@ impl SnapshotManager {
         v_box.show_all();
         let snapshot_manager = Self(Rc::new(SnapshotManagerCore {
             v_box,
-            list_view,
+            list_view: list_view.into(),
             list_store,
             snapshot,
             curr_dir_path: RefCell::new(base_dir_path.clone()),
@@ -219,7 +219,7 @@ impl SnapshotManager {
     }
 
     fn process_double_click(&self, value: &Value) {
-        let index = value.get_some::<u32>().expect(UNEXPECTED) as usize;
+        let index = value.get::<u32>().expect(UNEXPECTED) as usize;
         let curr_dir = self.curr_dir();
         if let FileSystemObject::Directory(ref dir_data) = curr_dir[index] {
             self.set_curr_dir_path(dir_data.path());
@@ -238,7 +238,7 @@ impl SnapshotManager {
             let mut extraction_stats = ExtractionStats::default();
             for index in values
                 .iter()
-                .map(|v| v.get_some::<u32>().expect(UNEXPECTED) as usize)
+                .map(|v| v.get::<u32>().expect(UNEXPECTED) as usize)
             {
                 match &curr_dir[index] {
                     FileSystemObject::Directory(dir_data) => {
@@ -314,20 +314,20 @@ struct ExtractionOptions(Rc<ExtractionOptionsCore>);
 
 impl ExtractionOptions {
     fn new() -> Self {
-        let v_box = gtk::BoxBuilder::new()
+        let v_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
-        let overwrite = gtk::CheckButtonBuilder::new()
+        let overwrite = gtk::CheckButton::builder()
             .label("overwrite")
             .tooltip_text("Overwrite existing files?")
             .active(false)
             .build();
         v_box.pack_start(&overwrite, false, false, 0);
-        let file_chooser_button = gtk::FileChooserButtonBuilder::new()
+        let file_chooser_button = gtk::FileChooserButton::builder()
             .create_folders(true)
             .action(gtk::FileChooserAction::SelectFolder)
             .build();
-        let h_box = gtk::BoxBuilder::new()
+        let h_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .build();
         h_box.pack_start(&gtk::Label::new(Some("Target Directory:")), false, false, 0);
@@ -342,10 +342,10 @@ impl ExtractionOptions {
     }
 
     fn overwrite(&self) -> bool {
-        self.0.overwrite.get_active()
+        self.0.overwrite.is_active()
     }
 
     fn target_dir_path(&self) -> Option<PathBuf> {
-        self.0.file_chooser_button.get_filename()
+        self.0.file_chooser_button.filename()
     }
 }

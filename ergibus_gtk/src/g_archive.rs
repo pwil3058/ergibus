@@ -3,11 +3,11 @@
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use pw_gtk_ext::{
+use gtk3_ext::{
     glib::{Type, Value},
-    gtk::{self, prelude::*},
+    gtk::{self, TreeViewColumn, prelude::*},
     gtkx::combo_box_text::NameSelector,
-    gtkx::list_store::{ListRowOps, ListViewSpec, Row, WrappedListStore},
+    gtkx::list_store::{ListRowOps, ListViewSpec, WrappedListStore},
     gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder},
     wrapper::*,
 };
@@ -17,27 +17,27 @@ struct PathBufListSpec;
 
 impl ListViewSpec for PathBufListSpec {
     fn column_types() -> Vec<Type> {
-        vec![Type::String]
+        vec![Type::STRING]
     }
 
     fn columns() -> Vec<gtk::TreeViewColumn> {
         let mut cols = vec![];
         for (column, title) in ["Inclusions"].iter().enumerate() {
-            let col = gtk::TreeViewColumnBuilder::new()
-                .title(title)
+            let col = TreeViewColumn::builder()
+                .title(*title)
                 .expand(false)
                 .resizable(false)
                 .build();
 
-            let cell = gtk::CellRendererTextBuilder::new()
+            let cell = gtk::CellRendererText::builder()
                 .editable(false)
                 .max_width_chars(29)
                 .width_chars(29)
                 .xalign(1.0)
                 .build();
 
-            col.pack_start(&cell, false);
-            col.add_attribute(&cell, "text", column as i32);
+            TreeViewColumnExt::pack_start(&col, &cell, false);
+            TreeViewColumnExt::add_attribute(&col, &cell, "text", column as i32);
             cols.push(col);
         }
         cols
@@ -78,13 +78,13 @@ impl<T> SimpleList<T> {
         vbox.show_all();
         Self {
             vbox,
-            list_view,
+            list_view: list_view.into(),
             list_store,
             list_items: vec![],
         }
     }
 
-    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Row) + 'static>(
+    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
         &self,
         name: &str,
         callback: F,

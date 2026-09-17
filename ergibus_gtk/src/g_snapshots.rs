@@ -5,7 +5,7 @@ use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::rc::Rc;
 
-use pw_gtk_ext::{
+use gtk3_ext::{
     UNEXPECTED,
     gtk::{self, prelude::*},
     wrapper::*,
@@ -18,16 +18,16 @@ use ergibus_lib::snapshot::Order;
 use ergibus_lib::{archive, snapshot};
 
 use crate::g_snapshot::SnapshotManager;
-use pw_gtk_ext::glib::{Type, Value};
-use pw_gtk_ext::gtkx::buffered_list_store::{BufferedListStore, Row, RowDataSource};
-use pw_gtk_ext::gtkx::combo_box_text::NameSelector;
-use pw_gtk_ext::gtkx::dialog_user::TopGtkWindow;
-use pw_gtk_ext::gtkx::list_store::ListViewSpec;
-use pw_gtk_ext::gtkx::menu::MenuItemSpec;
-use pw_gtk_ext::gtkx::notebook::TabRemoveLabelBuilder;
-use pw_gtk_ext::gtkx::paned::RememberPosition;
-use pw_gtk_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
-use pw_gtk_ext::sav_state::{SAV_SELN_MADE, SAV_SELN_UNIQUE_OR_HOVER_OK};
+use gtk3_ext::glib::{Type, Value};
+use gtk3_ext::gtkx::buffered_list_store::{BufferedListStore, RowDataSource};
+use gtk3_ext::gtkx::combo_box_text::NameSelector;
+use gtk3_ext::gtkx::dialog_user::TopGtkWindow;
+use gtk3_ext::gtkx::list_store::ListViewSpec;
+use gtk3_ext::gtkx::menu::MenuItemSpec;
+use gtk3_ext::gtkx::notebook::TabRemoveLabelBuilder;
+use gtk3_ext::gtkx::paned::RememberPosition;
+use gtk3_ext::gtkx::tree_view::{TreeViewWithPopup, TreeViewWithPopupBuilder};
+use gtk3_ext::sav_state::{SAV_SELN_MADE, SAV_SELN_UNIQUE_OR_HOVER_OK};
 
 #[derive(Default)]
 struct SnapshotRowDataCore {
@@ -51,13 +51,13 @@ impl SnapshotRowData {
 impl ListViewSpec for SnapshotRowData {
     fn column_types() -> Vec<Type> {
         vec![
-            Type::String,
-            Type::String,
-            Type::String,
-            Type::String,
-            Type::String,
-            Type::String,
-            Type::String,
+            Type::STRING,
+            Type::STRING,
+            Type::STRING,
+            Type::STRING,
+            Type::STRING,
+            Type::STRING,
+            Type::STRING,
         ]
     }
 
@@ -75,21 +75,21 @@ impl ListViewSpec for SnapshotRowData {
         .iter()
         .enumerate()
         {
-            let col = gtk::TreeViewColumnBuilder::new()
-                .title(title)
+            let col = gtk::TreeViewColumn::builder()
+                .title(*title)
                 .expand(false)
                 .resizable(false)
                 .build();
 
-            let cell = gtk::CellRendererTextBuilder::new()
+            let cell = gtk::CellRendererText::builder()
                 .editable(false)
                 .max_width_chars(29)
                 .width_chars(29)
                 .xalign(1.0)
                 .build();
 
-            col.pack_start(&cell, false);
-            col.add_attribute(&cell, "text", column as i32);
+            TreeViewColumnExt::pack_start(&col, &cell, false);
+            TreeViewColumnExt::add_attribute(&col, &cell, "text", column as i32);
             cols.push(col);
         }
         cols
@@ -97,7 +97,7 @@ impl ListViewSpec for SnapshotRowData {
 }
 
 impl RowDataSource for SnapshotRowData {
-    fn rows_and_digest(&self) -> (Vec<Row>, Vec<u8>) {
+    fn rows_and_digest(&self) -> (Vec<Vec<Value>>, Vec<u8>) {
         let archive_name = &*self.0.archive_name.borrow();
         let mut rows = vec![];
         let mut hasher = Hasher::new(Algorithm::SHA256);
@@ -202,7 +202,7 @@ impl SnapshotListView {
         self.0.buffered_list_store.update()
     }
 
-    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Row) + 'static>(
+    pub fn connect_popup_menu_item<F: Fn(Option<Value>, Vec<Value>) + 'static>(
         &self,
         name: &str,
         callback: F,
@@ -285,7 +285,7 @@ impl SnapshotListViewBuilder {
         vbox.show_all();
         SnapshotListView(Rc::new(SnapshotListViewCore {
             vbox,
-            buffered_list_view,
+            buffered_list_view: buffered_list_view.into(),
             buffered_list_store,
             changed_archive_callbacks: RefCell::new(vec![]),
         }))
@@ -325,7 +325,7 @@ impl SnapshotsManager {
         let label = gtk::Label::new(Some("Buttons go here"));
         hbox.pack_start(&label, false, false, 0);
         vbox.pack_start(&hbox, false, false, 0);
-        let paned = gtk::PanedBuilder::new()
+        let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
             .name("Snapshot Files")
             .build();
@@ -345,7 +345,7 @@ impl SnapshotsManager {
             .build();
         vbox.pack_start(&paned, true, true, 0);
         paned.add1(snapshot_list_view.pwo());
-        let notebook = gtk::NotebookBuilder::new()
+        let notebook = gtk::Notebook::builder()
             .scrollable(true)
             .enable_popup(true)
             .build();
@@ -363,11 +363,10 @@ impl SnapshotsManager {
             "open",
             move |hovered, selected| {
                 let snapshot_name = match selected.first() {
-                    Some(value) => value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED),
+                    Some(value) => value.get::<String>().expect(UNEXPECTED),
                     None => hovered
                         .expect(UNEXPECTED)
                         .get::<String>()
-                        .expect(UNEXPECTED)
                         .expect(UNEXPECTED),
                 };
                 snapshots_mgr_clone.open_snapshot(&OsString::from(snapshot_name));
@@ -379,7 +378,7 @@ impl SnapshotsManager {
             .0
             .snapshot_list_view
             .connect_double_click(move |value| {
-                let snapshot_name = value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED);
+                let snapshot_name = value.get::<String>().expect(UNEXPECTED);
                 snapshots_mgr_clone.open_snapshot(&OsString::from(snapshot_name));
             });
 
@@ -390,9 +389,7 @@ impl SnapshotsManager {
             .connect_popup_menu_item("delete", move |_, selected| {
                 let snapshot_names: Vec<OsString> = selected
                     .iter()
-                    .map(|value| {
-                        OsString::from(value.get::<String>().expect(UNEXPECTED).expect(UNEXPECTED))
-                    })
+                    .map(|value| OsString::from(value.get::<String>().expect(UNEXPECTED)))
                     .collect();
                 snapshots_mgr_clone.delete_snapshots(&snapshot_names);
             });
@@ -491,7 +488,7 @@ impl SnapshotsManager {
     }
 
     fn close_all_snapshots(&self) {
-        while let Some(page_no) = self.0.notebook.get_current_page() {
+        while let Some(page_no) = self.0.notebook.current_page() {
             self.0.notebook.remove_page(Some(page_no))
         }
         self.0.open_snapshots.borrow_mut().clear();
