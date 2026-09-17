@@ -517,7 +517,7 @@ impl SnapshotsManager {
                     .message_type(gtk::MessageType::Error)
                     .modal(true)
                     .text("Delete operation failed")
-                    .secondary_text(&err.to_string())
+                    .secondary_text(err.to_string())
                     .build();
                 dialog.run();
                 dialog.close();

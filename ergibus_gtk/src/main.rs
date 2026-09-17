@@ -18,7 +18,7 @@ mod icons;
 fn activate(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title(("ERGIBUS GUI"))
+        .title("ERGIBUS GUI")
         .build();
 
     let snapshots_manager = SnapshotsManager::new();
